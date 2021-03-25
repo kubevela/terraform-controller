@@ -74,6 +74,14 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "Configuration")
 		os.Exit(1)
 	}
+	if err = (&controllers.ProviderConfigReconciler{
+		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("ProviderConfig"),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ProviderConfig")
+		os.Exit(1)
+	}
 	// +kubebuilder:scaffold:builder
 
 	setupLog.Info("starting manager")

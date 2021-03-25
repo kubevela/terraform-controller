@@ -1,5 +1,5 @@
 /*
-
+Copyright 2021 The KubeVela Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,24 +18,22 @@ package v1beta1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
-
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 // ConfigurationSpec defines the desired state of Configuration
 type ConfigurationSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// Foo is an example field of Configuration. Edit Configuration_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	// JSON is the Terraform JSON syntax configuration
+	JSON string `json:"JSON,omitempty"`
+	// +kubebuilder:pruning:PreserveUnknownFields
+	Parameter runtime.RawExtension `json:"parameter,omitempty"`
 }
 
 // ConfigurationStatus defines the observed state of Configuration
 type ConfigurationStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+	State string `json:"state,omitempty"`
 }
 
 // +kubebuilder:object:root=true
