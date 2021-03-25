@@ -1,0 +1,7 @@
+domain: core.oam.dev
+repo: github.com/zzxwill/terraform-controller
+resources:
+- group: terraform
+  kind: Configuration
+  version: v1beta1
+version: "2"
