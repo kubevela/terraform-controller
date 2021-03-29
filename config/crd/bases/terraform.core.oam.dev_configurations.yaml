@@ -37,9 +37,11 @@ spec:
             JSON:
               description: JSON is the Terraform JSON syntax configuration
               type: string
-            parameter:
+            variable:
               type: object
               x-kubernetes-preserve-unknown-fields: true
+          required:
+          - variable
           type: object
         status:
           description: ConfigurationStatus defines the observed state of Configuration

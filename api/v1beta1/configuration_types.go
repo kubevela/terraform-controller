@@ -26,7 +26,7 @@ type ConfigurationSpec struct {
 	// JSON is the Terraform JSON syntax configuration
 	JSON string `json:"JSON,omitempty"`
 	// +kubebuilder:pruning:PreserveUnknownFields
-	Parameter runtime.RawExtension `json:"parameter,omitempty"`
+	Variable runtime.RawExtension `json:"variable"`
 }
 
 // ConfigurationStatus defines the observed state of Configuration

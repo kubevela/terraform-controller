@@ -1,5 +1,5 @@
 apiVersion: terraform.core.oam.dev/v1beta1
-kind: ProviderConfig
+kind: Provider
 metadata:
   name: default
 spec:
