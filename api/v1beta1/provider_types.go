@@ -21,8 +21,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// ProviderConfigSpec defines the desired state of ProviderConfig
-type ProviderConfigSpec struct {
+// ProviderSpec defines the desired state of Provider
+type ProviderSpec struct {
 	// Provider is the cloud service provider, like `alibaba`
 	Provider string `json:"provider"`
 
@@ -38,35 +38,39 @@ type ProviderCredentials struct {
 	// Source of the provider credentials.
 	// +kubebuilder:validation:Enum=None;Secret;InjectedIdentity;Environment;Filesystem
 	Source                         crossplanev1.CredentialsSource `json:"source"`
-	crossplanev1.CommonCredentialSelectors `json:",inline"`
+
+	// A SecretRef is a reference to a secret key that contains the credentials
+	// that must be used to connect to the provider.
+	// +optional
+	SecretRef *crossplanev1.SecretKeySelector `json:"secretRef,omitempty"`
 }
 
-// ProviderConfigStatus defines the observed state of ProviderConfig
-type ProviderConfigStatus struct {
+// ProviderStatus defines the observed state of Provider
+type ProviderStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 }
 
 // +kubebuilder:object:root=true
 
-// ProviderConfig is the Schema for the providerconfigs API
-type ProviderConfig struct {
+// Provider is the Schema for the providerconfigs API
+type Provider struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   ProviderConfigSpec   `json:"spec,omitempty"`
-	Status ProviderConfigStatus `json:"status,omitempty"`
+	Spec   ProviderSpec   `json:"spec,omitempty"`
+	Status ProviderStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 
-// ProviderConfigList contains a list of ProviderConfig
-type ProviderConfigList struct {
+// ProviderList contains a list of Provider
+type ProviderList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []ProviderConfig `json:"items"`
+	Items           []Provider `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&ProviderConfig{}, &ProviderConfigList{})
+	SchemeBuilder.Register(&Provider{}, &ProviderList{})
 }

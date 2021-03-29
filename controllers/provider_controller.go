@@ -27,8 +27,8 @@ import (
 	terraformv1beta1 "github.com/zzxwill/terraform-controller/api/v1beta1"
 )
 
-// ProviderConfigReconciler reconciles a ProviderConfig object
-type ProviderConfigReconciler struct {
+// ProviderReconciler reconciles a Provider object
+type ProviderReconciler struct {
 	client.Client
 	Log    logr.Logger
 	Scheme *runtime.Scheme
@@ -37,7 +37,7 @@ type ProviderConfigReconciler struct {
 // +kubebuilder:rbac:groups=terraform.core.oam.dev,resources=providerconfigs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=terraform.core.oam.dev,resources=providerconfigs/status,verbs=get;update;patch
 
-func (r *ProviderConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
+func (r *ProviderReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
 	_ = r.Log.WithValues("providerconfig", req.NamespacedName)
 
@@ -46,8 +46,8 @@ func (r *ProviderConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	return ctrl.Result{}, nil
 }
 
-func (r *ProviderConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *ProviderReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&terraformv1beta1.ProviderConfig{}).
+		For(&terraformv1beta1.Provider{}).
 		Complete(r)
 }
