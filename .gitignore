@@ -17,3 +17,8 @@
 .idea/
 
 .vela/
+
+.DS_Store
+examples/.DS_Store
+examples/.terraform.lock.hcl
+examples/.terraform/

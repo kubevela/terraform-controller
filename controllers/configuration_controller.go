@@ -19,21 +19,16 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"github.com/ghodss/yaml"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
-	"io"
-	"io/ioutil"
-	v1 "k8s.io/api/core/v1"
 	batchv1 "k8s.io/api/batch/v1"
+	v1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/pointer"
-	"os"
-	"os/exec"
-	"path/filepath"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"strings"
@@ -48,10 +43,35 @@ const (
 	// TerraformLog is the logfile name for terraform
 	TerraformLog = "terraform.log"
 	// Terraform image which can run `terraform init/plan/apply`
-	TerraformImage = "hashicorp/terraform:full"
+	TerraformImage = "zzxwill/docker-terraform:0.14.9"
+
+	workingVolumeMountPath              = "/data"
+	InputTFConfigurationVolumeName      = "tf-input-configuration"
+	InputTFConfigurationVolumeMountPath = "/opt/terraform"
 )
 
+const (
+	TerraformConfigurationName = "main.tf.json"
+	TerraformStateName         = "terraform.tfstate"
+)
+
+type ConfigMapName string
+
+const (
+	TFInputConfigMapSName ConfigMapName = "%s-tf-input"
+	TFStateConfigMapName  ConfigMapName = "%s-tf-state"
+)
+
+const (
+	AlicloudAcessKey  = "ALICLOUD_ACCESS_KEY"
+	AlicloudSecretKey = "ALICLOUD_SECRET_KEY"
+	AlicloudRegion    = "ALICLOUD_REGION"
+)
 const DefaultNamespace = "vela-system"
+
+const ProviderName = "default"
+
+const SucceededPod int32 = 1
 
 // ConfigurationReconciler reconciles a Configuration object
 type ConfigurationReconciler struct {
@@ -64,9 +84,14 @@ type ConfigurationReconciler struct {
 // +kubebuilder:rbac:groups=terraform.core.oam.dev,resources=configurations/status,verbs=get;update;patch
 
 func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	//_ = r.Log.WithValues("configuration", req.NamespacedName)
-	ctx := context.Background()
 	klog.InfoS("Reconciling Terraform Template...", "NamespacedName", req.NamespacedName)
+	var (
+		ctx               = context.Background()
+		ns                = req.Namespace
+		configurationName = req.Name
+		// tfStateConfigMapName = fmt.Sprintf(string(TFStateConfigMapName), configurationName)
+		configMap = v1.ConfigMap{}
+	)
 
 	var configuration v1beta1.Configuration
 	if err := r.Get(ctx, req.NamespacedName, &configuration); err != nil {
@@ -76,68 +101,155 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		return ctrl.Result{}, err
 	}
 
-	tfVariable, err := getTerraformJSONVariable(configuration)
+	envs, err := prepareTFVariables(ctx, r.Client,configuration)
 	if err != nil {
-		return  ctrl.Result{}, errors.Wrap(err, fmt.Sprintf("failed to get Terraform JSON files from Configuration %s", configuration.Name))
+		return ctrl.Result{}, err
+	}
+	tfInputConfigMapsName := fmt.Sprintf(string(TFInputConfigMapSName), configurationName)
+	job := prepareJob(configuration, envs, tfInputConfigMapsName)
+
+	err = r.Client.Get(ctx, client.ObjectKey{Name: configurationName, Namespace: ns}, &job)
+	if err != nil {
+		if kerrors.IsNotFound(err) {
+			// Check the existence of ConfigMap which is used to input TF configuration file
+			// TODO(zzxwill) replace the configmap every time?
+			if err := r.Client.Get(ctx, client.ObjectKey{Name: tfInputConfigMapsName, Namespace: ns}, &configMap); err != nil {
+				if kerrors.IsNotFound(err) {
+					configurationConfigMap := v1.ConfigMap{
+						TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+						ObjectMeta: metav1.ObjectMeta{Name: tfInputConfigMapsName, Namespace: ns},
+						Data: map[string]string{
+							TerraformConfigurationName: configuration.Spec.JSON,
+						},
+					}
+					if err := r.Client.Create(ctx, &configurationConfigMap); err != nil {
+						return ctrl.Result{}, err
+					}
+				} else {
+					return ctrl.Result{}, err
+				}
+			}
+
+			if err := r.Client.Create(ctx, &job); err != nil {
+				return ctrl.Result{}, err
+			}
+			return ctrl.Result{}, nil
+		}
+		return ctrl.Result{}, err
 	}
 
-	job := batchv1.Job{
-		TypeMeta: metav1.TypeMeta{Kind: "Job", APIVersion: "batch/v1"},
+	if job.Status.Succeeded == SucceededPod {
+		return ctrl.Result{}, nil
+	}
+
+	return ctrl.Result{}, nil
+}
+
+func prepareJob(configuration v1beta1.Configuration, envs []v1.EnvVar, tfInputConfigMapsName string) batchv1.Job {
+	configurationName := configuration.Name
+	workingVolume := v1.Volume{Name: configurationName}
+	workingVolume.EmptyDir = &v1.EmptyDirVolumeSource{}
+
+	configMapVolumeSource := v1.ConfigMapVolumeSource{}
+	configMapVolumeSource.Name = tfInputConfigMapsName
+	inputTFConfigurationVolume := v1.Volume{Name: InputTFConfigurationVolumeName}
+	inputTFConfigurationVolume.ConfigMap = &configMapVolumeSource
+
+	var parallelism int32 = 1
+	var completions int32 = 1
+	return batchv1.Job{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Job",
+			APIVersion: "batch/v1",
+		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: configuration.Name,
-			Namespace: req.Namespace,
+			Name:      configurationName,
+			Namespace: configuration.Namespace,
 			OwnerReferences: []metav1.OwnerReference{{
 				APIVersion: configuration.APIVersion,
 				Kind:       configuration.Kind,
-				Name:       configuration.Name,
+				Name:       configurationName,
 				UID:        configuration.UID,
 				Controller: pointer.BoolPtr(false),
 			}},
 		},
-		Spec:batchv1.JobSpec{
+		Spec: batchv1.JobSpec{
+			Parallelism: &parallelism,
+			Completions: &completions,
 			Template: v1.PodTemplateSpec{
 				Spec: v1.PodSpec{
+					//InitContainers: []v1.Container{{
+					//	Name:    "prepare-input-terraform-configurations",
+					//	Image:   "busybox",
+					//	Command: []string{"sh", "-c", fmt.Sprintf("cp -r %s/* %s", InputTFConfigurationVolumeMountPath, workingVolumeMountPath)},
+					//	VolumeMounts: []v1.VolumeMount{
+					//		{
+					//			Name:      configurationName,
+					//			MountPath: workingVolumeMountPath,
+					//		},
+					//		{
+					//			Name:      InputTFConfigurationVolumeName,
+					//			MountPath: InputTFConfigurationVolumeMountPath,
+					//		},
+					//	},
+					//}},
 					Containers: []v1.Container{{
-						Image: TerraformImage,
-						Command: []string{""},
+						Name:            configurationName,
+						Image:           TerraformImage,
+						ImagePullPolicy: v1.PullAlways,
+						Command: []string{
+							"bash",
+							"-c",
+							fmt.Sprintf("cp %s/* %s && terraform init && terraform apply -auto-approve", InputTFConfigurationVolumeMountPath, workingVolumeMountPath),
+						},
+						VolumeMounts: []v1.VolumeMount{
+							{
+								Name:      InputTFConfigurationVolumeName,
+								MountPath: InputTFConfigurationVolumeMountPath,
+							},
+						},
+						Env: envs,
 					}},
+					Volumes:       []v1.Volume{workingVolume, inputTFConfigurationVolume},
 					RestartPolicy: v1.RestartPolicyNever,
 				},
 			},
 		},
 	}
 
-	tfJSONDir := filepath.Join(TerraformBaseLocation, configuration.Name)
-	if _, err = os.Stat(tfJSONDir); err != nil && os.IsNotExist(err) {
-		if err = os.MkdirAll(tfJSONDir, 0750); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to create directory for %s: %w", tfJSONDir, err)
-		}
-	}
-	if err := ioutil.WriteFile(filepath.Join(tfJSONDir, "main.tf.json"), []byte(configuration.Spec.JSON), 0600); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to convert Terraform template: %w", err)
-	}
-	if err := ioutil.WriteFile(filepath.Join(tfJSONDir, "terraform.tfvars.json"), tfVariable, 0600); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to convert Terraform template: %w", err)
-	}
+}
 
-	outputs, err := callTerraform(tfJSONDir)
+func prepareTFVariables(ctx context.Context, k8sClient client.Client, configuration v1beta1.Configuration) ([]v1.EnvVar, error) {
+	var envs []v1.EnvVar
+
+	tfVariable, err := getTerraformJSONVariable(configuration)
 	if err != nil {
-		return ctrl.Result{}, err
-	}
-	cwd, err := os.Getwd()
-	if err := os.Chdir(cwd); err != nil {
-		return ctrl.Result{}, err
+		return nil, errors.Wrap(err, fmt.Sprintf("failed to get Terraform JSON variables from Configuration %s", configuration.Name))
 	}
 
-	outputList := strings.Split(strings.ReplaceAll(string(outputs), " ", ""), "\n")
-	if outputList[len(outputList)-1] == "" {
-		outputList = outputList[:len(outputList)-1]
-	}
-	if err := generateSecretFromTerraformOutput(r.Client, outputList, req.Name, req.Namespace); err != nil {
-		return ctrl.Result{}, err
+	for k, v := range tfVariable {
+		envs = append(envs, v1.EnvVar{Name: k, Value: v})
 	}
 
-	return ctrl.Result{}, nil
+	ak, err := getProviderSecret(ctx, k8sClient)
+	if err != nil {
+		return nil, err
+	}
+	envs = append(envs,
+		v1.EnvVar{
+			Name:  AlicloudAcessKey,
+			Value: ak.AccessKeyId,
+		},
+		v1.EnvVar{
+			Name:  AlicloudSecretKey,
+			Value: ak.AccessKeySecret,
+		},
+		v1.EnvVar{
+			Name:  AlicloudRegion,
+			Value: ak.Region,
+		},
+	)
+	return envs, nil
 }
 
 type Variable map[string]interface{}
@@ -148,72 +260,17 @@ func (r *ConfigurationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func getTerraformJSONVariable(c v1beta1.Configuration) ([]byte, error) {
+func getTerraformJSONVariable(c v1beta1.Configuration) (map[string]string, error) {
 	variables, err := util.RawExtension2Map(&c.Spec.Variable)
 	if err != nil {
 		return nil, err
 	}
-	tfVariableContent := map[string]Variable{}
+	var environments = make(map[string]string)
+
 	for k, v := range variables {
-		tfVariableContent[k] = map[string]interface{}{"default": v}
+		environments[fmt.Sprintf("TF_VAR_%s", k)] = fmt.Sprint(v)
 	}
-
-	tfVariable := map[string]interface{}{"variable": tfVariableContent}
-
-	tfVariableJSON, err := json.Marshal(tfVariable)
-	if err != nil {
-		return nil, err
-	}
-
-	return tfVariableJSON,nil
-}
-
-func callTerraform(tfJSONDir string) ([]byte, error) {
-	if err := os.Chdir(tfJSONDir); err != nil {
-		return nil, err
-	}
-	var cmd *exec.Cmd
-	cmd = exec.Command("bash", "-c", "terraform init")
-	if err := RealtimePrintCommandOutput(cmd, TerraformLog); err != nil {
-		return nil, err
-	}
-
-	cmd = exec.Command("bash", "-c", "terraform apply --auto-approve")
-	if err := RealtimePrintCommandOutput(cmd, TerraformLog); err != nil {
-		return nil, err
-	}
-
-	// Get output from Terraform
-	cmd = exec.Command("bash", "-c", "terraform output")
-	outputs, err := cmd.Output()
-	if err != nil {
-		return nil, err
-	}
-	return outputs, nil
-}
-
-// RealtimePrintCommandOutput prints command output in real time
-// If logFile is "", it will prints the stdout, or it will write to local file
-func RealtimePrintCommandOutput(cmd *exec.Cmd, logFile string) error {
-	var writer io.Writer
-	if logFile == "" {
-		writer = io.MultiWriter(os.Stdout)
-	} else {
-		if _, err := os.Stat(filepath.Dir(logFile)); err != nil {
-			return err
-		}
-		f, err := os.Create(filepath.Clean(logFile))
-		if err != nil {
-			return err
-		}
-		writer = io.MultiWriter(f)
-	}
-	cmd.Stdout = writer
-	cmd.Stderr = writer
-	if err := cmd.Run(); err != nil {
-		return err
-	}
-	return nil
+	return environments, nil
 }
 
 // generateSecretFromTerraformOutput generates secret from Terraform output
@@ -265,4 +322,37 @@ func generateSecretFromTerraformOutput(k8sClient client.Client, outputList []str
 		return fmt.Errorf("failed to store cloud resource %s output to secret: %w", name, err)
 	}
 	return nil
+}
+
+func getProviderSecret(ctx context.Context, k8sClient client.Client) (*util.AlibabaCloudCredentials, error) {
+	var provider v1beta1.Provider
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: ProviderName, Namespace: "default"}, &provider); err != nil {
+		errMsg := "failed to get Provider object"
+		klog.ErrorS(err, errMsg, "Name", ProviderName)
+		return nil, errors.Wrap(err, errMsg)
+	}
+
+	switch provider.Spec.Credentials.Source {
+	case "Secret":
+		var secret v1.Secret
+		secretRef := provider.Spec.Credentials.SecretRef
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: secretRef.Name, Namespace: secretRef.Namespace}, &secret); err != nil {
+			errMsg := "failed to get the Secret from Provider"
+			klog.ErrorS(err, errMsg, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
+			return nil, errors.Wrap(err, errMsg)
+		}
+		var ak util.AlibabaCloudCredentials
+		if err := yaml.Unmarshal(secret.Data[secretRef.Key], &ak); err != nil {
+			errMsg := "failed to convert the credentials of Secret from Provider"
+			klog.ErrorS(err, errMsg, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
+			return nil, errors.Wrap(err, errMsg)
+		}
+		ak.Region = provider.Spec.Region
+		return &ak, nil
+	default:
+		errMsg := "the credentials type is not supported."
+		err := errors.New(errMsg)
+		klog.ErrorS(err, "", "CredentialType", provider.Spec.Credentials.Source)
+		return nil, err
+	}
 }
