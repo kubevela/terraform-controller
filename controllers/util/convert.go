@@ -6,6 +6,13 @@ import (
 )
 
 var ParameterTag = "parameter"
+
+type AlibabaCloudCredentials struct {
+	AccessKeyId string `yaml:"accessKeyId"`
+	AccessKeySecret string `yaml:"accessKeySecret"`
+	Region string
+}
+
 //
 //// Complete do workload definition's rendering
 //func Complete(ctx process.Context, name, abstractTemplate string, params interface{}) error {
@@ -85,3 +92,4 @@ func RawExtension2Map(raw *runtime.RawExtension) (map[string]interface{}, error)
 	}
 	return ret, err
 }
+

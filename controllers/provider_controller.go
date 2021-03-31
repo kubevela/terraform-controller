@@ -18,8 +18,8 @@ package controllers
 
 import (
 	"context"
-
 	"github.com/go-logr/logr"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -38,10 +38,16 @@ type ProviderReconciler struct {
 // +kubebuilder:rbac:groups=terraform.core.oam.dev,resources=providerconfigs/status,verbs=get;update;patch
 
 func (r *ProviderReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	_ = context.Background()
-	_ = r.Log.WithValues("providerconfig", req.NamespacedName)
+	var ctx = context.Background()
+	_ = r.Log.WithValues("provider", req.NamespacedName)
 
-	// your logic here
+	var provider terraformv1beta1.Provider
+	if err := r.Get(ctx, req.NamespacedName, &provider); err != nil {
+		if kerrors.IsNotFound(err) {
+			err = nil
+		}
+		return ctrl.Result{}, err
+	}
 
 	return ctrl.Result{}, nil
 }
