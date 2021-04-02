@@ -3,7 +3,7 @@
     "alicloud_oss_bucket": {
       "bucket-acl": {
         "bucket": "${var.bucket}",
-        "acl": "private"
+        "acl": "${var.acl}"
       }
     }
   },
@@ -15,6 +15,11 @@
   "variable": {
     "bucket": {
       "default": "poc"
+    }
+  },
+  "variable": {
+    "acl": {
+      "default": "private"
     }
   }
 }

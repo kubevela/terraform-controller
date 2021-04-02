@@ -9,7 +9,7 @@ spec:
         "alicloud_oss_bucket": {
           "bucket-acl": {
             "bucket": "${var.bucket}",
-            "acl": "private"
+            "acl": "${var.acl}"
           }
         }
       },
@@ -21,10 +21,14 @@ spec:
       "variable": {
         "bucket": {
           "default": "poc"
+        },
+        "acl": {
+          "default": "private"
         }
       }
     }
 
   variable:
     bucket: "vela-website"
+    acl: "private"
 
