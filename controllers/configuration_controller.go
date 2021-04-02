@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/ghodss/yaml"
 	"github.com/go-logr/logr"
@@ -93,9 +94,8 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		ctx               = context.Background()
 		ns                = req.Namespace
 		configurationName = req.Name
-		// tfStateConfigMapName = fmt.Sprintf(string(TFStateConfigMapName), configurationName)
-		configMap = v1.ConfigMap{}
-		gotJob    batchv1.Job
+		configMap         = v1.ConfigMap{}
+		gotJob            batchv1.Job
 	)
 
 	var configuration v1beta1.Configuration
@@ -107,6 +107,9 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	}
 
 	tfInputConfigMapsName := fmt.Sprintf(string(TFInputConfigMapSName), configurationName)
+	tfStateConfigMapName := fmt.Sprintf(string(TFStateConfigMapName), configurationName)
+
+	// Keep provisioning Deployment for debugging for a while
 
 	//envs, err2 := prepareTFVariables(ctx, r.Client, configuration)
 	//if err2 != nil {
@@ -143,7 +146,7 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 				return ctrl.Result{}, err
 			}
 
-			job := prepareJob(configuration, envs, tfInputConfigMapsName)
+			job := prepareJob(ctx, r.Client, configuration, envs, tfInputConfigMapsName)
 
 			if err := r.Client.Create(ctx, &job); err != nil {
 				return ctrl.Result{}, err
@@ -154,14 +157,24 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		return ctrl.Result{}, err
 	}
 
+	//
 	if gotJob.Status.Succeeded == SucceededPod {
+		outputs, err := getTFOutputs(ctx, r.Client, configuration, tfStateConfigMapName)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		configuration.Status.State = "provisioned"
+		configuration.Status.Outputs = outputs
+		if err := r.Client.Update(ctx, &configuration); err != nil {
+			return ctrl.Result{}, err
+		}
 		return ctrl.Result{}, nil
 	}
 
 	return ctrl.Result{}, nil
 }
 
-func prepareJob(configuration v1beta1.Configuration, envs []v1.EnvVar, tfInputConfigMapsName string) batchv1.Job {
+func prepareJob(ctx context.Context, k8sClient client.Client, configuration v1beta1.Configuration, envs []v1.EnvVar, tfInputConfigMapsName string) batchv1.Job {
 	configurationName := configuration.Name
 	workingVolume := v1.Volume{Name: configurationName}
 	workingVolume.EmptyDir = &v1.EmptyDirVolumeSource{}
@@ -261,6 +274,56 @@ func prepareJob(configuration v1beta1.Configuration, envs []v1.EnvVar, tfInputCo
 			},
 		},
 	}
+}
+
+type TFState struct {
+	Outputs map[string]v1beta1.Property `json:"outputs"`
+}
+
+func getTFOutputs(ctx context.Context, k8sClient client.Client, configuration v1beta1.Configuration, tfStateConfigMapName string) (map[string]v1beta1.Property, error) {
+	var configMap = v1.ConfigMap{}
+	// Check the existence of ConfigMap which is used to store TF state file
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: tfStateConfigMapName, Namespace: configuration.Namespace}, &configMap); err != nil {
+		return nil, err
+	}
+	tfStateJSON, ok := configMap.Data[TerraformStateName]
+	if !ok {
+		return nil, fmt.Errorf("failed to get %s from ConfigMap %s", TerraformStateName, configMap.Name)
+	}
+
+	var tfState TFState
+	if err := json.Unmarshal([]byte(tfStateJSON), &tfState); err != nil {
+		return nil, err
+	}
+	outputs := tfState.Outputs
+
+	writeConnectionSecretToReference := configuration.Spec.WriteConnectionSecretToReference
+	if writeConnectionSecretToReference.Name != "" {
+		name := writeConnectionSecretToReference.Name
+		ns := writeConnectionSecretToReference.Namespace
+		data := make(map[string][]byte)
+		for k, v := range outputs {
+			data[k] = []byte(v.Value)
+		}
+		var gotSecret v1.Secret
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: name, Namespace: ns}, &gotSecret); err != nil {
+			if kerrors.IsNotFound(err) {
+				var secret = v1.Secret{
+					ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
+					TypeMeta:   metav1.TypeMeta{Kind: "Secret"},
+					Data:       data,
+				}
+				if err := k8sClient.Create(ctx, &secret); err != nil {
+					return nil, err
+				}
+			}
+		}
+		gotSecret.Data = data
+		if err := k8sClient.Update(ctx, &gotSecret); err != nil {
+			return nil, err
+		}
+	}
+	return outputs, nil
 }
 
 func prepareDeployment(configuration v1beta1.Configuration, envs []v1.EnvVar, tfInputConfigMapsName string) appsv1.Deployment {

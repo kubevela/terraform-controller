@@ -17,6 +17,7 @@ limitations under the License.
 package v1beta1
 
 import (
+	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -27,6 +28,13 @@ type ConfigurationSpec struct {
 	JSON string `json:"JSON,omitempty"`
 	// +kubebuilder:pruning:PreserveUnknownFields
 	Variable runtime.RawExtension `json:"variable"`
+
+	// WriteConnectionSecretToReference specifies the namespace and name of a
+	// Secret to which any connection details for this managed resource should
+	// be written. Connection details frequently include the endpoint, username,
+	// and password required to connect to the managed resource.
+	// +optional
+	WriteConnectionSecretToReference *xpv1.SecretReference `json:"writeConnectionSecretToRef,omitempty"`
 }
 
 // ConfigurationStatus defines the observed state of Configuration
@@ -34,6 +42,12 @@ type ConfigurationStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 	State string `json:"state,omitempty"`
+	Outputs map[string]Property `json:"outputs,omitempty"`
+}
+
+type Property struct {
+	Value string `json:"value,omitempty"`
+	Type  string `json:"type,omitempty"`
 }
 
 // +kubebuilder:object:root=true
