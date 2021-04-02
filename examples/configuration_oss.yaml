@@ -32,3 +32,8 @@ spec:
     bucket: "vela-website"
     acl: "private"
 
+  writeConnectionSecretToRef:
+    name: oss-conn
+    namespace: default
+
+

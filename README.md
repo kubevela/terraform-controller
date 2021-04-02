@@ -83,7 +83,59 @@ NAME         AGE
 aliyun-oss   6d1h
 ```
 
-## Watch the job to complete
+## Check Configuration
+
+```shell
+✗ kubectl get configuration.terraform.core.oam.dev aliyun-oss -o yaml
+apiVersion: terraform.core.oam.dev/v1beta1
+kind: Configuration
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"terraform.core.oam.dev/v1beta1","kind":"Configuration","metadata":{"annotations":{},"name":"aliyun-oss","namespace":"default"},"spec":{"JSON":"{\n  \"resource\": {\n    \"alicloud_oss_bucket\": {\n      \"bucket-acl\": {\n        \"bucket\": \"${var.bucket}\",\n        \"acl\": \"${var.acl}\"\n      }\n    }\n  },\n  \"output\": {\n    \"BUCKET_NAME\": {\n      \"value\": \"${alicloud_oss_bucket.bucket-acl.bucket}.${alicloud_oss_bucket.bucket-acl.extranet_endpoint}\"\n    }\n  },\n  \"variable\": {\n    \"bucket\": {\n      \"default\": \"poc\"\n    },\n    \"acl\": {\n      \"default\": \"private\"\n    }\n  }\n}\n","variable":{"acl":"private","bucket":"vela-website"},"writeConnectionSecretToRef":{"name":"oss-conn","namespace":"default"}}}
+  creationTimestamp: "2021-04-02T08:17:08Z"
+  generation: 2
+spec:
+  JSON: |
+    {
+      "resource": {
+        "alicloud_oss_bucket": {
+          "bucket-acl": {
+            "bucket": "${var.bucket}",
+            "acl": "${var.acl}"
+          }
+        }
+      },
+      "output": {
+        "BUCKET_NAME": {
+          "value": "${alicloud_oss_bucket.bucket-acl.bucket}.${alicloud_oss_bucket.bucket-acl.extranet_endpoint}"
+        }
+      },
+      "variable": {
+        "bucket": {
+          "default": "poc"
+        },
+        "acl": {
+          "default": "private"
+        }
+      }
+    }
+  variable:
+    acl: private
+    bucket: vela-website
+  writeConnectionSecretToRef:
+    name: oss-conn
+    namespace: default
+status:
+  outputs:
+    BUCKET_NAME:
+      type: string
+      value: vela-website.oss-cn-beijing.aliyuncs.com
+  state: provisioned
+```
+
+## Look into Configuration
+### Watch the job to complete
 
 ```shell
 ✗ kubectl get job
@@ -135,7 +187,7 @@ Outputs:
 BUCKET_NAME = "vela-website.oss-cn-beijing.aliyuncs.com"
 ```
 
-## Check whether Terraform state file is stored
+### Check whether Terraform state file is stored
 
 ```shell
 ✗ kubectl get cm | grep aliyun-oss
