@@ -23,6 +23,8 @@ import (
 	"github.com/ghodss/yaml"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
+	"github.com/zzxwill/terraform-controller/api/v1beta1"
+	"github.com/zzxwill/terraform-controller/controllers/util"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
@@ -34,22 +36,16 @@ import (
 	"path/filepath"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"strings"
-
-	"github.com/zzxwill/terraform-controller/api/v1beta1"
-	"github.com/zzxwill/terraform-controller/controllers/util"
 )
 
 const (
-	// TerraformBaseLocation is the base directory to store all Terraform JSON files
-	TerraformBaseLocation = ".vela/terraform/"
-	// TerraformLog is the logfile name for terraform
-	TerraformLog = "terraform.log"
 	// Terraform image which can run `terraform init/plan/apply`
 	TerraformImage = "zzxwill/docker-terraform:0.14.9"
 
 	TFStateRetrieverImage = "zzxwill/terraform-tfstate-retriever:v0.2"
+)
 
+const (
 	WorkingVolumeMountPath              = "/data"
 	InputTFConfigurationVolumeName      = "tf-input-configuration"
 	InputTFConfigurationVolumeMountPath = "/opt/terraform"
@@ -72,7 +68,6 @@ const (
 	AlicloudSecretKey = "ALICLOUD_SECRET_KEY"
 	AlicloudRegion    = "ALICLOUD_REGION"
 )
-const DefaultNamespace = "vela-system"
 
 const ProviderName = "default"
 
@@ -108,17 +103,6 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 
 	tfInputConfigMapsName := fmt.Sprintf(string(TFInputConfigMapSName), configurationName)
 	tfStateConfigMapName := fmt.Sprintf(string(TFStateConfigMapName), configurationName)
-
-	// Keep provisioning Deployment for debugging for a while
-
-	//envs, err2 := prepareTFVariables(ctx, r.Client, configuration)
-	//if err2 != nil {
-	//	return ctrl.Result{}, err2
-	//}
-	//deploy := prepareDeployment(configuration, envs, tfInputConfigMapsName)
-	//if err := r.Client.Create(ctx, &deploy); err != nil {
-	//	return ctrl.Result{}, err
-	//}
 
 	err := r.Client.Get(ctx, client.ObjectKey{Name: configurationName, Namespace: ns}, &gotJob)
 	if err != nil {
@@ -157,7 +141,6 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		return ctrl.Result{}, err
 	}
 
-	//
 	if gotJob.Status.Succeeded == SucceededPod {
 		outputs, err := getTFOutputs(ctx, r.Client, configuration, tfStateConfigMapName)
 		if err != nil {
@@ -464,57 +447,6 @@ func getTerraformJSONVariable(c v1beta1.Configuration) (map[string]string, error
 		environments[fmt.Sprintf("TF_VAR_%s", k)] = fmt.Sprint(v)
 	}
 	return environments, nil
-}
-
-// generateSecretFromTerraformOutput generates secret from Terraform output
-func generateSecretFromTerraformOutput(k8sClient client.Client, outputList []string, name, namespace string) error {
-	ctx := context.TODO()
-	err := k8sClient.Create(ctx, &v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}})
-	if err == nil {
-		return fmt.Errorf("namespace %s doesn't exist", namespace)
-	}
-	var cmData = make(map[string]string, len(outputList))
-	for _, i := range outputList {
-		line := strings.Split(i, "=")
-		if len(line) != 2 {
-			return fmt.Errorf("terraform output isn't in the right format")
-		}
-		k := strings.TrimSpace(line[0])
-		v := strings.TrimSpace(line[1])
-		if k != "" && v != "" {
-			cmData[k] = v
-		}
-	}
-
-	objectKey := client.ObjectKey{
-		Namespace: namespace,
-		Name:      name,
-	}
-	var secret v1.Secret
-	if err := k8sClient.Get(ctx, objectKey, &secret); err != nil && !kerrors.IsNotFound(err) {
-		return fmt.Errorf("retrieving the secret from cloud resource %s hit an issue: %w", name, err)
-	} else if err == nil {
-		if err := k8sClient.Delete(ctx, &secret); err != nil {
-			return fmt.Errorf("failed to store cloud resource %s output to secret: %w", name, err)
-		}
-	}
-
-	secret = v1.Secret{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "v1",
-			Kind:       "Secret",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespace,
-			Name:      name,
-		},
-		StringData: cmData,
-	}
-
-	if err := k8sClient.Create(ctx, &secret); err != nil {
-		return fmt.Errorf("failed to store cloud resource %s output to secret: %w", name, err)
-	}
-	return nil
 }
 
 func getProviderSecret(ctx context.Context, k8sClient client.Client) (*util.AlibabaCloudCredentials, error) {

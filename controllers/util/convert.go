@@ -1,3 +1,19 @@
+/*
+Copyright 2021 The KubeVela Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package util
 
 import (
@@ -8,75 +24,13 @@ import (
 var ParameterTag = "parameter"
 
 type AlibabaCloudCredentials struct {
-	AccessKeyId string `yaml:"accessKeyId"`
+	AccessKeyId     string `yaml:"accessKeyId"`
 	AccessKeySecret string `yaml:"accessKeySecret"`
-	Region string
+	Region          string
 }
 
-//
-//// Complete do workload definition's rendering
-//func Complete(ctx process.Context, name, abstractTemplate string, params interface{}) error {
-//	bi := build.NewContext().NewInstance("", nil)
-//	if err := bi.AddFile("-", abstractTemplate); err != nil {
-//		return errors.WithMessagef(err, "invalid cue template: %s", name)
-//	}
-//	var paramFile = fmt.Sprintf("%s: {}", ParameterTag)
-//	if params != nil {
-//		bt, err := json.Marshal(params)
-//		if err != nil {
-//			return errors.WithMessagef(err, "marshal parameter of configuration %s", name)
-//		}
-//		if string(bt) != "null" {
-//			paramFile = fmt.Sprintf("%s: %s", ParameterTag, string(bt))
-//		}
-//	}
-//	if err := bi.AddFile(ParameterTag, paramFile); err != nil {
-//		return errors.WithMessagef(err, "invalid parameter of configuration %s", name)
-//	}
-//
-//	if err := bi.AddFile("-", ctx.BaseContextFile()); err != nil {
-//		return err
-//	}
-//	var r cue.Runtime
-//	inst, err := r.Build(bi)
-//	if err != nil {
-//		return err
-//	}
-//
-//	if err := inst.Value().Err(); err != nil {
-//		return errors.WithMessagef(err, "invalid cue template of workload %s after merge parameter and context", wd.name)
-//	}
-//	output := inst.Lookup(OutputFieldName)
-//	base, err := model.NewBase(output)
-//	if err != nil {
-//		return errors.WithMessagef(err, "invalid output of workload %s", wd.name)
-//	}
-//	ctx.SetBase(base)
-//
-//	// we will support outputs for workload composition, and it will become trait in AppConfig.
-//	outputs := inst.Lookup(OutputsFieldName)
-//	if !outputs.Exists() {
-//		return nil
-//	}
-//	st, err := outputs.Struct()
-//	if err != nil {
-//		return errors.WithMessagef(err, "invalid outputs of workload %s", wd.name)
-//	}
-//	for i := 0; i < st.Len(); i++ {
-//		fieldInfo := st.Field(i)
-//		if fieldInfo.IsDefinition || fieldInfo.IsHidden || fieldInfo.IsOptional {
-//			continue
-//		}
-//		other, err := model.NewOther(fieldInfo.Value)
-//		if err != nil {
-//			return errors.WithMessagef(err, "invalid outputs(%s) of workload %s", fieldInfo.Name, wd.name)
-//		}
-//		ctx.AppendAuxiliaries(process.Auxiliary{Ins: other, Type: AuxiliaryWorkload, Name: fieldInfo.Name})
-//	}
-//	return nil
-//}
-
 // RawExtension2Map will convert rawExtension to map
+// This function is copied from oam-dev/kubevela
 func RawExtension2Map(raw *runtime.RawExtension) (map[string]interface{}, error) {
 	if raw == nil {
 		return nil, nil
@@ -92,4 +46,3 @@ func RawExtension2Map(raw *runtime.RawExtension) (map[string]interface{}, error)
 	}
 	return ret, err
 }
-
