@@ -24,7 +24,7 @@ import (
 var ParameterTag = "parameter"
 
 type AlibabaCloudCredentials struct {
-	AccessKeyId     string `yaml:"accessKeyId"`
+	AccessKeyID     string `yaml:"accessKeyID"`
 	AccessKeySecret string `yaml:"accessKeySecret"`
 	Region          string
 }
