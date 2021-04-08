@@ -5,12 +5,12 @@ Kubernetes Terraform Controller is inspired by [Crossplane runtime](https://cros
 
 - Terraform binary Docker 
   
-  zzxwill/docker-terraform:0.14.9 built from [docker-terraform](https://github.com/zzxwill/docker-terraform/tree/long-run-container)
+  zzxwill/docker-terraform:0.14.10 built from [zzxwill/broadinstitute-docker-terraform](https://github.com/zzxwill/broadinstitute-docker-terraform.git)
 
 
 - Terraform terraform.tfstate retriever
 
-  zzxwill/terraform-tfstate-retriever:v0.1 built from [terraform-tfstate-retriever](https://github.com/zzxwill/terraform-tfstate-retriever) 
+  zzxwill/terraform-tfstate-retriever:v0.2 built from [terraform-tfstate-retriever](https://github.com/zzxwill/terraform-tfstate-retriever) 
   
 
 ## Terraform Provider configuration

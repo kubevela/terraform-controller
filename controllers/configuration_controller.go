@@ -40,7 +40,7 @@ import (
 
 const (
 	// Terraform image which can run `terraform init/plan/apply`
-	TerraformImage = "zzxwill/docker-terraform:0.14.9"
+	TerraformImage = "zzxwill/docker-terraform:0.14.10"
 
 	TFStateRetrieverImage = "zzxwill/terraform-tfstate-retriever:v0.2"
 )
@@ -130,7 +130,7 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 				return ctrl.Result{}, err
 			}
 
-			job := prepareJob(ctx, r.Client, configuration, envs, tfInputConfigMapsName)
+			job := prepareJob(configuration, envs, tfInputConfigMapsName)
 
 			if err := r.Client.Create(ctx, &job); err != nil {
 				return ctrl.Result{}, err
@@ -157,7 +157,7 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	return ctrl.Result{}, nil
 }
 
-func prepareJob(ctx context.Context, k8sClient client.Client, configuration v1beta1.Configuration, envs []v1.EnvVar, tfInputConfigMapsName string) batchv1.Job {
+func prepareJob(configuration v1beta1.Configuration, envs []v1.EnvVar, tfInputConfigMapsName string) batchv1.Job {
 	configurationName := configuration.Name
 	workingVolume := v1.Volume{Name: configurationName}
 	workingVolume.EmptyDir = &v1.EmptyDirVolumeSource{}
@@ -168,8 +168,6 @@ func prepareJob(ctx context.Context, k8sClient client.Client, configuration v1be
 	inputTFConfigurationVolume.ConfigMap = &configMapVolumeSource
 
 	tfStateConfigMapName := fmt.Sprintf(string(TFStateConfigMapName), configurationName)
-	//tfStateVolume := v1.Volume{Name: tfStateConfigMapName}
-	//tfStateVolume.EmptyDir = &v1.EmptyDirVolumeSource{}
 
 	tfStateDir := filepath.Join(WorkingVolumeMountPath, "tfstate")
 
@@ -196,21 +194,34 @@ func prepareJob(ctx context.Context, k8sClient client.Client, configuration v1be
 			Completions: &completions,
 			Template: v1.PodTemplateSpec{
 				Spec: v1.PodSpec{
-					//InitContainers: []v1.Container{{
-					//	Name:    "prepare-input-terraform-configurations",
-					//	Image:   "busybox",
-					//	Command: []string{"sh", "-c", fmt.Sprintf("cp -r %s/* %s", InputTFConfigurationVolumeMountPath, workingVolumeMountPath)},
-					//	VolumeMounts: []v1.VolumeMount{
-					//		{
-					//			Name:      configurationName,
-					//			MountPath: workingVolumeMountPath,
-					//		},
-					//		{
-					//			Name:      InputTFConfigurationVolumeName,
-					//			MountPath: InputTFConfigurationVolumeMountPath,
-					//		},
-					//	},
-					//}},
+					// InitContainer will copy Terraform configuration files to working directory and create Terraform
+					// state file directory in advance
+					InitContainers: []v1.Container{{
+						Name:            "prepare-input-terraform-configurations",
+						Image:           "busybox",
+						ImagePullPolicy: v1.PullAlways,
+						Command: []string{
+							"sh",
+							"-c",
+							fmt.Sprintf("cp %s/* %s && mkdir -p %s",
+								InputTFConfigurationVolumeMountPath, WorkingVolumeMountPath, tfStateDir),
+						},
+						VolumeMounts: []v1.VolumeMount{
+							{
+								Name:      configurationName,
+								MountPath: WorkingVolumeMountPath,
+							},
+							{
+								Name:      InputTFConfigurationVolumeName,
+								MountPath: InputTFConfigurationVolumeMountPath,
+							},
+						},
+					}},
+					// Containers has two container
+					// 1) Container terraform-executor will first copy predefined terraform.d to working directory, and then
+					// run terraform init/apply.
+					// 2) Container terraform-tfstate-retriever will wait forever for state file until it got the file
+					// and will write it to configmap for future use.
 					Containers: []v1.Container{{
 						Name:            "terraform-executor",
 						Image:           TerraformImage,
@@ -218,14 +229,10 @@ func prepareJob(ctx context.Context, k8sClient client.Client, configuration v1be
 						Command: []string{
 							"bash",
 							"-c",
-							fmt.Sprintf("cp %s/* %s && terraform init && terraform apply -auto-approve && mkdir -p %s && cp %s %s/",
-								InputTFConfigurationVolumeMountPath, WorkingVolumeMountPath, tfStateDir, TerraformStateName, tfStateDir),
+							fmt.Sprintf("cp -r /root/terraform.d %s && terraform init && terraform apply -auto-approve && cp %s %s/",
+								WorkingVolumeMountPath, TerraformStateName, tfStateDir),
 						},
 						VolumeMounts: []v1.VolumeMount{
-							{
-								Name:      InputTFConfigurationVolumeName,
-								MountPath: InputTFConfigurationVolumeMountPath,
-							},
 							{
 								Name:      configurationName,
 								MountPath: WorkingVolumeMountPath,
@@ -252,7 +259,7 @@ func prepareJob(ctx context.Context, k8sClient client.Client, configuration v1be
 						},
 					},
 					Volumes:       []v1.Volume{workingVolume, inputTFConfigurationVolume},
-					RestartPolicy: v1.RestartPolicyNever,
+					RestartPolicy: v1.RestartPolicyOnFailure,
 				},
 			},
 		},
@@ -414,7 +421,7 @@ func prepareTFVariables(ctx context.Context, k8sClient client.Client, configurat
 	envs = append(envs,
 		v1.EnvVar{
 			Name:  AlicloudAcessKey,
-			Value: ak.AccessKeyId,
+			Value: ak.AccessKeyID,
 		},
 		v1.EnvVar{
 			Name:  AlicloudSecretKey,
