@@ -40,7 +40,8 @@ import (
 
 const (
 	// Terraform image which can run `terraform init/plan/apply`
-	TerraformImage = "zzxwill/docker-terraform:0.14.10"
+	// hit issue toomanyrequests for "zzxwill/docker-terraform:0.14.10"
+	TerraformImage = "registry.cn-hongkong.aliyuncs.com/zzxwill/docker-terraform:0.14.10"
 
 	TFStateRetrieverImage = "zzxwill/terraform-tfstate-retriever:v0.3"
 )
@@ -48,7 +49,9 @@ const (
 const (
 	WorkingVolumeMountPath              = "/data"
 	InputTFConfigurationVolumeName      = "tf-input-configuration"
-	InputTFConfigurationVolumeMountPath = "/opt/terraform"
+	InputTFConfigurationVolumeMountPath = "/opt/tfconfiguration"
+	TFStateFileVolumeName               = "tf-state-file"
+	TFStateFileVolumeMountPath          = "/opt/tfstate"
 )
 
 const (
@@ -73,6 +76,13 @@ const ProviderName = "default"
 
 const SucceededPod int32 = 1
 
+type TerraformExecutionType string
+
+const (
+	TerraformApply   TerraformExecutionType = "apply"
+	TerraformDestroy TerraformExecutionType = "destroy"
+)
+
 // ConfigurationReconciler reconciles a Configuration object
 type ConfigurationReconciler struct {
 	client.Client
@@ -86,27 +96,32 @@ type ConfigurationReconciler struct {
 func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	klog.InfoS("Reconciling Terraform Template...", "NamespacedName", req.NamespacedName)
 	var (
-		ctx               = context.Background()
-		ns                = req.Namespace
-		configurationName = req.Name
-		configMap         = v1.ConfigMap{}
-		gotJob            batchv1.Job
+		ctx                   = context.Background()
+		ns                    = req.Namespace
+		configurationName     = req.Name
+		configMap             = v1.ConfigMap{}
+		gotJob                batchv1.Job
+		tfInputConfigMapsName = fmt.Sprintf(string(TFInputConfigMapSName), configurationName)
+		tfStateConfigMapName  = fmt.Sprintf(string(TFStateConfigMapName), configurationName)
 	)
 
 	var configuration v1beta1.Configuration
 	if err := r.Get(ctx, req.NamespacedName, &configuration); err != nil {
 		if kerrors.IsNotFound(err) {
-			// delete Terraform State ConfigMap
-
-			err = nil
+			job, err := prepareJob(ctx, r.Client, req.Namespace, req.Name, &configuration, tfInputConfigMapsName, TerraformDestroy)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+			if err := r.Client.Create(ctx, job); err != nil {
+				return ctrl.Result{}, err
+			}
+			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err
 	}
 
-	tfInputConfigMapsName := fmt.Sprintf(string(TFInputConfigMapSName), configurationName)
-	tfStateConfigMapName := fmt.Sprintf(string(TFStateConfigMapName), configurationName)
-
-	err := r.Client.Get(ctx, client.ObjectKey{Name: configurationName, Namespace: ns}, &gotJob)
+	jobName := configurationName + "-" + string(TerraformApply)
+	err := r.Client.Get(ctx, client.ObjectKey{Name: jobName, Namespace: ns}, &gotJob)
 	if err != nil {
 		if kerrors.IsNotFound(err) {
 			// Check the existence of ConfigMap which is used to input TF configuration file
@@ -118,13 +133,13 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      tfInputConfigMapsName,
 							Namespace: ns,
-							OwnerReferences: []metav1.OwnerReference{{
-								APIVersion: configuration.APIVersion,
-								Kind:       configuration.Kind,
-								Name:       configurationName,
-								UID:        configuration.UID,
-								Controller: pointer.BoolPtr(false),
-							}},
+							//OwnerReferences: []metav1.OwnerReference{{
+							//	APIVersion: configuration.APIVersion,
+							//	Kind:       configuration.Kind,
+							//	Name:       configurationName,
+							//	UID:        configuration.UID,
+							//	Controller: pointer.BoolPtr(false),
+							//}},
 						},
 						Data: map[string]string{
 							TerraformConfigurationName: configuration.Spec.JSON,
@@ -137,14 +152,12 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 					return ctrl.Result{}, err
 				}
 			}
-			envs, err := prepareTFVariables(ctx, r.Client, configuration)
+
+			job, err := prepareJob(ctx, r.Client, req.Namespace, req.Name, &configuration, tfInputConfigMapsName, TerraformApply)
 			if err != nil {
 				return ctrl.Result{}, err
 			}
-
-			job := prepareJob(configuration, envs, tfInputConfigMapsName)
-
-			if err := r.Client.Create(ctx, &job); err != nil {
+			if err := r.Client.Create(ctx, job); err != nil {
 				return ctrl.Result{}, err
 			}
 
@@ -169,117 +182,198 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	return ctrl.Result{}, nil
 }
 
-func prepareJob(configuration v1beta1.Configuration, envs []v1.EnvVar, tfInputConfigMapsName string) batchv1.Job {
-	configurationName := configuration.Name
-	workingVolume := v1.Volume{Name: configurationName}
+func prepareJob(ctx context.Context, k8sClient client.Client, namespace, name string, configuration *v1beta1.Configuration, tfInputConfigMapsName string, executionType TerraformExecutionType) (*batchv1.Job, error) {
+	jobName := name + "-" + string(executionType)
+
+	envs, err := prepareTFVariables(ctx, k8sClient, configuration)
+	if err != nil {
+		return nil, err
+	}
+
+	var parallelism int32 = 1
+	var completions int32 = 1
+	var ttlSecondsAfterFinished int32 = 120
+
+	workingVolume := v1.Volume{Name: name}
 	workingVolume.EmptyDir = &v1.EmptyDirVolumeSource{}
+
+	tfStateConfigMapName := fmt.Sprintf(string(TFStateConfigMapName), name)
+	tfStateDir := filepath.Join(WorkingVolumeMountPath, "tfstate")
 
 	configMapVolumeSource := v1.ConfigMapVolumeSource{}
 	configMapVolumeSource.Name = tfInputConfigMapsName
 	inputTFConfigurationVolume := v1.Volume{Name: InputTFConfigurationVolumeName}
 	inputTFConfigurationVolume.ConfigMap = &configMapVolumeSource
 
-	tfStateConfigMapName := fmt.Sprintf(string(TFStateConfigMapName), configurationName)
-
-	tfStateDir := filepath.Join(WorkingVolumeMountPath, "tfstate")
-
-	var parallelism int32 = 1
-	var completions int32 = 1
-	return batchv1.Job{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Job",
-			APIVersion: "batch/v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      configurationName,
-			Namespace: configuration.Namespace,
-			OwnerReferences: []metav1.OwnerReference{{
-				APIVersion: configuration.APIVersion,
-				Kind:       configuration.Kind,
-				Name:       configurationName,
-				UID:        configuration.UID,
-				Controller: pointer.BoolPtr(false),
-			}},
-		},
-		Spec: batchv1.JobSpec{
-			Parallelism: &parallelism,
-			Completions: &completions,
-			Template: v1.PodTemplateSpec{
-				Spec: v1.PodSpec{
-					// InitContainer will copy Terraform configuration files to working directory and create Terraform
-					// state file directory in advance
-					InitContainers: []v1.Container{{
-						Name:            "prepare-input-terraform-configurations",
-						Image:           "busybox",
-						ImagePullPolicy: v1.PullAlways,
-						Command: []string{
-							"sh",
-							"-c",
-							fmt.Sprintf("cp %s/* %s && mkdir -p %s",
-								InputTFConfigurationVolumeMountPath, WorkingVolumeMountPath, tfStateDir),
-						},
-						VolumeMounts: []v1.VolumeMount{
-							{
-								Name:      configurationName,
-								MountPath: WorkingVolumeMountPath,
-							},
-							{
-								Name:      InputTFConfigurationVolumeName,
-								MountPath: InputTFConfigurationVolumeMountPath,
-							},
-						},
-					}},
-					// Containers has two container
-					// 1) Container terraform-executor will first copy predefined terraform.d to working directory, and then
-					// run terraform init/apply.
-					// 2) Container terraform-tfstate-retriever will wait forever for state file until it got the file
-					// and will write it to configmap for future use.
-					Containers: []v1.Container{{
-						Name:            "terraform-executor",
-						Image:           TerraformImage,
-						ImagePullPolicy: v1.PullAlways,
-						Command: []string{
-							"bash",
-							"-c",
-							fmt.Sprintf("cp -r /root/terraform.d %s && terraform init && terraform apply -auto-approve && cp %s %s/",
-								WorkingVolumeMountPath, TerraformStateName, tfStateDir),
-						},
-						VolumeMounts: []v1.VolumeMount{
-							{
-								Name:      configurationName,
-								MountPath: WorkingVolumeMountPath,
-							},
-						},
-						Env: envs,
-					},
-						{
-							Name:            "terraform-tfstate-retriever",
-							Image:           TFStateRetrieverImage,
+	if executionType == TerraformApply {
+		return &batchv1.Job{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Job",
+				APIVersion: "batch/v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      jobName,
+				Namespace: namespace,
+			},
+			Spec: batchv1.JobSpec{
+				TTLSecondsAfterFinished: &ttlSecondsAfterFinished,
+				Parallelism:             &parallelism,
+				Completions:             &completions,
+				Template: v1.PodTemplateSpec{
+					Spec: v1.PodSpec{
+						// InitContainer will copy Terraform configuration files to working directory and create Terraform
+						// state file directory in advance
+						InitContainers: []v1.Container{{
+							Name:            "prepare-input-terraform-configurations",
+							Image:           "busybox",
 							ImagePullPolicy: v1.PullAlways,
-							Env: []v1.EnvVar{
-								{Name: "CONFIGMAPS_NAMESPACE", Value: configuration.Namespace},
-								{Name: "CONFIGMAPS_NAME", Value: tfStateConfigMapName},
-								{Name: "TF_STATE_DIR", Value: tfStateDir},
-								{Name: "TF_STATE_NAME", Value: TerraformStateName},
-								{Name: "CONFIGURATION_APIVERSION", Value: configuration.APIVersion},
-								{Name: "CONFIGURATION_KIND", Value: configuration.Kind},
-								{Name: "CONFIGURATION_NAME", Value: configuration.Name},
-								{Name: "CONFIGURATION_UID", Value: string(configuration.UID)},
+							Command: []string{
+								"sh",
+								"-c",
+								fmt.Sprintf("cp %s/* %s && mkdir -p %s",
+									InputTFConfigurationVolumeMountPath, WorkingVolumeMountPath, tfStateDir),
 							},
 							VolumeMounts: []v1.VolumeMount{
 								{
-									Name:      configurationName,
+									Name:      name,
 									MountPath: WorkingVolumeMountPath,
+								},
+								{
+									Name:      InputTFConfigurationVolumeName,
+									MountPath: InputTFConfigurationVolumeMountPath,
+								},
+							},
+						}},
+						// Containers has two container
+						// 1) Container terraform-executor will first copy predefined terraform.d to working directory, and then
+						// run terraform init/apply.
+						// 2) Container terraform-tfstate-retriever will wait forever for state file until it got the file
+						// and will write it to configmap for future use.
+						Containers: []v1.Container{{
+							Name:            "terraform-executor",
+							Image:           TerraformImage,
+							ImagePullPolicy: v1.PullAlways,
+							Command: []string{
+								"bash",
+								"-c",
+								fmt.Sprintf("cp -r /root/terraform.d %s && terraform init && terraform apply -auto-approve && cp %s %s/",
+									WorkingVolumeMountPath, TerraformStateName, tfStateDir),
+							},
+							VolumeMounts: []v1.VolumeMount{
+								{
+									Name:      name,
+									MountPath: WorkingVolumeMountPath,
+								},
+								{
+									Name:      InputTFConfigurationVolumeName,
+									MountPath: InputTFConfigurationVolumeMountPath,
+								},
+							},
+							Env: envs,
+						},
+							{
+								Name:            "terraform-tfstate-retriever",
+								Image:           TFStateRetrieverImage,
+								ImagePullPolicy: v1.PullAlways,
+								Env: []v1.EnvVar{
+									{Name: "CONFIGMAPS_NAMESPACE", Value: configuration.Namespace},
+									{Name: "CONFIGMAPS_NAME", Value: tfStateConfigMapName},
+									{Name: "TF_STATE_DIR", Value: tfStateDir},
+									{Name: "TF_STATE_NAME", Value: TerraformStateName},
+								},
+								VolumeMounts: []v1.VolumeMount{
+									{
+										Name:      name,
+										MountPath: WorkingVolumeMountPath,
+									},
 								},
 							},
 						},
+						Volumes:       []v1.Volume{workingVolume, inputTFConfigurationVolume},
+						RestartPolicy: v1.RestartPolicyOnFailure,
 					},
-					Volumes:       []v1.Volume{workingVolume, inputTFConfigurationVolume},
-					RestartPolicy: v1.RestartPolicyOnFailure,
 				},
 			},
-		},
+		}, nil
+
+	} else if executionType == TerraformDestroy {
+		configMapVolumeSource := v1.ConfigMapVolumeSource{}
+		configMapVolumeSource.Name = tfStateConfigMapName
+		tfStateFileVolume := v1.Volume{Name: TFStateFileVolumeName}
+		tfStateFileVolume.ConfigMap = &configMapVolumeSource
+
+		return &batchv1.Job{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Job",
+				APIVersion: "batch/v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      jobName,
+				Namespace: namespace,
+			},
+			Spec: batchv1.JobSpec{
+				TTLSecondsAfterFinished: &ttlSecondsAfterFinished,
+				Parallelism:             &parallelism,
+				Completions:             &completions,
+				Template: v1.PodTemplateSpec{
+					Spec: v1.PodSpec{
+						// InitContainer will copy Terraform configuration files to working directory and create Terraform
+						// state file directory in advance
+						InitContainers: []v1.Container{{
+							Name:            "prepare-input-terraform-configurations",
+							Image:           "busybox",
+							ImagePullPolicy: v1.PullAlways,
+							Command: []string{
+								"sh",
+								"-c",
+								fmt.Sprintf("cp %s/* %s && cp %s/* %s", InputTFConfigurationVolumeMountPath, WorkingVolumeMountPath, TFStateFileVolumeMountPath, WorkingVolumeMountPath),
+							},
+							VolumeMounts: []v1.VolumeMount{
+								{
+									Name:      name,
+									MountPath: WorkingVolumeMountPath,
+								},
+								{
+									Name:      InputTFConfigurationVolumeName,
+									MountPath: InputTFConfigurationVolumeMountPath,
+								},
+								{
+									Name:      TFStateFileVolumeName,
+									MountPath: TFStateFileVolumeMountPath,
+								},
+							},
+						}},
+						// Containers has two container
+						// 1) Container terraform-executor will first copy predefined terraform.d to working directory, and then
+						// run terraform init/apply.
+						// 2) Container terraform-tfstate-retriever will wait forever for state file until it got the file
+						// and will write it to configmap for future use.
+						Containers: []v1.Container{{
+							Name:            "terraform-executor",
+							Image:           TerraformImage,
+							ImagePullPolicy: v1.PullAlways,
+							Command: []string{
+								"bash",
+								"-c",
+								fmt.Sprintf("cp -r /root/terraform.d %s && terraform init && terraform destroy -auto-approve",
+									WorkingVolumeMountPath),
+							},
+							VolumeMounts: []v1.VolumeMount{
+								{
+									Name:      name,
+									MountPath: WorkingVolumeMountPath,
+								},
+							},
+							Env: envs,
+						}},
+						Volumes:       []v1.Volume{workingVolume, inputTFConfigurationVolume, tfStateFileVolume},
+						RestartPolicy: v1.RestartPolicyOnFailure,
+					},
+				},
+			},
+		}, nil
 	}
+	return nil, nil
 }
 
 type TFState struct {
@@ -316,7 +410,7 @@ func getTFOutputs(ctx context.Context, k8sClient client.Client, configuration v1
 			if kerrors.IsNotFound(err) {
 				var secret = v1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: name,
+						Name:      name,
 						Namespace: ns,
 						OwnerReferences: []metav1.OwnerReference{{
 							APIVersion: configuration.APIVersion,
@@ -326,8 +420,8 @@ func getTFOutputs(ctx context.Context, k8sClient client.Client, configuration v1
 							Controller: pointer.BoolPtr(false),
 						}},
 					},
-					TypeMeta:   metav1.TypeMeta{Kind: "Secret"},
-					Data:       data,
+					TypeMeta: metav1.TypeMeta{Kind: "Secret"},
+					Data:     data,
 				}
 				if err := k8sClient.Create(ctx, &secret); err != nil {
 					return nil, err
@@ -428,16 +522,17 @@ func prepareDeployment(configuration v1beta1.Configuration, envs []v1.EnvVar, tf
 	}
 }
 
-func prepareTFVariables(ctx context.Context, k8sClient client.Client, configuration v1beta1.Configuration) ([]v1.EnvVar, error) {
+func prepareTFVariables(ctx context.Context, k8sClient client.Client, configuration *v1beta1.Configuration) ([]v1.EnvVar, error) {
 	var envs []v1.EnvVar
 
-	tfVariable, err := getTerraformJSONVariable(configuration)
-	if err != nil {
-		return nil, errors.Wrap(err, fmt.Sprintf("failed to get Terraform JSON variables from Configuration %s", configuration.Name))
-	}
-
-	for k, v := range tfVariable {
-		envs = append(envs, v1.EnvVar{Name: k, Value: v})
+	if configuration != nil {
+		tfVariable, err := getTerraformJSONVariable(configuration)
+		if err != nil {
+			return nil, errors.Wrap(err, fmt.Sprintf("failed to get Terraform JSON variables from Configuration %s", configuration.Name))
+		}
+		for k, v := range tfVariable {
+			envs = append(envs, v1.EnvVar{Name: k, Value: v})
+		}
 	}
 
 	ak, err := getProviderSecret(ctx, k8sClient)
@@ -469,7 +564,7 @@ func (r *ConfigurationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func getTerraformJSONVariable(c v1beta1.Configuration) (map[string]string, error) {
+func getTerraformJSONVariable(c *v1beta1.Configuration) (map[string]string, error) {
 	variables, err := util.RawExtension2Map(&c.Spec.Variable)
 	if err != nil {
 		return nil, err
