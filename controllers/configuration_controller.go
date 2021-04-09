@@ -185,8 +185,6 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 			if err := r.Client.Create(ctx, job); err != nil {
 				return ctrl.Result{}, err
 			}
-
-			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err
 	}
@@ -217,7 +215,7 @@ func prepareJob(ctx context.Context, k8sClient client.Client, namespace, name st
 
 	var parallelism int32 = 1
 	var completions int32 = 1
-	var ttlSecondsAfterFinished int32 = 120
+	var ttlSecondsAfterFinished int32 = 0
 
 	workingVolume := v1.Volume{Name: name}
 	workingVolume.EmptyDir = &v1.EmptyDirVolumeSource{}
@@ -225,12 +223,43 @@ func prepareJob(ctx context.Context, k8sClient client.Client, namespace, name st
 	tfStateConfigMapName := fmt.Sprintf(string(TFStateConfigMapName), name)
 	tfStateDir := filepath.Join(WorkingVolumeMountPath, "tfstate")
 
-	configMapVolumeSource := v1.ConfigMapVolumeSource{}
-	configMapVolumeSource.Name = tfInputConfigMapsName
+	inputCMVolumeSource := v1.ConfigMapVolumeSource{}
+	inputCMVolumeSource.Name = tfInputConfigMapsName
 	inputTFConfigurationVolume := v1.Volume{Name: InputTFConfigurationVolumeName}
-	inputTFConfigurationVolume.ConfigMap = &configMapVolumeSource
+	inputTFConfigurationVolume.ConfigMap = &inputCMVolumeSource
+
+	stateCMVolumeSource := v1.ConfigMapVolumeSource{}
+	stateCMVolumeSource.Name = tfStateConfigMapName
+	tfStateFileVolume := v1.Volume{Name: TFStateFileVolumeName}
+	tfStateFileVolume.ConfigMap = &stateCMVolumeSource
+
+	var tfStateFileCM v1.ConfigMap
+	tfStateError := k8sClient.Get(ctx, client.ObjectKey{Name: tfStateConfigMapName, Namespace: namespace}, &tfStateFileCM)
 
 	if executionType == TerraformApply {
+		volumes := []v1.Volume{workingVolume, inputTFConfigurationVolume}
+		initContainerVolumeMounts := []v1.VolumeMount{
+			{
+				Name:      name,
+				MountPath: WorkingVolumeMountPath,
+			},
+			{
+				Name:      InputTFConfigurationVolumeName,
+				MountPath: InputTFConfigurationVolumeMountPath,
+			},
+		}
+		initContainerCMD := fmt.Sprintf("cp %s/* %s && mkdir -p %s",
+			InputTFConfigurationVolumeMountPath, WorkingVolumeMountPath, tfStateDir)
+
+		if tfStateError == nil {
+			volumes = append(volumes, tfStateFileVolume)
+			initContainerVolumeMounts = append(initContainerVolumeMounts, v1.VolumeMount{
+				Name:      TFStateFileVolumeName,
+				MountPath: TFStateFileVolumeMountPath,
+			})
+			initContainerCMD = fmt.Sprintf("cp %s/* %s && cp %s/* %s && mkdir -p %s", InputTFConfigurationVolumeMountPath,
+				WorkingVolumeMountPath, TFStateFileVolumeMountPath, WorkingVolumeMountPath, tfStateDir)
+		}
 		return &batchv1.Job{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "Job",
@@ -255,19 +284,9 @@ func prepareJob(ctx context.Context, k8sClient client.Client, namespace, name st
 							Command: []string{
 								"sh",
 								"-c",
-								fmt.Sprintf("cp %s/* %s && mkdir -p %s",
-									InputTFConfigurationVolumeMountPath, WorkingVolumeMountPath, tfStateDir),
+								initContainerCMD,
 							},
-							VolumeMounts: []v1.VolumeMount{
-								{
-									Name:      name,
-									MountPath: WorkingVolumeMountPath,
-								},
-								{
-									Name:      InputTFConfigurationVolumeName,
-									MountPath: InputTFConfigurationVolumeMountPath,
-								},
-							},
+							VolumeMounts: initContainerVolumeMounts,
 						}},
 						// Containers has two container
 						// 1) Container terraform-executor will first copy predefined terraform.d to working directory, and then
@@ -281,8 +300,8 @@ func prepareJob(ctx context.Context, k8sClient client.Client, namespace, name st
 							Command: []string{
 								"bash",
 								"-c",
-								fmt.Sprintf("cp -r /root/terraform.d %s && terraform init && terraform apply -auto-approve && cp %s %s/",
-									WorkingVolumeMountPath, TerraformStateName, tfStateDir),
+								fmt.Sprintf("cp -r /root/terraform.d %s && rm -f %s/ && terraform init && terraform apply -auto-approve && cp %s %s/",
+									WorkingVolumeMountPath, filepath.Join(tfStateDir, TerraformStateName), TerraformStateName, tfStateDir),
 							},
 							VolumeMounts: []v1.VolumeMount{
 								{
@@ -314,7 +333,7 @@ func prepareJob(ctx context.Context, k8sClient client.Client, namespace, name st
 								},
 							},
 						},
-						Volumes:       []v1.Volume{workingVolume, inputTFConfigurationVolume},
+						Volumes:       volumes,
 						RestartPolicy: v1.RestartPolicyOnFailure,
 					},
 				},
@@ -322,11 +341,6 @@ func prepareJob(ctx context.Context, k8sClient client.Client, namespace, name st
 		}, nil
 
 	} else if executionType == TerraformDestroy {
-		configMapVolumeSource := v1.ConfigMapVolumeSource{}
-		configMapVolumeSource.Name = tfStateConfigMapName
-		tfStateFileVolume := v1.Volume{Name: TFStateFileVolumeName}
-		tfStateFileVolume.ConfigMap = &configMapVolumeSource
-
 		return &batchv1.Job{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "Job",
