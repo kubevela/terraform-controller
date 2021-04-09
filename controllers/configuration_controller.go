@@ -42,7 +42,7 @@ const (
 	// Terraform image which can run `terraform init/plan/apply`
 	TerraformImage = "zzxwill/docker-terraform:0.14.10"
 
-	TFStateRetrieverImage = "zzxwill/terraform-tfstate-retriever:v0.2"
+	TFStateRetrieverImage = "zzxwill/terraform-tfstate-retriever:v0.3"
 )
 
 const (
@@ -96,6 +96,8 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	var configuration v1beta1.Configuration
 	if err := r.Get(ctx, req.NamespacedName, &configuration); err != nil {
 		if kerrors.IsNotFound(err) {
+			// delete Terraform State ConfigMap
+
 			err = nil
 		}
 		return ctrl.Result{}, err
@@ -112,8 +114,18 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 			if err := r.Client.Get(ctx, client.ObjectKey{Name: tfInputConfigMapsName, Namespace: ns}, &configMap); err != nil {
 				if kerrors.IsNotFound(err) {
 					configurationConfigMap := v1.ConfigMap{
-						TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-						ObjectMeta: metav1.ObjectMeta{Name: tfInputConfigMapsName, Namespace: ns},
+						TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      tfInputConfigMapsName,
+							Namespace: ns,
+							OwnerReferences: []metav1.OwnerReference{{
+								APIVersion: configuration.APIVersion,
+								Kind:       configuration.Kind,
+								Name:       configurationName,
+								UID:        configuration.UID,
+								Controller: pointer.BoolPtr(false),
+							}},
+						},
 						Data: map[string]string{
 							TerraformConfigurationName: configuration.Spec.JSON,
 						},
@@ -249,6 +261,10 @@ func prepareJob(configuration v1beta1.Configuration, envs []v1.EnvVar, tfInputCo
 								{Name: "CONFIGMAPS_NAME", Value: tfStateConfigMapName},
 								{Name: "TF_STATE_DIR", Value: tfStateDir},
 								{Name: "TF_STATE_NAME", Value: TerraformStateName},
+								{Name: "CONFIGURATION_APIVERSION", Value: configuration.APIVersion},
+								{Name: "CONFIGURATION_KIND", Value: configuration.Kind},
+								{Name: "CONFIGURATION_NAME", Value: configuration.Name},
+								{Name: "CONFIGURATION_UID", Value: string(configuration.UID)},
 							},
 							VolumeMounts: []v1.VolumeMount{
 								{
@@ -299,7 +315,17 @@ func getTFOutputs(ctx context.Context, k8sClient client.Client, configuration v1
 		if err := k8sClient.Get(ctx, client.ObjectKey{Name: name, Namespace: ns}, &gotSecret); err != nil {
 			if kerrors.IsNotFound(err) {
 				var secret = v1.Secret{
-					ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
+					ObjectMeta: metav1.ObjectMeta{
+						Name: name,
+						Namespace: ns,
+						OwnerReferences: []metav1.OwnerReference{{
+							APIVersion: configuration.APIVersion,
+							Kind:       configuration.Kind,
+							Name:       configuration.Name,
+							UID:        configuration.UID,
+							Controller: pointer.BoolPtr(false),
+						}},
+					},
 					TypeMeta:   metav1.TypeMeta{Kind: "Secret"},
 					Data:       data,
 				}
