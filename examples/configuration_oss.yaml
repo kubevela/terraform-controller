@@ -35,5 +35,3 @@ spec:
   writeConnectionSecretToRef:
     name: oss-conn
     namespace: default
-
-
