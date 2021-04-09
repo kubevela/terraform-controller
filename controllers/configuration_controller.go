@@ -101,6 +101,7 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		configurationName     = req.Name
 		configMap             = v1.ConfigMap{}
 		gotJob                batchv1.Job
+		destroyJob            batchv1.Job
 		tfInputConfigMapsName = fmt.Sprintf(string(TFInputConfigMapSName), configurationName)
 		tfStateConfigMapName  = fmt.Sprintf(string(TFStateConfigMapName), configurationName)
 	)
@@ -108,16 +109,40 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	var configuration v1beta1.Configuration
 	if err := r.Get(ctx, req.NamespacedName, &configuration); err != nil {
 		if kerrors.IsNotFound(err) {
-			job, err := prepareJob(ctx, r.Client, req.Namespace, req.Name, &configuration, tfInputConfigMapsName, TerraformDestroy)
-			if err != nil {
-				return ctrl.Result{}, err
+			jobName := configurationName + "-" + string(TerraformDestroy)
+			if err := r.Client.Get(ctx, client.ObjectKey{Name: jobName, Namespace: ns}, &destroyJob); err != nil {
+				if kerrors.IsNotFound(err) {
+					job, err := prepareJob(ctx, r.Client, ns, req.Name, &configuration, tfInputConfigMapsName, TerraformDestroy)
+					if err != nil {
+						return ctrl.Result{}, err
+					}
+					if err := r.Client.Create(ctx, job); err != nil {
+						return ctrl.Result{}, err
+					}
+					return ctrl.Result{}, errors.New("Terraform configuration input and state file ConfigMaps are not deleted")
+
+				}
 			}
-			if err := r.Client.Create(ctx, job); err != nil {
-				return ctrl.Result{}, err
+			if destroyJob.Status.Succeeded == SucceededPod {
+				// delete Terraform input Configuration ConfigMap
+				var tfInputCM v1.ConfigMap
+				if err := r.Client.Get(ctx, client.ObjectKey{Name: tfInputConfigMapsName, Namespace: ns}, &tfInputCM); err == nil {
+					if err := r.Client.Delete(ctx, &tfInputCM); err != nil {
+						return ctrl.Result{}, err
+					}
+				}
+
+				// delete Terraform state file ConfigMap
+				var tfStateFileCM v1.ConfigMap
+				if err := r.Client.Get(ctx, client.ObjectKey{Name: tfStateConfigMapName, Namespace: ns}, &tfStateFileCM); err == nil {
+					if err := r.Client.Delete(ctx, &tfStateFileCM); err != nil {
+						return ctrl.Result{}, err
+					}
+				}
+				return ctrl.Result{}, nil
 			}
-			return ctrl.Result{}, nil
+			return ctrl.Result{}, err
 		}
-		return ctrl.Result{}, err
 	}
 
 	jobName := configurationName + "-" + string(TerraformApply)
