@@ -26,6 +26,8 @@ import (
 type ConfigurationSpec struct {
 	// JSON is the Terraform JSON syntax configuration
 	JSON string `json:"JSON,omitempty"`
+	// HCL is the Terraform HCL type configuration
+	HCL string `json:"hcl,omitempty"`
 	// +kubebuilder:pruning:PreserveUnknownFields
 	Variable runtime.RawExtension `json:"variable"`
 

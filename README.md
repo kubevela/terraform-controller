@@ -70,7 +70,7 @@ Here is a drawback for the choice: we have to grant the Pod in the Job to create
 
 # Get started
 
-Let's manage cloud resource on Alibaba Cloud as an example.
+Let's manage cloud resources on Alibaba Cloud as an example.
 
 ## Locally run Terraform Controller
 
@@ -98,7 +98,7 @@ Terraform state file is essential to update or destroy cloud resources. After te
 needs to be stored to a ConfigMap.
 
 ```shell
-✗ kubectl apply -f examples/rbac.yaml
+$ kubectl apply -f examples/rbac.yaml
 clusterrole.rbac.authorization.k8s.io/tf-clusterrole created
 clusterrolebinding.rbac.authorization.k8s.io/tf-binding created
 ```
@@ -269,11 +269,11 @@ Bucket Number is: 1
 ### Check whether Terraform state file is stored
 
 ```shell
-✗ kubectl get cm | grep aliyun-oss
+$ kubectl get cm | grep aliyun-oss
 aliyun-oss-tf-input      1      16m
 aliyun-oss-tf-state      1      11m
 
-✗ kubectl get cm aliyun-oss-tf-state -o yaml
+$ kubectl get cm aliyun-oss-tf-state -o yaml
 apiVersion: v1
 data:
   terraform.tfstate: |

@@ -37,6 +37,9 @@ spec:
             JSON:
               description: JSON is the Terraform JSON syntax configuration
               type: string
+            hcl:
+              description: HCL is the Terraform HCL type configuration
+              type: string
             variable:
               type: object
               x-kubernetes-preserve-unknown-fields: true
