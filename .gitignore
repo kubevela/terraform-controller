@@ -19,8 +19,13 @@
 .vela/
 
 .DS_Store
-examples/tf-native/.DS_Store
-examples/tf-native/.terraform.lock.hcl
-examples/tf-native/.terraform/
-examples/tf-native/terraform.tfstate
-examples/tf-native/terraform.tfstate.backup
+examples/tf-native/json/.DS_Store
+examples/tf-native/json/.terraform.lock.hcl
+examples/tf-native/json/.terraform/
+examples/tf-native/json/terraform.tfstate
+examples/tf-native/json/terraform.tfstate.backup
+examples/tf-native/hcl/.DS_Store
+examples/tf-native/hcl/.terraform.lock.hcl
+examples/tf-native/hcl/.terraform/
+examples/tf-native/hcl/terraform.tfstate
+examples/tf-native/hcl/terraform.tfstate.backup
