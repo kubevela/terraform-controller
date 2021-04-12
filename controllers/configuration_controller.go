@@ -141,7 +141,11 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 						return ctrl.Result{}, err
 					}
 				}
-				return ctrl.Result{}, nil
+
+				// delete Job itself
+				if err := r.Client.Delete(ctx, &destroyJob); err != nil {
+					return ctrl.Result{}, err
+				}
 			}
 			return ctrl.Result{}, err
 		}
@@ -187,7 +191,7 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 				}
 			}
 
-			job, err := prepareJob(ctx, r.Client, req.Namespace, req.Name, &configuration.Spec.Variable, tfInputConfigMapsName, TerraformApply)
+			job, err := prepareJob(ctx, r.Client, req.Namespace, req.Name, &configuration, tfInputConfigMapsName, TerraformApply)
 			if err != nil {
 				return ctrl.Result{}, err
 			}
@@ -214,7 +218,7 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	return ctrl.Result{}, nil
 }
 
-func prepareJob(ctx context.Context, k8sClient client.Client, namespace, name string, tfVariables *runtime.RawExtension, tfInputConfigMapsName string, executionType TerraformExecutionType) (*batchv1.Job, error) {
+func prepareJob(ctx context.Context, k8sClient client.Client, namespace, name string,configuration *v1beta1.Configuration, tfInputConfigMapsName string, executionType TerraformExecutionType) (*batchv1.Job, error) {
 	jobName := name + "-" + string(executionType)
 	var parallelism int32 = 1
 	var completions int32 = 1
@@ -239,7 +243,7 @@ func prepareJob(ctx context.Context, k8sClient client.Client, namespace, name st
 	var tfStateFileCM v1.ConfigMap
 	tfStateError := k8sClient.Get(ctx, client.ObjectKey{Name: tfStateConfigMapName, Namespace: namespace}, &tfStateFileCM)
 
-	envs, err := prepareTFVariables(ctx, k8sClient, tfVariables)
+	envs, err := prepareTFVariables(ctx, k8sClient, configuration)
 	if err != nil {
 		return nil, err
 	}
@@ -276,8 +280,16 @@ func prepareJob(ctx context.Context, k8sClient client.Client, namespace, name st
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      jobName,
 				Namespace: namespace,
+				OwnerReferences: []metav1.OwnerReference{{
+					APIVersion: configuration.APIVersion,
+					Kind:       configuration.Kind,
+					Name:       configuration.Name,
+					UID:        configuration.UID,
+					Controller: pointer.BoolPtr(false),
+				}},
 			},
 			Spec: batchv1.JobSpec{
+				// TODO(zzxwill) Not enabled in Kubernetes cluster lower than v1.21
 				TTLSecondsAfterFinished: &ttlSecondsAfterFinished,
 				Parallelism:             &parallelism,
 				Completions:             &completions,
@@ -569,9 +581,13 @@ func prepareDeployment(configuration v1beta1.Configuration, envs []v1.EnvVar, tf
 	}
 }
 
-func prepareTFVariables(ctx context.Context, k8sClient client.Client, tfVariables *runtime.RawExtension) ([]v1.EnvVar, error) {
+func prepareTFVariables(ctx context.Context, k8sClient client.Client, configuration *v1beta1.Configuration) ([]v1.EnvVar, error) {
 	var envs []v1.EnvVar
 
+	var tfVariables *runtime.RawExtension
+	if configuration != nil {
+		tfVariables = &configuration.Spec.Variable
+	}
 	tfVariable, err := getTerraformJSONVariable(tfVariables)
 	if err != nil {
 		return nil, errors.Wrap(err, fmt.Sprintf("failed to get Terraform JSON variables from Configuration Variables %v", tfVariables))
