@@ -78,3 +78,29 @@ CONTROLLER_GEN=$(GOBIN)/controller-gen
 else
 CONTROLLER_GEN=$(shell which controller-gen)
 endif
+
+GOLANGCILINT_VERSION ?= v1.31.0
+HOSTOS := $(shell uname -s | tr '[:upper:]' '[:lower:]')
+HOSTARCH := $(shell uname -m)
+ifeq ($(HOSTARCH),x86_64)
+HOSTARCH := amd64
+endif
+
+golangci:
+ifeq (, $(shell which golangci-lint))
+	@{ \
+	set -e ;\
+	echo 'installing golangci-lint-$(GOLANGCILINT_VERSION)' ;\
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOBIN) $(GOLANGCILINT_VERSION) ;\
+	echo 'Install succeed' ;\
+	}
+GOLANGCILINT=$(GOBIN)/golangci-lint
+else
+GOLANGCILINT=$(shell which golangci-lint)
+endif
+
+lint: golangci
+	$(GOLANGCILINT) run ./...
+
+reviewable: lint generate
+	@go mod tidy
