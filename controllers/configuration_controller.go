@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/ghodss/yaml"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	batchv1 "k8s.io/api/batch/v1"
@@ -70,14 +69,6 @@ const (
 	TFStateConfigMapName  ConfigMapName = "%s-tf-state"
 )
 
-const (
-	AlicloudAcessKey  = "ALICLOUD_ACCESS_KEY"
-	AlicloudSecretKey = "ALICLOUD_SECRET_KEY"
-	AlicloudRegion    = "ALICLOUD_REGION"
-)
-
-const ProviderName = "default"
-
 type TerraformExecutionType string
 
 const (
@@ -107,7 +98,7 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	klog.InfoS("reconciling Terraform Template...", "NamespacedName", req.NamespacedName)
 
 	// Terraform destroy
-	if err := r.Get(ctx, req.NamespacedName, &configuration); err != nil {
+ 	if err := r.Get(ctx, req.NamespacedName, &configuration); err != nil {
 		klog.InfoS("performing Terraform Destroy", "Namespace", req.Namespace, "Name", req.Name)
 		if kerrors.IsNotFound(err) {
 			destroyJobName := configurationName + "-" + string(TerraformDestroy)
@@ -427,24 +418,17 @@ func prepareTFVariables(ctx context.Context, k8sClient client.Client, configurat
 		envs = append(envs, v1.EnvVar{Name: k, Value: v})
 	}
 
-	ak, err := getProviderSecret(ctx, k8sClient)
+	credential, err := util.GetProviderCredentials(ctx, k8sClient)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to get credentials from the cloud provider")
 	}
-	envs = append(envs,
-		v1.EnvVar{
-			Name:  AlicloudAcessKey,
-			Value: ak.AccessKeyID,
-		},
-		v1.EnvVar{
-			Name:  AlicloudSecretKey,
-			Value: ak.AccessKeySecret,
-		},
-		v1.EnvVar{
-			Name:  AlicloudRegion,
-			Value: ak.Region,
-		},
-	)
+	for k, v := range credential {
+		envs = append(envs,
+			v1.EnvVar{
+				Name:  k,
+				Value: v,
+			})
+	}
 	return envs, nil
 }
 
@@ -467,39 +451,6 @@ func getTerraformJSONVariable(tfVariables *runtime.RawExtension) (map[string]str
 		environments[fmt.Sprintf("TF_VAR_%s", k)] = fmt.Sprint(v)
 	}
 	return environments, nil
-}
-
-func getProviderSecret(ctx context.Context, k8sClient client.Client) (*util.AlibabaCloudCredentials, error) {
-	var provider v1beta1.Provider
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: ProviderName, Namespace: "default"}, &provider); err != nil {
-		errMsg := "failed to get Provider object"
-		klog.ErrorS(err, errMsg, "Name", ProviderName)
-		return nil, errors.Wrap(err, errMsg)
-	}
-
-	switch provider.Spec.Credentials.Source {
-	case "Secret":
-		var secret v1.Secret
-		secretRef := provider.Spec.Credentials.SecretRef
-		if err := k8sClient.Get(ctx, client.ObjectKey{Name: secretRef.Name, Namespace: secretRef.Namespace}, &secret); err != nil {
-			errMsg := "failed to get the Secret from Provider"
-			klog.ErrorS(err, errMsg, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
-			return nil, errors.Wrap(err, errMsg)
-		}
-		var ak util.AlibabaCloudCredentials
-		if err := yaml.Unmarshal(secret.Data[secretRef.Key], &ak); err != nil {
-			errMsg := "failed to convert the credentials of Secret from Provider"
-			klog.ErrorS(err, errMsg, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
-			return nil, errors.Wrap(err, errMsg)
-		}
-		ak.Region = provider.Spec.Region
-		return &ak, nil
-	default:
-		errMsg := "the credentials type is not supported."
-		err := errors.New(errMsg)
-		klog.ErrorS(err, "", "CredentialType", provider.Spec.Credentials.Source)
-		return nil, err
-	}
 }
 
 func deleteConfigMap(ctx context.Context, k8sClient client.Client, namespace, name string) error {
