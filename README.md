@@ -119,7 +119,7 @@ clusterrolebinding.rbac.authorization.k8s.io/tf-binding created
 
 ### Apply Terraform Configuration
 
-Apply Terraform configuration [configuration_oss.yaml](./examples/alibaba/configuration_json_oss.yaml) to provision an Alibaba OSS bucket.
+Apply Terraform configuration [configuration_hcl_oss.yaml](./examples/alibaba/configuration_hcl_oss.yaml) (JSON configuration [configuration_oss.yaml](./examples/alibaba/configuration_json_oss.yaml) is also supported) to provision an Alibaba OSS bucket.
 
 ```yaml
 apiVersion: terraform.core.oam.dev/v1beta1
@@ -127,29 +127,22 @@ kind: Configuration
 metadata:
   name: aliyun-oss
 spec:
-  JSON: |
-    {
-      "resource": {
-        "alicloud_oss_bucket": {
-          "bucket-acl": {
-            "bucket": "${var.bucket}",
-            "acl": "${var.acl}"
-          }
-        }
-      },
-      "output": {
-        "BUCKET_NAME": {
-          "value": "${alicloud_oss_bucket.bucket-acl.bucket}.${alicloud_oss_bucket.bucket-acl.extranet_endpoint}"
-        }
-      },
-      "variable": {
-        "bucket": {
-          "default": "poc"
-        },
-        "acl": {
-          "default": "private"
-        }
-      }
+  hcl: |
+    resource "alicloud_oss_bucket" "bucket-acl" {
+      bucket = var.bucket
+      acl    = var.acl
+    }
+
+    output "BUCKET_NAME" {
+      value = "${alicloud_oss_bucket.bucket-acl.bucket}.${alicloud_oss_bucket.bucket-acl.extranet_endpoint}"
+    }
+
+    variable "bucket" {
+      default = "vela-website"
+    }
+
+    variable "acl" {
+      default = "private"
     }
 
   variable:
@@ -177,30 +170,7 @@ metadata:
   creationTimestamp: "2021-04-02T08:17:08Z"
   generation: 2
 spec:
-  JSON: |
-    {
-      "resource": {
-        "alicloud_oss_bucket": {
-          "bucket-acl": {
-            "bucket": "${var.bucket}",
-            "acl": "${var.acl}"
-          }
-        }
-      },
-      "output": {
-        "BUCKET_NAME": {
-          "value": "${alicloud_oss_bucket.bucket-acl.bucket}.${alicloud_oss_bucket.bucket-acl.extranet_endpoint}"
-        }
-      },
-      "variable": {
-        "bucket": {
-          "default": "poc"
-        },
-        "acl": {
-          "default": "private"
-        }
-      }
-    }
+  ...
   variable:
     acl: private
     bucket: vela-website
