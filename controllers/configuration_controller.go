@@ -56,7 +56,7 @@ const (
 
 const (
 	TerraformJSONConfigurationName = "main.tf.json"
-	TerraformHCLConfigurationName = "main.tf.json"
+	TerraformHCLConfigurationName = "main.tf"
 	TerraformStateName         = "terraform.tfstate"
 )
 
@@ -148,16 +148,15 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	}
 
 	// Destroy apply (create or update)
-	configurationType, inputConfiguration, err := util.ValidConfiguration(configuration)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-
-
 	jobName := configurationName + "-" + string(TerraformApply)
-	err = r.Client.Get(ctx, client.ObjectKey{Name: jobName, Namespace: ns}, &gotJob)
+	err := r.Client.Get(ctx, client.ObjectKey{Name: jobName, Namespace: ns}, &gotJob)
 	if err != nil {
 		if kerrors.IsNotFound(err) {
+			configurationType, inputConfiguration, err := util.ValidConfiguration(configuration)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+
 			// Check the existence of ConfigMap which is used to input TF configuration file
 			// TODO(zzxwill) replace the configmap every time?
 			if err := r.Client.Get(ctx, client.ObjectKey{Name: tfInputConfigMapsName, Namespace: ns}, &configMap); err != nil {
@@ -240,12 +239,12 @@ func prepareJob(ctx context.Context, k8sClient client.Client, namespace, name st
 	var tfStateFileCM v1.ConfigMap
 	tfStateError := k8sClient.Get(ctx, client.ObjectKey{Name: tfStateConfigMapName, Namespace: namespace}, &tfStateFileCM)
 
-	if executionType == TerraformApply {
-		envs, err := prepareTFVariables(ctx, k8sClient, tfVariables)
-		if err != nil {
-			return nil, err
-		}
+	envs, err := prepareTFVariables(ctx, k8sClient, tfVariables)
+	if err != nil {
+		return nil, err
+	}
 
+	if executionType == TerraformApply {
 		volumes := []v1.Volume{workingVolume, inputTFConfigurationVolume}
 		initContainerVolumeMounts := []v1.VolumeMount{
 			{
@@ -412,6 +411,7 @@ func prepareJob(ctx context.Context, k8sClient client.Client, namespace, name st
 									MountPath: WorkingVolumeMountPath,
 								},
 							},
+							Env: envs,
 						}},
 						Volumes:       []v1.Volume{workingVolume, inputTFConfigurationVolume, tfStateFileVolume},
 						RestartPolicy: v1.RestartPolicyOnFailure,

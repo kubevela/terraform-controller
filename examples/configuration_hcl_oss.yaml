@@ -3,7 +3,7 @@ kind: Configuration
 metadata:
   name: aliyun-oss
 spec:
-  HCL: |
+  hcl: |
     resource "alicloud_oss_bucket" "bucket-acl" {
       bucket = var.bucket
       acl    = var.acl
