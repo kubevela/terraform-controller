@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 
 	"github.com/ghodss/yaml"
 	"github.com/go-logr/logr"
@@ -31,7 +32,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/pointer"
-	"path/filepath"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -53,6 +53,8 @@ const (
 	InputTFConfigurationVolumeMountPath = "/opt/tfconfiguration"
 	TFStateFileVolumeName               = "tf-state-file"
 	TFStateFileVolumeMountPath          = "/opt/tfstate"
+
+	SucceededPod int32 = 1
 )
 
 const (
@@ -76,8 +78,6 @@ const (
 
 const ProviderName = "default"
 
-const SucceededPod int32 = 1
-
 type TerraformExecutionType string
 
 const (
@@ -85,7 +85,7 @@ const (
 	TerraformDestroy TerraformExecutionType = "destroy"
 )
 
-// ConfigurationReconciler reconciles a Configuration object
+// ConfigurationReconciler reconciles a Configuration object.
 type ConfigurationReconciler struct {
 	client.Client
 	Log    logr.Logger
@@ -96,130 +96,39 @@ type ConfigurationReconciler struct {
 // +kubebuilder:rbac:groups=terraform.core.oam.dev,resources=configurations/status,verbs=get;update;patch
 
 func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	klog.InfoS("Reconciling Terraform Template...", "NamespacedName", req.NamespacedName)
 	var (
+		configuration         v1beta1.Configuration
 		ctx                   = context.Background()
 		ns                    = req.Namespace
 		configurationName     = req.Name
-		configMap             = v1.ConfigMap{}
-		gotJob                batchv1.Job
-		destroyJob            batchv1.Job
 		tfInputConfigMapsName = fmt.Sprintf(string(TFInputConfigMapSName), configurationName)
 		tfStateConfigMapName  = fmt.Sprintf(string(TFStateConfigMapName), configurationName)
 	)
+	klog.InfoS("reconciling Terraform Template...", "NamespacedName", req.NamespacedName)
 
-	var configuration v1beta1.Configuration
 	// Terraform destroy
 	if err := r.Get(ctx, req.NamespacedName, &configuration); err != nil {
+		klog.InfoS("performing Terraform Destroy", "Namespace", req.Namespace, "Name", req.Name)
 		if kerrors.IsNotFound(err) {
-			jobName := configurationName + "-" + string(TerraformDestroy)
-			if err := r.Client.Get(ctx, client.ObjectKey{Name: jobName, Namespace: ns}, &destroyJob); err != nil {
-				if kerrors.IsNotFound(err) {
-					job, err := prepareJob(ctx, r.Client, ns, req.Name, nil, tfInputConfigMapsName, TerraformDestroy)
-					if err != nil {
-						return ctrl.Result{}, err
-					}
-					if err := r.Client.Create(ctx, job); err != nil {
-						return ctrl.Result{}, err
-					}
-					return ctrl.Result{}, errors.New("Terraform configuration input and state file ConfigMaps are not deleted")
-
-				}
-			}
-			if destroyJob.Status.Succeeded == SucceededPod {
-				// delete Terraform input Configuration ConfigMap
-				var tfInputCM v1.ConfigMap
-				if err := r.Client.Get(ctx, client.ObjectKey{Name: tfInputConfigMapsName, Namespace: ns}, &tfInputCM); err == nil {
-					if err := r.Client.Delete(ctx, &tfInputCM); err != nil {
-						return ctrl.Result{}, err
-					}
-				}
-
-				// delete Terraform state file ConfigMap
-				var tfStateFileCM v1.ConfigMap
-				if err := r.Client.Get(ctx, client.ObjectKey{Name: tfStateConfigMapName, Namespace: ns}, &tfStateFileCM); err == nil {
-					if err := r.Client.Delete(ctx, &tfStateFileCM); err != nil {
-						return ctrl.Result{}, err
-					}
-				}
-
-				// delete Job itself
-				if err := r.Client.Delete(ctx, &destroyJob); err != nil {
-					return ctrl.Result{}, err
-				}
-			}
-			return ctrl.Result{}, err
+			destroyJobName := configurationName + "-" + string(TerraformDestroy)
+			klog.InfoS("creating job", "Namespace", req.Namespace, "Name", destroyJobName)
+			err := terraformDestroy(ctx, r.Client, ns, req.Name, destroyJobName, tfInputConfigMapsName, tfStateConfigMapName)
+			return ctrl.Result{}, errors.Wrap(err, "continue reconciling to destroy cloud resource")
 		}
 	}
 
-	// Destroy apply (create or update)
-	jobName := configurationName + "-" + string(TerraformApply)
-	err := r.Client.Get(ctx, client.ObjectKey{Name: jobName, Namespace: ns}, &gotJob)
-	if err != nil {
-		if kerrors.IsNotFound(err) {
-			configurationType, inputConfiguration, err := util.ValidConfiguration(configuration)
-			if err != nil {
-				return ctrl.Result{}, err
-			}
-
-			// Check the existence of ConfigMap which is used to input TF configuration file
-			// TODO(zzxwill) replace the configmap every time?
-			if err := r.Client.Get(ctx, client.ObjectKey{Name: tfInputConfigMapsName, Namespace: ns}, &configMap); err != nil {
-				if kerrors.IsNotFound(err) {
-					var dataName string
-					switch configurationType {
-					case util.ConfigurationJSON:
-						dataName = TerraformJSONConfigurationName
-					case util.ConfigurationHCL:
-						dataName = TerraformHCLConfigurationName
-					}
-
-					configurationConfigMap := v1.ConfigMap{
-						TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      tfInputConfigMapsName,
-							Namespace: ns,
-						},
-						Data: map[string]string{
-							dataName: inputConfiguration,
-						},
-					}
-					if err := r.Client.Create(ctx, &configurationConfigMap); err != nil {
-						return ctrl.Result{}, err
-					}
-				} else {
-					return ctrl.Result{}, err
-				}
-			}
-
-			job, err := prepareJob(ctx, r.Client, req.Namespace, req.Name, &configuration, tfInputConfigMapsName, TerraformApply)
-			if err != nil {
-				return ctrl.Result{}, err
-			}
-			if err := r.Client.Create(ctx, job); err != nil {
-				return ctrl.Result{}, err
-			}
-		}
+	// Terraform apply (create or update)
+	klog.InfoS("performing Terraform Apply (cloud resource create/update)", "Namespace", req.Namespace, "Name", req.Name)
+	applyJobName := configurationName + "-" + string(TerraformApply)
+	klog.InfoS("creating job", "Namespace", req.Namespace, "Name", applyJobName)
+	if err := terraformApply(ctx, r.Client, ns, configuration, applyJobName, tfInputConfigMapsName, tfStateConfigMapName); err != nil {
 		return ctrl.Result{}, err
 	}
-
-	if gotJob.Status.Succeeded == SucceededPod {
-		outputs, err := getTFOutputs(ctx, r.Client, configuration, tfStateConfigMapName)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		configuration.Status.State = "provisioned"
-		configuration.Status.Outputs = outputs
-		if err := r.Client.Update(ctx, &configuration); err != nil {
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{}, nil
-	}
-
 	return ctrl.Result{}, nil
 }
 
-func prepareJob(ctx context.Context, k8sClient client.Client, namespace, name string, configuration *v1beta1.Configuration, tfInputConfigMapsName string, executionType TerraformExecutionType) (*batchv1.Job, error) {
+func assembleAndTriggerJob(ctx context.Context, k8sClient client.Client, namespace, name string, configuration *v1beta1.Configuration, tfInputConfigMapsName string, executionType TerraformExecutionType) error {
+	var job *batchv1.Job
 	jobName := name + "-" + string(executionType)
 	var parallelism int32 = 1
 	var completions int32 = 1
@@ -246,7 +155,7 @@ func prepareJob(ctx context.Context, k8sClient client.Client, namespace, name st
 
 	envs, err := prepareTFVariables(ctx, k8sClient, configuration)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	if executionType == TerraformApply {
@@ -273,7 +182,7 @@ func prepareJob(ctx context.Context, k8sClient client.Client, namespace, name st
 			initContainerCMD = fmt.Sprintf("cp %s/* %s && cp %s/* %s && mkdir -p %s", InputTFConfigurationVolumeMountPath,
 				WorkingVolumeMountPath, TFStateFileVolumeMountPath, WorkingVolumeMountPath, tfStateDir)
 		}
-		return &batchv1.Job{
+		job = &batchv1.Job{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "Job",
 				APIVersion: "batch/v1",
@@ -321,7 +230,8 @@ func prepareJob(ctx context.Context, k8sClient client.Client, namespace, name st
 							Command: []string{
 								"bash",
 								"-c",
-								fmt.Sprintf("cp -r /root/terraform.d %s && rm -f %s/ && terraform init && terraform apply -auto-approve && cp %s %s/",
+								fmt.Sprintf("cp -r /root/terraform.d %s && rm -f %s/ && terraform init &&"+
+									" terraform apply -auto-approve && cp %s %s/",
 									WorkingVolumeMountPath, filepath.Join(tfStateDir, TerraformStateName), TerraformStateName, tfStateDir),
 							},
 							VolumeMounts: []v1.VolumeMount{
@@ -359,10 +269,10 @@ func prepareJob(ctx context.Context, k8sClient client.Client, namespace, name st
 					},
 				},
 			},
-		}, nil
+		}
 
 	} else if executionType == TerraformDestroy {
-		return &batchv1.Job{
+		job = &batchv1.Job{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "Job",
 				APIVersion: "batch/v1",
@@ -431,9 +341,12 @@ func prepareJob(ctx context.Context, k8sClient client.Client, namespace, name st
 					},
 				},
 			},
-		}, nil
+		}
 	}
-	return nil, nil
+	if err := k8sClient.Create(ctx, job); err != nil {
+		return err
+	}
+	return nil
 }
 
 type TFState struct {
@@ -458,40 +371,43 @@ func getTFOutputs(ctx context.Context, k8sClient client.Client, configuration v1
 	outputs := tfState.Outputs
 
 	writeConnectionSecretToReference := configuration.Spec.WriteConnectionSecretToReference
-	if writeConnectionSecretToReference.Name != "" {
-		name := writeConnectionSecretToReference.Name
-		ns := writeConnectionSecretToReference.Namespace
-		data := make(map[string][]byte)
-		for k, v := range outputs {
-			data[k] = []byte(v.Value)
-		}
-		var gotSecret v1.Secret
-		if err := k8sClient.Get(ctx, client.ObjectKey{Name: name, Namespace: ns}, &gotSecret); err != nil {
-			if kerrors.IsNotFound(err) {
-				var secret = v1.Secret{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      name,
-						Namespace: ns,
-						OwnerReferences: []metav1.OwnerReference{{
-							APIVersion: configuration.APIVersion,
-							Kind:       configuration.Kind,
-							Name:       configuration.Name,
-							UID:        configuration.UID,
-							Controller: pointer.BoolPtr(false),
-						}},
-					},
-					TypeMeta: metav1.TypeMeta{Kind: "Secret"},
-					Data:     data,
-				}
-				if err := k8sClient.Create(ctx, &secret); err != nil {
-					return nil, err
-				}
+
+	if writeConnectionSecretToReference.Name == "" {
+		return outputs, nil
+	}
+
+	name := writeConnectionSecretToReference.Name
+	ns := writeConnectionSecretToReference.Namespace
+	data := make(map[string][]byte)
+	for k, v := range outputs {
+		data[k] = []byte(v.Value)
+	}
+	var gotSecret v1.Secret
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: name, Namespace: ns}, &gotSecret); err != nil {
+		if kerrors.IsNotFound(err) {
+			var secret = v1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      name,
+					Namespace: ns,
+					OwnerReferences: []metav1.OwnerReference{{
+						APIVersion: configuration.APIVersion,
+						Kind:       configuration.Kind,
+						Name:       configuration.Name,
+						UID:        configuration.UID,
+						Controller: pointer.BoolPtr(false),
+					}},
+				},
+				TypeMeta: metav1.TypeMeta{Kind: "Secret"},
+				Data:     data,
+			}
+			if err := k8sClient.Create(ctx, &secret); err != nil {
+				return nil, err
 			}
 		}
-		gotSecret.Data = data
-		if err := k8sClient.Update(ctx, &gotSecret); err != nil {
-			return nil, err
-		}
+	}
+	gotSecret.Data = data
+	if err := k8sClient.Update(ctx, &gotSecret); err != nil {
+		return nil, err
 	}
 	return outputs, nil
 }
@@ -584,4 +500,114 @@ func getProviderSecret(ctx context.Context, k8sClient client.Client) (*util.Alib
 		klog.ErrorS(err, "", "CredentialType", provider.Spec.Credentials.Source)
 		return nil, err
 	}
+}
+
+func deleteConfigMap(ctx context.Context, k8sClient client.Client, namespace, name string) error {
+	var cm v1.ConfigMap
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: name, Namespace: namespace}, &cm); err == nil {
+		if err := k8sClient.Delete(ctx, &cm); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func createConfigMap(ctx context.Context, k8sClient client.Client, namespace, name string, data map[string]string) error {
+	cm := v1.ConfigMap{
+		TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Data: data,
+	}
+	if err := k8sClient.Create(ctx, &cm); err != nil {
+		return err
+	}
+	return nil
+}
+
+func terraformDestroy(ctx context.Context, k8sClient client.Client, namespace, configurationName, jobName, tfInputConfigMapsName, tfStateConfigMapName string) error {
+	var destroyJob batchv1.Job
+
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: jobName, Namespace: namespace}, &destroyJob); err != nil {
+		if kerrors.IsNotFound(err) {
+			if err = assembleAndTriggerJob(ctx, k8sClient, namespace, configurationName, nil, tfInputConfigMapsName,
+				TerraformDestroy); err != nil {
+				return err
+			}
+		}
+	}
+	if destroyJob.Status.Succeeded == SucceededPod {
+		// delete Terraform input Configuration ConfigMap
+		if err := deleteConfigMap(ctx, k8sClient, namespace, tfInputConfigMapsName); err != nil {
+			return err
+		}
+
+		// delete Terraform state file ConfigMap
+		if err := deleteConfigMap(ctx, k8sClient, namespace, tfStateConfigMapName); err != nil {
+			return err
+		}
+
+		// delete Job itself
+		if err := k8sClient.Delete(ctx, &destroyJob); err != nil {
+			return err
+		}
+		return nil
+	}
+	return errors.New("configuration deletion isn't completed.")
+}
+
+func terraformApply(ctx context.Context, k8sClient client.Client, namespace string, configuration v1beta1.Configuration, applyJobName, tfInputConfigMapsName, tfStateConfigMapName string) error {
+	var gotJob batchv1.Job
+
+	err := k8sClient.Get(ctx, client.ObjectKey{Name: applyJobName, Namespace: namespace}, &gotJob)
+	if err == nil {
+		if gotJob.Status.Succeeded == SucceededPod {
+			outputs, err := getTFOutputs(ctx, k8sClient, configuration, tfStateConfigMapName)
+			if err != nil {
+				return err
+			}
+			configuration.Status.State = "provisioned"
+			configuration.Status.Outputs = outputs
+			if err := k8sClient.Update(ctx, &configuration); err != nil {
+				return err
+			}
+			return nil
+		}
+	}
+
+	if kerrors.IsNotFound(err) {
+		configurationType, inputConfiguration, err := util.ValidConfiguration(configuration)
+		if err != nil {
+			return err
+		}
+
+		// Check the existence of ConfigMap which is used to input TF configuration file
+		// TODO(zzxwill) replace the configmap every time?
+		var configMap v1.ConfigMap
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: tfInputConfigMapsName, Namespace: namespace}, &configMap); err != nil {
+			if kerrors.IsNotFound(err) {
+				var dataName string
+				switch configurationType {
+				case util.ConfigurationJSON:
+					dataName = TerraformJSONConfigurationName
+				case util.ConfigurationHCL:
+					dataName = TerraformHCLConfigurationName
+				}
+				data := map[string]string{dataName: inputConfiguration}
+				if err = createConfigMap(ctx, k8sClient, namespace, tfInputConfigMapsName, data); err != nil {
+					return err
+				}
+			} else {
+				return err
+			}
+		}
+
+		if err := assembleAndTriggerJob(ctx, k8sClient, namespace, configuration.Name, &configuration,
+			tfInputConfigMapsName, TerraformApply); err != nil {
+			return err
+		}
+	}
+	return nil
 }
