@@ -9,7 +9,7 @@ import (
 type ConfigurationType string
 
 const (
-	ConfigurationJSON ConfigurationType= "JSON"
+	ConfigurationJSON ConfigurationType = "JSON"
 	ConfigurationHCL  ConfigurationType = "HCL"
 )
 

@@ -37,7 +37,7 @@ type ProviderSpec struct {
 type ProviderCredentials struct {
 	// Source of the provider credentials.
 	// +kubebuilder:validation:Enum=None;Secret;InjectedIdentity;Environment;Filesystem
-	Source                         crossplanev1.CredentialsSource `json:"source"`
+	Source crossplanev1.CredentialsSource `json:"source"`
 
 	// A SecretRef is a reference to a secret key that contains the credentials
 	// that must be used to connect to the provider.

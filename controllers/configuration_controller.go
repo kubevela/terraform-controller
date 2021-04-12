@@ -1,5 +1,5 @@
 /*
-
+Copyright 2021 The KubeVela Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,12 +20,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
 	"github.com/ghodss/yaml"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
-	"github.com/zzxwill/terraform-controller/api/v1beta1"
-	"github.com/zzxwill/terraform-controller/controllers/util"
-	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -36,6 +34,9 @@ import (
 	"path/filepath"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/zzxwill/terraform-controller/api/v1beta1"
+	"github.com/zzxwill/terraform-controller/controllers/util"
 )
 
 const (
@@ -56,8 +57,8 @@ const (
 
 const (
 	TerraformJSONConfigurationName = "main.tf.json"
-	TerraformHCLConfigurationName = "main.tf"
-	TerraformStateName         = "terraform.tfstate"
+	TerraformHCLConfigurationName  = "main.tf"
+	TerraformStateName             = "terraform.tfstate"
 )
 
 type ConfigMapName string
@@ -218,7 +219,7 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	return ctrl.Result{}, nil
 }
 
-func prepareJob(ctx context.Context, k8sClient client.Client, namespace, name string,configuration *v1beta1.Configuration, tfInputConfigMapsName string, executionType TerraformExecutionType) (*batchv1.Job, error) {
+func prepareJob(ctx context.Context, k8sClient client.Client, namespace, name string, configuration *v1beta1.Configuration, tfInputConfigMapsName string, executionType TerraformExecutionType) (*batchv1.Job, error) {
 	jobName := name + "-" + string(executionType)
 	var parallelism int32 = 1
 	var completions int32 = 1
@@ -493,92 +494,6 @@ func getTFOutputs(ctx context.Context, k8sClient client.Client, configuration v1
 		}
 	}
 	return outputs, nil
-}
-
-func prepareDeployment(configuration v1beta1.Configuration, envs []v1.EnvVar, tfInputConfigMapsName string) appsv1.Deployment {
-	configurationName := configuration.Name
-	workingVolume := v1.Volume{Name: configurationName}
-	workingVolume.EmptyDir = &v1.EmptyDirVolumeSource{}
-
-	configMapVolumeSource := v1.ConfigMapVolumeSource{}
-	configMapVolumeSource.Name = tfInputConfigMapsName
-	inputTFConfigurationVolume := v1.Volume{Name: InputTFConfigurationVolumeName}
-	inputTFConfigurationVolume.ConfigMap = &configMapVolumeSource
-
-	tfStateConfigMapName := fmt.Sprintf(string(TFStateConfigMapName), configurationName)
-	tfStateDir := filepath.Join(WorkingVolumeMountPath, "tfstate")
-
-	return appsv1.Deployment{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Deployment",
-			APIVersion: "apps/v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      configurationName,
-			Namespace: configuration.Namespace,
-			OwnerReferences: []metav1.OwnerReference{{
-				APIVersion: configuration.APIVersion,
-				Kind:       configuration.Kind,
-				Name:       configurationName,
-				UID:        configuration.UID,
-				Controller: pointer.BoolPtr(false),
-			}},
-		},
-		Spec: appsv1.DeploymentSpec{
-			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{"name": "poc"},
-			},
-			Template: v1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{"name": "poc"},
-				},
-				Spec: v1.PodSpec{
-					Containers: []v1.Container{{
-						Name:            "terraform-executor",
-						Image:           TerraformImage,
-						ImagePullPolicy: v1.PullAlways,
-						Command: []string{
-							"bash",
-							"-c",
-							fmt.Sprintf("cp %s/* %s && terraform init && terraform apply -auto-approve && mkdir -p %s && cp %s %s && tail -f /dev/null",
-								InputTFConfigurationVolumeMountPath, WorkingVolumeMountPath, tfStateDir, TerraformStateName, tfStateDir),
-						},
-						VolumeMounts: []v1.VolumeMount{
-							{
-								Name:      InputTFConfigurationVolumeName,
-								MountPath: InputTFConfigurationVolumeMountPath,
-							},
-							{
-								Name:      configurationName,
-								MountPath: WorkingVolumeMountPath,
-							},
-						},
-						Env: envs,
-					},
-						{
-							Name:            "terraform-tfstate-retriever",
-							Image:           TFStateRetrieverImage,
-							ImagePullPolicy: v1.PullAlways,
-							Env: []v1.EnvVar{
-								{Name: "CONFIGMAPS_NAMESPACE", Value: configuration.Namespace},
-								{Name: "CONFIGMAPS_NAME", Value: tfStateConfigMapName},
-								{Name: "TF_STATE_DIR", Value: tfStateDir},
-								{Name: "TF_STATE_NAME", Value: TerraformStateName},
-							},
-							VolumeMounts: []v1.VolumeMount{
-								{
-									Name:      configurationName,
-									MountPath: WorkingVolumeMountPath,
-								},
-							},
-						},
-					},
-					Volumes:       []v1.Volume{workingVolume, inputTFConfigurationVolume},
-					RestartPolicy: v1.RestartPolicyAlways,
-				},
-			},
-		},
-	}
 }
 
 func prepareTFVariables(ctx context.Context, k8sClient client.Client, configuration *v1beta1.Configuration) ([]v1.EnvVar, error) {
