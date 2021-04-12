@@ -18,16 +18,18 @@ package util
 
 import (
 	"encoding/json"
+
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-var ParameterTag = "parameter"
+const (
 
-type AlibabaCloudCredentials struct {
-	AccessKeyID     string `yaml:"accessKeyID"`
-	AccessKeySecret string `yaml:"accessKeySecret"`
-	Region          string
-}
+)
+
+
+
+
+
 
 // RawExtension2Map will convert rawExtension to map
 // This function is copied from oam-dev/kubevela

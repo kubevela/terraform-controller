@@ -4,6 +4,18 @@ Terraform Controller is a Kubernetes Controller for Terraform, which can address
 
 ![](docs/resources/architecture.png)
 
+# Features
+
+## Supported Cloud Providers
+
+- Alibaba Cloud
+- AWS
+
+## Supported Terraform Configuration
+
+- HCL
+- JSON
+
 # Design
 
 ## Components
@@ -70,14 +82,16 @@ Here is a drawback for the choice: we have to grant the Pod in the Job to create
 
 # Get started
 
-Let's manage cloud resources on Alibaba Cloud as an example.
+- Install the controller
 
-## Locally run Terraform Controller
+## Alibaba Cloud
+
+### Locally run Terraform Controller
 
 Get the codebase from [release v0.1-alpha.1](https://github.com/zzxwill/terraform-controller/releases/tag/v0.1-alpha.1),
 and run it locally.
 
-## Apply Provider configuration
+### Apply Provider configuration
 
 ```shell
 $ export ALICLOUD_ACCESS_KEY=xxx; export ALICLOUD_SECRET_KEY=yyy
@@ -88,11 +102,11 @@ $ kubectl get secret -n vela-system
 NAME                                              TYPE                                  DATA   AGE
 alibaba-account-creds                             Opaque                                1      11s
 
-$ k apply -f examples/provider.yaml
+$ k apply -f examples/alibaba/provider.yaml
 provider.terraform.core.oam.dev/default created
 ```
 
-## Authenticate pods to create ConfigMaps
+### Authenticate pods to create ConfigMaps
 
 Terraform state file is essential to update or destroy cloud resources. After terraform execution completes, its state file
 needs to be stored to a ConfigMap.
@@ -103,9 +117,9 @@ clusterrole.rbac.authorization.k8s.io/tf-clusterrole created
 clusterrolebinding.rbac.authorization.k8s.io/tf-binding created
 ```
 
-## Apply Terraform Configuration
+### Apply Terraform Configuration
 
-Apply Terraform configuration [configuration_oss.yaml](./examples/configuration_oss.yaml) to provision an Alibaba OSS bucket.
+Apply Terraform configuration [configuration_oss.yaml](./examples/alibaba/configuration_json_oss.yaml) to provision an Alibaba OSS bucket.
 
 ```yaml
 apiVersion: terraform.core.oam.dev/v1beta1
@@ -201,9 +215,9 @@ status:
   state: provisioned
 ```
 
-## Looking into Configuration (optional)
+### Looking into Configuration (optional)
 
-### Watch the job to complete
+#### Watch the job to complete
 
 ```shell
 $ kubectl get job
@@ -266,7 +280,7 @@ Bucket Number is: 1
 0.146789(s) elapsed
 ```
 
-### Check whether Terraform state file is stored
+#### Check whether Terraform state file is stored
 
 ```shell
 $ kubectl get cm | grep aliyun-oss
@@ -347,7 +361,7 @@ metadata:
   uid: 762b1912-1f8f-428c-a4c7-2a7297375579
 ```
 
-### Check the generated connection secret
+#### Check the generated connection secret
 
 ```shell
 $ kubectl get secret oss-conn
@@ -355,7 +369,7 @@ NAME       TYPE     DATA   AGE
 oss-conn   Opaque   1      2m41s
 ```
 
-## Update Configuration
+### Update Configuration
 
 Change the OSS ACL to `public-read`.
 
@@ -374,7 +388,7 @@ spec:
 
 ```
 
-## Delete Configuration
+### Delete Configuration
 
 Delete the configuration will destroy the OSS cloud resource.
 
@@ -386,4 +400,90 @@ $ ossutil ls oss://
 Bucket Number is: 0
 
 0.030917(s) elapsed
+```
+
+## AWS
+
+### Apply Provider configuration
+
+```shell
+$ export AWS_ACCESS_KEY_ID=xxx;export AWS_SECRET_ACCESS_KEY=yyy
+
+$ sh hack/prepare-aws-credentials.sh
+
+$ kubectl get secret -n vela-system
+NAME                                              TYPE                                  DATA   AGE
+aws-account-creds                                 Opaque                                1      52s
+
+$ k apply -f examples/aws/provider.yaml
+provider.terraform.core.oam.dev/default created
+
+$ kubectl apply -f examples/rbac.yaml
+clusterrole.rbac.authorization.k8s.io/tf-clusterrole created
+clusterrolebinding.rbac.authorization.k8s.io/tf-binding created
+```
+
+### Apply Terraform Configuration
+
+Apply Terraform configuration [configuration_hcl_s3.yaml](./examples/aws/configuration_hcl_s3.yaml) to provision a s3 bucket.
+
+```yaml
+apiVersion: terraform.core.oam.dev/v1beta1
+kind: Configuration
+metadata:
+  name: aws-s3
+spec:
+  hcl: |
+    resource "aws_s3_bucket" "bucket-acl" {
+      bucket = var.bucket
+      acl    = var.acl
+    }
+
+    output "BUCKET_NAME" {
+      value = aws_s3_bucket.bucket-acl.bucket_domain_name
+    }
+
+    variable "bucket" {
+      default = "vela-website"
+    }
+
+    variable "acl" {
+      default = "private"
+    }
+
+  variable:
+    bucket: "vela-website"
+    acl: "private"
+
+  writeConnectionSecretToRef:
+    name: s3-conn
+    namespace: default
+
+```
+
+```shell
+$ kubectl get configuration.terraform.core.oam.dev
+NAME     AGE
+aws-s3   6m48s
+
+$ kubectl describe configuration.terraform.core.oam.dev aws-s3
+apiVersion: terraform.core.oam.dev/v1beta1
+kind: Configuration
+...
+  Write Connection Secret To Ref:
+    Name:       s3-conn
+    Namespace:  default
+Status:
+  Outputs:
+    BUCKET_NAME:
+      Type:   string
+      Value:  vela-website.s3.amazonaws.com
+  State:      provisioned
+
+$ kubectl get secret s3-conn
+NAME      TYPE     DATA   AGE
+s3-conn   Opaque   1      7m37s
+
+$ aws s3 ls
+2021-04-12 19:03:32 vela-website
 ```

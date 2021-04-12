@@ -1,0 +1,30 @@
+apiVersion: terraform.core.oam.dev/v1beta1
+kind: Configuration
+metadata:
+  name: aws-s3
+spec:
+  hcl: |
+    resource "aws_s3_bucket" "bucket-acl" {
+      bucket = var.bucket
+      acl    = var.acl
+    }
+
+    output "BUCKET_NAME" {
+      value = aws_s3_bucket.bucket-acl.bucket_domain_name
+    }
+
+    variable "bucket" {
+      default = "vela-website"
+    }
+
+    variable "acl" {
+      default = "private"
+    }
+
+  variable:
+    bucket: "vela-website"
+    acl: "private"
+
+  writeConnectionSecretToRef:
+    name: s3-conn
+    namespace: default

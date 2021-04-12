@@ -11,4 +11,3 @@ spec:
       namespace: vela-system
       name: alibaba-account-creds
       key: credentials
-
