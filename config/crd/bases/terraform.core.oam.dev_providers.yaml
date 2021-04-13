@@ -17,7 +17,7 @@ spec:
   scope: Namespaced
   validation:
     openAPIV3Schema:
-      description: Provider is the Schema for the providerconfigs API
+      description: Provider is the Schema for the providerconfigs API.
       properties:
         apiVersion:
           description: 'APIVersion defines the versioned schema of this representation
@@ -32,7 +32,7 @@ spec:
         metadata:
           type: object
         spec:
-          description: ProviderSpec defines the desired state of Provider
+          description: ProviderSpec defines the desired state of Provider.
           properties:
             credentials:
               description: Credentials required to authenticate to this provider.
@@ -79,7 +79,7 @@ spec:
           - region
           type: object
         status:
-          description: ProviderStatus defines the observed state of Provider
+          description: ProviderStatus defines the observed state of Provider.
           type: object
       type: object
   version: v1beta1

@@ -43,7 +43,7 @@ manifests: controller-gen
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
 # Run go fmt against code
-fmt:
+fmt: goimports
 	go fmt ./...
 
 # Run go vet against code
@@ -102,5 +102,23 @@ endif
 lint: golangci
 	$(GOLANGCILINT) run ./...
 
-reviewable: lint generate
-	@go mod tidy
+reviewable: manifests fmt vet lint
+	go mod tidy
+
+# Execute auto-gen code commands and ensure branch is clean.
+check-diff: reviewable
+	git --no-pager diff
+	git diff --quiet || ($(ERR) please run 'make reviewable' to include all changes && false)
+	@$(OK) branch is clean
+
+.PHONY: goimports
+goimports:
+ifeq (, $(shell which goimports))
+	@{ \
+	set -e ;\
+	GO111MODULE=off go get -u golang.org/x/tools/cmd/goimports ;\
+	}
+GOIMPORTS=$(GOBIN)/goimports
+else
+GOIMPORTS=$(shell which goimports)
+endif

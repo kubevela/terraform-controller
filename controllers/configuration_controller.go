@@ -98,7 +98,7 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	klog.InfoS("reconciling Terraform Template...", "NamespacedName", req.NamespacedName)
 
 	// Terraform destroy
- 	if err := r.Get(ctx, req.NamespacedName, &configuration); err != nil {
+	if err := r.Get(ctx, req.NamespacedName, &configuration); err != nil {
 		klog.InfoS("performing Terraform Destroy", "Namespace", req.Namespace, "Name", req.Name)
 		if kerrors.IsNotFound(err) {
 			destroyJobName := configurationName + "-" + string(TerraformDestroy)

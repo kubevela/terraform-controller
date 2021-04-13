@@ -21,7 +21,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// ProviderSpec defines the desired state of Provider
+// ProviderSpec defines the desired state of Provider.
 type ProviderSpec struct {
 	// Provider is the cloud service provider, like `alibaba`
 	Provider string `json:"provider"`
@@ -45,7 +45,7 @@ type ProviderCredentials struct {
 	SecretRef *crossplanev1.SecretKeySelector `json:"secretRef,omitempty"`
 }
 
-// ProviderStatus defines the observed state of Provider
+// ProviderStatus defines the observed state of Provider.
 type ProviderStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
@@ -53,7 +53,7 @@ type ProviderStatus struct {
 
 // +kubebuilder:object:root=true
 
-// Provider is the Schema for the providerconfigs API
+// Provider is the Schema for the providerconfigs API.
 type Provider struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -64,7 +64,7 @@ type Provider struct {
 
 // +kubebuilder:object:root=true
 
-// ProviderList contains a list of Provider
+// ProviderList contains a list of Provider.
 type ProviderList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`

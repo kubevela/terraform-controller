@@ -22,15 +22,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-const (
-
-)
-
-
-
-
-
-
 // RawExtension2Map will convert rawExtension to map
 // This function is copied from oam-dev/kubevela
 func RawExtension2Map(raw *runtime.RawExtension) (map[string]interface{}, error) {
