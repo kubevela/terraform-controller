@@ -9,11 +9,13 @@ import (
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/zzxwill/terraform-controller/api/v1beta1"
+	"github.com/oam-dev/terraform-controller/api/v1beta1"
 )
 
 const (
-	ProviderName      = "default"
+	// ProviderName is the name of Provider object
+	ProviderName = "default"
+	// ProviderNamespace is the namespace of Provider object
 	ProviderNamespace = "default"
 )
 
