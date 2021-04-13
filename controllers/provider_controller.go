@@ -25,7 +25,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	terraformv1beta1 "github.com/zzxwill/terraform-controller/api/v1beta1"
+	terraformv1beta1 "github.com/oam-dev/terraform-controller/api/v1beta1"
 )
 
 // ProviderReconciler reconciles a Provider object
