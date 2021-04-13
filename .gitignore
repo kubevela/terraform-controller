@@ -13,3 +13,24 @@
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+
+.idea/
+
+.vela/
+
+.DS_Store
+
+examples/tf-native/alibaba/json/terraform.tfstate
+examples/tf-native/alibaba/json/terraform.tfstate.backup
+examples/tf-native/alibaba/json/.terraform
+examples/tf-native/alibaba/json/.terraform.lock.hcl
+
+examples/tf-native/alibaba/hcl/terraform.tfstate
+examples/tf-native/alibaba/hcl/terraform.tfstate.backup
+examples/tf-native/alibaba/hcl/.terraform
+examples/tf-native/alibaba/hcl/.terraform.lock.hcl
+
+examples/tf-native/aws/hcl/terraform.tfstate
+examples/tf-native/aws/hcl/terraform.tfstate.backup
+examples/tf-native/aws/hcl/.terraform
+examples/tf-native/aws/hcl/.terraform.lock.hcl

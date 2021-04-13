@@ -1,0 +1,13 @@
+apiVersion: terraform.core.oam.dev/v1beta1
+kind: Provider
+metadata:
+  name: default
+spec:
+  provider: aws
+  region: us-east-1
+  credentials:
+    source: Secret
+    secretRef:
+      namespace: vela-system
+      name: aws-account-creds
+      key: credentials
