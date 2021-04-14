@@ -1,4 +1,4 @@
-module github.com/zzxwill/terraform-controller
+module github.com/oam-dev/terraform-controller
 
 go 1.13
 
