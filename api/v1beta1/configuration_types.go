@@ -17,9 +17,10 @@ limitations under the License.
 package v1beta1
 
 import (
-	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+
+	types "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
 )
 
 // ConfigurationSpec defines the desired state of Configuration
@@ -36,7 +37,7 @@ type ConfigurationSpec struct {
 	// be written. Connection details frequently include the endpoint, username,
 	// and password required to connect to the managed resource.
 	// +optional
-	WriteConnectionSecretToReference *xpv1.SecretReference `json:"writeConnectionSecretToRef,omitempty"`
+	WriteConnectionSecretToReference *types.SecretReference `json:"writeConnectionSecretToRef,omitempty"`
 }
 
 // ConfigurationStatus defines the observed state of Configuration
