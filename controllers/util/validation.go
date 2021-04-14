@@ -3,7 +3,7 @@ package util
 import (
 	"github.com/pkg/errors"
 
-	"github.com/zzxwill/terraform-controller/api/v1beta1"
+	"github.com/oam-dev/terraform-controller/api/v1beta1"
 )
 
 type ConfigurationType string

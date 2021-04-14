@@ -34,8 +34,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/zzxwill/terraform-controller/api/v1beta1"
-	"github.com/zzxwill/terraform-controller/controllers/util"
+	"github.com/oam-dev/terraform-controller/api/v1beta1"
+	"github.com/oam-dev/terraform-controller/controllers/util"
 )
 
 const (
