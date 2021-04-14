@@ -3,7 +3,7 @@ module github.com/oam-dev/terraform-controller
 go 1.13
 
 require (
-	github.com/crossplane/crossplane-runtime v0.12.0
+	cloud.google.com/go v0.45.1 // indirect
 	github.com/ghodss/yaml v1.0.0
 	github.com/go-logr/logr v0.4.0
 	github.com/go-logr/zapr v0.4.0 // indirect

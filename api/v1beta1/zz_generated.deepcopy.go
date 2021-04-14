@@ -21,7 +21,7 @@ limitations under the License.
 package v1beta1
 
 import (
-	"github.com/crossplane/crossplane-runtime/apis/common/v1"
+	crossplane_runtime "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -90,7 +90,7 @@ func (in *ConfigurationSpec) DeepCopyInto(out *ConfigurationSpec) {
 	in.Variable.DeepCopyInto(&out.Variable)
 	if in.WriteConnectionSecretToReference != nil {
 		in, out := &in.WriteConnectionSecretToReference, &out.WriteConnectionSecretToReference
-		*out = new(v1.SecretReference)
+		*out = new(crossplane_runtime.SecretReference)
 		**out = **in
 	}
 }
@@ -174,7 +174,7 @@ func (in *ProviderCredentials) DeepCopyInto(out *ProviderCredentials) {
 	*out = *in
 	if in.SecretRef != nil {
 		in, out := &in.SecretRef, &out.SecretRef
-		*out = new(v1.SecretKeySelector)
+		*out = new(crossplane_runtime.SecretKeySelector)
 		**out = **in
 	}
 }
