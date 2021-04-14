@@ -17,8 +17,9 @@ limitations under the License.
 package v1beta1
 
 import (
-	crossplanev1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	types "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
 )
 
 // ProviderSpec defines the desired state of Provider.
@@ -37,12 +38,12 @@ type ProviderSpec struct {
 type ProviderCredentials struct {
 	// Source of the provider credentials.
 	// +kubebuilder:validation:Enum=None;Secret;InjectedIdentity;Environment;Filesystem
-	Source crossplanev1.CredentialsSource `json:"source"`
+	Source types.CredentialsSource `json:"source"`
 
 	// A SecretRef is a reference to a secret key that contains the credentials
 	// that must be used to connect to the provider.
 	// +optional
-	SecretRef *crossplanev1.SecretKeySelector `json:"secretRef,omitempty"`
+	SecretRef *types.SecretKeySelector `json:"secretRef,omitempty"`
 }
 
 // ProviderStatus defines the observed state of Provider.
