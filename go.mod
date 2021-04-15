@@ -7,7 +7,7 @@ require (
 	github.com/ghodss/yaml v1.0.0
 	github.com/go-logr/logr v0.4.0
 	github.com/go-logr/zapr v0.4.0 // indirect
-	github.com/onsi/ginkgo v1.14.1
+	github.com/onsi/ginkgo v1.13.0
 	github.com/onsi/gomega v1.10.3
 	github.com/pkg/errors v0.9.1
 	k8s.io/api v0.18.8
@@ -19,7 +19,6 @@ require (
 	sigs.k8s.io/controller-runtime v0.6.2
 )
 
-// clint-go had a buggy release, https://github.com/kubernetes/client-go/issues/749
 replace (
 	// fix build issue https://github.com/ory/dockertest/issues/208
 	golang.org/x/sys => golang.org/x/sys v0.0.0-20210320140829-1e4c9ba3b0c4
