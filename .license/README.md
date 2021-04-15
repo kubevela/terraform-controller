@@ -1,6 +1,6 @@
 # License Checker
 
-Our license checker CI rely on https://github.com/pivotal/LicenseFinder.
+Our license checker CI relies on https://github.com/pivotal/LicenseFinder.
 
 ## How to add a new license?
 
