@@ -3,7 +3,7 @@
 # It should be run by config/default
 resources:
 - bases/terraform.core.oam.dev_configurations.yaml
-- bases/terraform.core.oam.dev_providerconfigs.yaml
+- bases/terraform.core.oam.dev_providers.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patchesStrategicMerge:
