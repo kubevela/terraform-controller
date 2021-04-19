@@ -88,8 +88,7 @@ Here is a drawback for the choice: we have to grant the Pod in the Job to create
 
 ### Locally run Terraform Controller
 
-Get the codebase from [release v0.1-alpha.1](https://github.com/zzxwill/terraform-controller/releases/tag/v0.1-alpha.1),
-and run it locally.
+Get the latest [releases](https://github.com/zzxwill/terraform-controller/releases/), and run it locally.
 
 ### Apply Provider configuration
 
@@ -125,12 +124,12 @@ Apply Terraform configuration [configuration_hcl_oss.yaml](./examples/alibaba/co
 apiVersion: terraform.core.oam.dev/v1beta1
 kind: Configuration
 metadata:
-  name: aliyun-oss
+  name: alibaba-oss
 spec:
   hcl: |
     resource "alicloud_oss_bucket" "bucket-acl" {
       bucket = var.bucket
-      acl    = var.acl
+      acl = var.acl
     }
 
     output "BUCKET_NAME" {
@@ -138,11 +137,15 @@ spec:
     }
 
     variable "bucket" {
+      description = "OSS bucket name"
       default = "vela-website"
+      type = string
     }
 
     variable "acl" {
+      description = "OSS bucket ACL, supported 'private', 'public-read', 'public-read-write'"
       default = "private"
+      type = string
     }
 
   variable:
@@ -152,21 +155,20 @@ spec:
   writeConnectionSecretToRef:
     name: oss-conn
     namespace: default
-
 ```
 
 ```shell
 $ kubectl get configuration.terraform.core.oam.dev
 NAME         AGE
-aliyun-oss   1h
+alibaba-oss   1h
 
-$ kubectl get configuration.terraform.core.oam.dev aliyun-oss -o yaml
+$ kubectl get configuration.terraform.core.oam.dev alibaba-oss -o yaml
 apiVersion: terraform.core.oam.dev/v1beta1
 kind: Configuration
 metadata:
   annotations:
     kubectl.kubernetes.io/last-applied-configuration: |
-      {"apiVersion":"terraform.core.oam.dev/v1beta1","kind":"Configuration","metadata":{"annotations":{},"name":"aliyun-oss","namespace":"default"},"spec":{"JSON":"{\n  \"resource\": {\n    \"alicloud_oss_bucket\": {\n      \"bucket-acl\": {\n        \"bucket\": \"${var.bucket}\",\n        \"acl\": \"${var.acl}\"\n      }\n    }\n  },\n  \"output\": {\n    \"BUCKET_NAME\": {\n      \"value\": \"${alicloud_oss_bucket.bucket-acl.bucket}.${alicloud_oss_bucket.bucket-acl.extranet_endpoint}\"\n    }\n  },\n  \"variable\": {\n    \"bucket\": {\n      \"default\": \"poc\"\n    },\n    \"acl\": {\n      \"default\": \"private\"\n    }\n  }\n}\n","variable":{"acl":"private","bucket":"vela-website"},"writeConnectionSecretToRef":{"name":"oss-conn","namespace":"default"}}}
+      {"apiVersion":"terraform.core.oam.dev/v1beta1","kind":"Configuration","metadata":{"annotations":{},"name":"alibaba-oss","namespace":"default"},"spec":{"JSON":"{\n  \"resource\": {\n    \"alicloud_oss_bucket\": {\n      \"bucket-acl\": {\n        \"bucket\": \"${var.bucket}\",\n        \"acl\": \"${var.acl}\"\n      }\n    }\n  },\n  \"output\": {\n    \"BUCKET_NAME\": {\n      \"value\": \"${alicloud_oss_bucket.bucket-acl.bucket}.${alicloud_oss_bucket.bucket-acl.extranet_endpoint}\"\n    }\n  },\n  \"variable\": {\n    \"bucket\": {\n      \"default\": \"poc\"\n    },\n    \"acl\": {\n      \"default\": \"private\"\n    }\n  }\n}\n","variable":{"acl":"private","bucket":"vela-website"},"writeConnectionSecretToRef":{"name":"oss-conn","namespace":"default"}}}
   creationTimestamp: "2021-04-02T08:17:08Z"
   generation: 2
 spec:
@@ -192,13 +194,13 @@ status:
 ```shell
 $ kubectl get job
 NAME               COMPLETIONS   DURATION   AGE
-aliyun-oss-apply   1/1           12s        94s
+alibaba-oss-apply   1/1           12s        94s
 
 $ kubectl get pod
 NAME                     READY   STATUS      RESTARTS   AGE
-aliyun-oss-apply-5c8b6   0/2     Completed   0          111s
+alibaba-oss-apply-5c8b6   0/2     Completed   0          111s
 
-$ kubectl logs aliyun-oss-rllx4 terraform-executor
+$ kubectl logs alibaba-oss-rllx4 terraform-executor
 
 Initializing the backend...
 
@@ -253,11 +255,11 @@ Bucket Number is: 1
 #### Check whether Terraform state file is stored
 
 ```shell
-$ kubectl get cm | grep aliyun-oss
-aliyun-oss-tf-input      1      16m
-aliyun-oss-tf-state      1      11m
+$ kubectl get cm | grep alibaba-oss
+alibaba-oss-tf-input      1      16m
+alibaba-oss-tf-state      1      11m
 
-$ kubectl get cm aliyun-oss-tf-state -o yaml
+$ kubectl get cm alibaba-oss-tf-state -o yaml
 apiVersion: v1
 data:
   terraform.tfstate: |
@@ -324,10 +326,10 @@ metadata:
     manager: terraform-tfstate-retriever
     operation: Update
     time: "2021-04-02T03:37:31Z"
-  name: aliyun-oss-tf-state
+  name: alibaba-oss-tf-state
   namespace: default
   resourceVersion: "33145818"
-  selfLink: /api/v1/namespaces/default/configmaps/aliyun-oss-tf-state
+  selfLink: /api/v1/namespaces/default/configmaps/alibaba-oss-tf-state
   uid: 762b1912-1f8f-428c-a4c7-2a7297375579
 ```
 
@@ -347,7 +349,7 @@ Change the OSS ACL to `public-read`.
 apiVersion: terraform.core.oam.dev/v1beta1
 kind: Configuration
 metadata:
-  name: aliyun-oss
+  name: alibaba-oss
 spec:
   JSON: |
     ..
@@ -363,8 +365,8 @@ spec:
 Delete the configuration will destroy the OSS cloud resource.
 
 ```shell
-$ kubectl delete configuration.terraform.core.oam.dev aliyun-oss
-configuration.terraform.core.oam.dev "aliyun-oss" deleted
+$ kubectl delete configuration.terraform.core.oam.dev alibaba-oss
+configuration.terraform.core.oam.dev "alibaba-oss" deleted
 
 $ ossutil ls oss://
 Bucket Number is: 0

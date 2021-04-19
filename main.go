@@ -52,7 +52,7 @@ func main() {
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
-	flag.DurationVar(&syncPeriod, "informer-re-sync-interval", 30*time.Second,
+	flag.DurationVar(&syncPeriod, "informer-re-sync-interval", 10*time.Second,
 		"controller shared informer lister full re-sync period")
 	flag.Parse()
 
