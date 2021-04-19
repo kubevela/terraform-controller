@@ -30,7 +30,7 @@ type ConfigurationSpec struct {
 	// HCL is the Terraform HCL type configuration
 	HCL string `json:"hcl,omitempty"`
 	// +kubebuilder:pruning:PreserveUnknownFields
-	Variable runtime.RawExtension `json:"variable"`
+	Variable *runtime.RawExtension `json:"variable,omitempty"`
 
 	// WriteConnectionSecretToReference specifies the namespace and name of a
 	// Secret to which any connection details for this managed resource should

@@ -39,7 +39,7 @@ import (
 )
 
 const (
-	// Terraform image which can run `terraform init/plan/apply`
+	// TerraformImage is the Terraform image which can run `terraform init/plan/apply`
 	// hit issue `toomanyrequests` for "zzxwill/docker-terraform:0.14.10"
 	TerraformImage = "registry.cn-hongkong.aliyuncs.com/zzxwill/docker-terraform:0.14.10"
 
@@ -261,7 +261,6 @@ func assembleAndTriggerJob(ctx context.Context, k8sClient client.Client, namespa
 				},
 			},
 		}
-
 	} else if executionType == TerraformDestroy {
 		job = &batchv1.Job{
 			TypeMeta: metav1.TypeMeta{
@@ -356,19 +355,22 @@ func getTFOutputs(ctx context.Context, k8sClient client.Client, configuration v1
 	}
 
 	var tfState TFState
-	if err := json.Unmarshal([]byte(tfStateJSON), &tfState); err != nil {
-		return nil, err
+	if tfStateJSON != "" {
+		if err := json.Unmarshal([]byte(tfStateJSON), &tfState); err != nil {
+			return nil, err
+		}
 	}
 	outputs := tfState.Outputs
-
 	writeConnectionSecretToReference := configuration.Spec.WriteConnectionSecretToReference
-
-	if writeConnectionSecretToReference.Name == "" {
+	if writeConnectionSecretToReference == nil || writeConnectionSecretToReference.Name == "" {
 		return outputs, nil
 	}
 
 	name := writeConnectionSecretToReference.Name
 	ns := writeConnectionSecretToReference.Namespace
+	if ns == "" {
+		ns = "default"
+	}
 	data := make(map[string][]byte)
 	for k, v := range outputs {
 		data[k] = []byte(v.Value)
@@ -395,10 +397,11 @@ func getTFOutputs(ctx context.Context, k8sClient client.Client, configuration v1
 				return nil, err
 			}
 		}
-	}
-	gotSecret.Data = data
-	if err := k8sClient.Update(ctx, &gotSecret); err != nil {
-		return nil, err
+	} else {
+		gotSecret.Data = data
+		if err := k8sClient.Update(ctx, &gotSecret); err != nil {
+			return nil, err
+		}
 	}
 	return outputs, nil
 }
@@ -408,7 +411,7 @@ func prepareTFVariables(ctx context.Context, k8sClient client.Client, configurat
 
 	var tfVariables *runtime.RawExtension
 	if configuration != nil {
-		tfVariables = &configuration.Spec.Variable
+		tfVariables = configuration.Spec.Variable
 	}
 	tfVariable, err := getTerraformJSONVariable(tfVariables)
 	if err != nil {

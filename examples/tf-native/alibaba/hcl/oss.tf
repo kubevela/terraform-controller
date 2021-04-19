@@ -1,6 +1,6 @@
 resource "alicloud_oss_bucket" "bucket-acl" {
   bucket = var.bucket
-  acl    = var.acl
+  acl = var.acl
 }
 
 output "BUCKET_NAME" {
@@ -8,9 +8,13 @@ output "BUCKET_NAME" {
 }
 
 variable "bucket" {
+  description = "OSS bucket name"
   default = "vela-website"
+  type = string
 }
 
 variable "acl" {
+  description = "OSS bucket ACL, supported 'private', 'public-read', 'public-read-write'"
   default = "private"
+  type = string
 }
