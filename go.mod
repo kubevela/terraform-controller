@@ -3,13 +3,15 @@ module github.com/oam-dev/terraform-controller
 go 1.13
 
 require (
-	cloud.google.com/go v0.45.1 // indirect
+	github.com/Masterminds/sprig/v3 v3.2.2
 	github.com/ghodss/yaml v1.0.0
 	github.com/go-logr/logr v0.4.0
 	github.com/go-logr/zapr v0.4.0 // indirect
 	github.com/onsi/ginkgo v1.13.0
 	github.com/onsi/gomega v1.10.3
 	github.com/pkg/errors v0.9.1
+	golang.org/x/text v0.3.5 // indirect
+	google.golang.org/appengine v1.6.5 // indirect
 	k8s.io/api v0.18.8
 	k8s.io/apimachinery v0.18.8
 	k8s.io/client-go v12.0.0+incompatible

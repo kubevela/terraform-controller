@@ -17,10 +17,24 @@ limitations under the License.
 package util
 
 import (
+	"bytes"
 	"encoding/json"
+	"text/template"
 
+	"github.com/Masterminds/sprig/v3"
 	"k8s.io/apimachinery/pkg/runtime"
+
+	"github.com/oam-dev/terraform-controller/api/v1beta1"
 )
+
+var backendTF = `
+terraform {
+  backend "kubernetes" {
+    secret_suffix    = "{{.SecretSuffix}}"
+    in_cluster_config = {{.InClusterConfig}}
+  }
+}
+`
 
 // RawExtension2Map will convert rawExtension to map
 // This function is copied from oam-dev/kubevela
@@ -38,4 +52,17 @@ func RawExtension2Map(raw *runtime.RawExtension) (map[string]interface{}, error)
 		return nil, err
 	}
 	return ret, err
+}
+
+func renderTemplate(backend *v1beta1.Backend) (string, error) {
+	tmpl, err := template.New("backend").Funcs(template.FuncMap(sprig.FuncMap())).Parse(backendTF)
+	if err != nil {
+		return "", err
+	}
+	var wr bytes.Buffer
+	err = tmpl.Execute(&wr, backend)
+	if err != nil {
+		return "", err
+	}
+	return wr.String(), nil
 }

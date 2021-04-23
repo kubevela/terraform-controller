@@ -44,14 +44,15 @@ const (
 	TerraformImage = "registry.cn-hongkong.aliyuncs.com/zzxwill/docker-terraform:0.14.10"
 
 	TFStateRetrieverImage = "zzxwill/terraform-tfstate-retriever:v0.3"
+	TerraformWorkspace    = "default"
 )
 
 const (
 	WorkingVolumeMountPath              = "/data"
 	InputTFConfigurationVolumeName      = "tf-input-configuration"
 	InputTFConfigurationVolumeMountPath = "/opt/tfconfiguration"
-	TFStateFileVolumeName               = "tf-state-file"
-	TFStateFileVolumeMountPath          = "/opt/tfstate"
+	//TFStateFileVolumeName               = "tf-state-file"
+	//TFStateFileVolumeMountPath          = "/opt/tfstate"
 
 	SucceededPod int32 = 1
 )
@@ -59,7 +60,7 @@ const (
 const (
 	TerraformJSONConfigurationName = "main.tf.json"
 	TerraformHCLConfigurationName  = "main.tf"
-	TerraformStateName             = "terraform.tfstate"
+	TerraformStateNameInSecret     = "tfstate"
 )
 
 type ConfigMapName string
@@ -112,7 +113,7 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	klog.InfoS("performing Terraform Apply (cloud resource create/update)", "Namespace", req.Namespace, "Name", req.Name)
 	applyJobName := configurationName + "-" + string(TerraformApply)
 	klog.InfoS("creating job", "Namespace", req.Namespace, "Name", applyJobName)
-	if err := terraformApply(ctx, r.Client, ns, configuration, applyJobName, tfInputConfigMapsName, tfStateConfigMapName); err != nil {
+	if err := terraformApply(ctx, r.Client, ns, configuration, applyJobName, tfInputConfigMapsName); err != nil {
 		return ctrl.Result{}, err
 	}
 	return ctrl.Result{}, nil
@@ -128,7 +129,7 @@ func assembleAndTriggerJob(ctx context.Context, k8sClient client.Client, namespa
 	workingVolume := v1.Volume{Name: name}
 	workingVolume.EmptyDir = &v1.EmptyDirVolumeSource{}
 
-	tfStateConfigMapName := fmt.Sprintf(string(TFStateConfigMapName), name)
+	//tfStateConfigMapName := fmt.Sprintf(string(TFStateConfigMapName), name)
 	tfStateDir := filepath.Join(WorkingVolumeMountPath, "tfstate")
 
 	inputCMVolumeSource := v1.ConfigMapVolumeSource{}
@@ -136,13 +137,10 @@ func assembleAndTriggerJob(ctx context.Context, k8sClient client.Client, namespa
 	inputTFConfigurationVolume := v1.Volume{Name: InputTFConfigurationVolumeName}
 	inputTFConfigurationVolume.ConfigMap = &inputCMVolumeSource
 
-	stateCMVolumeSource := v1.ConfigMapVolumeSource{}
-	stateCMVolumeSource.Name = tfStateConfigMapName
-	tfStateFileVolume := v1.Volume{Name: TFStateFileVolumeName}
-	tfStateFileVolume.ConfigMap = &stateCMVolumeSource
-
-	var tfStateFileCM v1.ConfigMap
-	tfStateError := k8sClient.Get(ctx, client.ObjectKey{Name: tfStateConfigMapName, Namespace: namespace}, &tfStateFileCM)
+	//stateCMVolumeSource := v1.ConfigMapVolumeSource{}
+	//stateCMVolumeSource.Name = tfStateConfigMapName
+	//tfStateFileVolume := v1.Volume{Name: TFStateFileVolumeName}
+	//tfStateFileVolume.ConfigMap = &stateCMVolumeSource
 
 	envs, err := prepareTFVariables(ctx, k8sClient, configuration)
 	if err != nil {
@@ -164,15 +162,6 @@ func assembleAndTriggerJob(ctx context.Context, k8sClient client.Client, namespa
 		initContainerCMD := fmt.Sprintf("cp %s/* %s && mkdir -p %s",
 			InputTFConfigurationVolumeMountPath, WorkingVolumeMountPath, tfStateDir)
 
-		if tfStateError == nil {
-			volumes = append(volumes, tfStateFileVolume)
-			initContainerVolumeMounts = append(initContainerVolumeMounts, v1.VolumeMount{
-				Name:      TFStateFileVolumeName,
-				MountPath: TFStateFileVolumeMountPath,
-			})
-			initContainerCMD = fmt.Sprintf("cp %s/* %s && cp %s/* %s && mkdir -p %s", InputTFConfigurationVolumeMountPath,
-				WorkingVolumeMountPath, TFStateFileVolumeMountPath, WorkingVolumeMountPath, tfStateDir)
-		}
 		job = &batchv1.Job{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "Job",
@@ -221,9 +210,8 @@ func assembleAndTriggerJob(ctx context.Context, k8sClient client.Client, namespa
 							Command: []string{
 								"bash",
 								"-c",
-								fmt.Sprintf("cp -r /root/terraform.d %s && rm -f %s/ && terraform init &&"+
-									" terraform apply -auto-approve && cp %s %s/",
-									WorkingVolumeMountPath, filepath.Join(tfStateDir, TerraformStateName), TerraformStateName, tfStateDir),
+								fmt.Sprintf("cp -r /root/terraform.d %s && terraform init &&"+
+									" terraform apply -auto-approve", WorkingVolumeMountPath),
 							},
 							VolumeMounts: []v1.VolumeMount{
 								{
@@ -237,23 +225,6 @@ func assembleAndTriggerJob(ctx context.Context, k8sClient client.Client, namespa
 							},
 							Env: envs,
 						},
-							{
-								Name:            "terraform-tfstate-retriever",
-								Image:           TFStateRetrieverImage,
-								ImagePullPolicy: v1.PullAlways,
-								Env: []v1.EnvVar{
-									{Name: "CONFIGMAPS_NAMESPACE", Value: namespace},
-									{Name: "CONFIGMAPS_NAME", Value: tfStateConfigMapName},
-									{Name: "TF_STATE_DIR", Value: tfStateDir},
-									{Name: "TF_STATE_NAME", Value: TerraformStateName},
-								},
-								VolumeMounts: []v1.VolumeMount{
-									{
-										Name:      name,
-										MountPath: WorkingVolumeMountPath,
-									},
-								},
-							},
 						},
 						Volumes:       volumes,
 						RestartPolicy: v1.RestartPolicyOnFailure,
@@ -286,7 +257,7 @@ func assembleAndTriggerJob(ctx context.Context, k8sClient client.Client, namespa
 							Command: []string{
 								"sh",
 								"-c",
-								fmt.Sprintf("cp %s/* %s && cp %s/* %s", InputTFConfigurationVolumeMountPath, WorkingVolumeMountPath, TFStateFileVolumeMountPath, WorkingVolumeMountPath),
+								fmt.Sprintf("cp %s/* %s", InputTFConfigurationVolumeMountPath, WorkingVolumeMountPath),
 							},
 							VolumeMounts: []v1.VolumeMount{
 								{
@@ -296,10 +267,6 @@ func assembleAndTriggerJob(ctx context.Context, k8sClient client.Client, namespa
 								{
 									Name:      InputTFConfigurationVolumeName,
 									MountPath: InputTFConfigurationVolumeMountPath,
-								},
-								{
-									Name:      TFStateFileVolumeName,
-									MountPath: TFStateFileVolumeMountPath,
 								},
 							},
 						}},
@@ -326,7 +293,7 @@ func assembleAndTriggerJob(ctx context.Context, k8sClient client.Client, namespa
 							},
 							Env: envs,
 						}},
-						Volumes:       []v1.Volume{workingVolume, inputTFConfigurationVolume, tfStateFileVolume},
+						Volumes:       []v1.Volume{workingVolume, inputTFConfigurationVolume},
 						RestartPolicy: v1.RestartPolicyOnFailure,
 					},
 				},
@@ -343,23 +310,36 @@ type TFState struct {
 	Outputs map[string]v1beta1.Property `json:"outputs"`
 }
 
-func getTFOutputs(ctx context.Context, k8sClient client.Client, configuration v1beta1.Configuration, tfStateConfigMapName string) (map[string]v1beta1.Property, error) {
-	var configMap = v1.ConfigMap{}
-	// Check the existence of ConfigMap which is used to store TF state file
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: tfStateConfigMapName, Namespace: configuration.Namespace}, &configMap); err != nil {
+func getTFOutputs(ctx context.Context, k8sClient client.Client, configuration v1beta1.Configuration) (map[string]v1beta1.Property, error) {
+	var s = v1.Secret{}
+	// Check the existence of Terraform state secret which is used to store TF state file. For detailed information,
+	// please refer to https://www.terraform.io/docs/language/settings/backends/kubernetes.html#configuration-variables
+	var backendSecretSuffix string
+	if configuration.Spec.Backend != nil && configuration.Spec.Backend.SecretSuffix != "" {
+		backendSecretSuffix = configuration.Spec.Backend.SecretSuffix
+	} else {
+		backendSecretSuffix = configuration.Name
+	}
+
+	k8sBackendSecretName := fmt.Sprintf("tfstate-%s-%s", TerraformWorkspace, backendSecretSuffix)
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: k8sBackendSecretName, Namespace: configuration.Namespace}, &s); err != nil {
 		return nil, err
 	}
-	tfStateJSON, ok := configMap.Data[TerraformStateName]
+	tfStateData, ok := s.Data[TerraformStateNameInSecret]
 	if !ok {
-		return nil, fmt.Errorf("failed to get %s from ConfigMap %s", TerraformStateName, configMap.Name)
+		return nil, fmt.Errorf("failed to get %s from Terraform State secret %s", TerraformStateNameInSecret, s.Name)
+	}
+
+	tfStateJSON, err := util.DecompressTerraformStateSecret(string(tfStateData))
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to decompress state secret data")
 	}
 
 	var tfState TFState
-	if tfStateJSON != "" {
-		if err := json.Unmarshal([]byte(tfStateJSON), &tfState); err != nil {
-			return nil, err
-		}
+	if err := json.Unmarshal(tfStateJSON, &tfState); err != nil {
+		return nil, err
 	}
+
 	outputs := tfState.Outputs
 	writeConnectionSecretToReference := configuration.Spec.WriteConnectionSecretToReference
 	if writeConnectionSecretToReference == nil || writeConnectionSecretToReference.Name == "" {
@@ -466,19 +446,26 @@ func deleteConfigMap(ctx context.Context, k8sClient client.Client, namespace, na
 	return nil
 }
 
-func createConfigMap(ctx context.Context, k8sClient client.Client, namespace, name string, data map[string]string) error {
-	cm := v1.ConfigMap{
-		TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		},
-		Data: data,
-	}
-	if err := k8sClient.Create(ctx, &cm); err != nil {
+func createOrUpdateConfigMap(ctx context.Context, k8sClient client.Client, namespace, name string, data map[string]string) error {
+	var gotCM v1.ConfigMap
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: name, Namespace: namespace}, &gotCM); err != nil {
+		if kerrors.IsNotFound(err) {
+			cm := v1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      name,
+					Namespace: namespace,
+				},
+				Data: data,
+			}
+			err := k8sClient.Create(ctx, &cm)
+			return errors.Wrap(err, "failed to create TF configuration ConfigMap")
+		}
 		return err
 	}
-	return nil
+	gotCM.Data = data
+	err := k8sClient.Update(ctx, &gotCM)
+	return errors.Wrap(err, "failed to update TF configuration ConfigMap")
 }
 
 func terraformDestroy(ctx context.Context, k8sClient client.Client, namespace, configurationName, jobName, tfInputConfigMapsName, tfStateConfigMapName string) error {
@@ -498,10 +485,11 @@ func terraformDestroy(ctx context.Context, k8sClient client.Client, namespace, c
 			return err
 		}
 
-		// delete Terraform state file ConfigMap
-		if err := deleteConfigMap(ctx, k8sClient, namespace, tfStateConfigMapName); err != nil {
-			return err
-		}
+		// delete Terraform state file Secret
+		// TODO(zzxwill) Terraform Kubernetes backend tends to keep the secret
+		//if err := deleteConfigMap(ctx, k8sClient, namespace, tfStateConfigMapName); err != nil {
+		//	return err
+		//}
 
 		// delete Job itself
 		if err := k8sClient.Delete(ctx, &destroyJob); err != nil {
@@ -512,13 +500,13 @@ func terraformDestroy(ctx context.Context, k8sClient client.Client, namespace, c
 	return errors.New("configuration deletion isn't completed.")
 }
 
-func terraformApply(ctx context.Context, k8sClient client.Client, namespace string, configuration v1beta1.Configuration, applyJobName, tfInputConfigMapsName, tfStateConfigMapName string) error {
+func terraformApply(ctx context.Context, k8sClient client.Client, namespace string, configuration v1beta1.Configuration, applyJobName, tfInputConfigMapName string) error {
 	var gotJob batchv1.Job
 
 	err := k8sClient.Get(ctx, client.ObjectKey{Name: applyJobName, Namespace: namespace}, &gotJob)
 	if err == nil {
 		if gotJob.Status.Succeeded == SucceededPod {
-			outputs, err := getTFOutputs(ctx, k8sClient, configuration, tfStateConfigMapName)
+			outputs, err := getTFOutputs(ctx, k8sClient, configuration)
 			if err != nil {
 				return err
 			}
@@ -536,32 +524,28 @@ func terraformApply(ctx context.Context, k8sClient client.Client, namespace stri
 		if err != nil {
 			return err
 		}
-
-		// Check the existence of ConfigMap which is used to input TF configuration file
-		// TODO(zzxwill) replace the configmap every time?
-		var configMap v1.ConfigMap
-		if err := k8sClient.Get(ctx, client.ObjectKey{Name: tfInputConfigMapsName, Namespace: namespace}, &configMap); err != nil {
-			if kerrors.IsNotFound(err) {
-				var dataName string
-				switch configurationType {
-				case util.ConfigurationJSON:
-					dataName = TerraformJSONConfigurationName
-				case util.ConfigurationHCL:
-					dataName = TerraformHCLConfigurationName
-				}
-				data := map[string]string{dataName: inputConfiguration}
-				if err = createConfigMap(ctx, k8sClient, namespace, tfInputConfigMapsName, data); err != nil {
-					return err
-				}
-			} else {
-				return err
-			}
+		data := prepareTFInputConfigurationData(configurationType, inputConfiguration)
+		if err = createOrUpdateConfigMap(ctx, k8sClient, namespace, tfInputConfigMapName, data); err != nil {
+			return err
 		}
 
 		if err := assembleAndTriggerJob(ctx, k8sClient, namespace, configuration.Name, &configuration,
-			tfInputConfigMapsName, TerraformApply); err != nil {
+			tfInputConfigMapName, TerraformApply); err != nil {
 			return err
 		}
+		return nil
 	}
-	return nil
+	return err
+}
+
+func prepareTFInputConfigurationData(configurationType util.ConfigurationType, inputConfiguration string) map[string]string {
+	var dataName string
+	switch configurationType {
+	case util.ConfigurationJSON:
+		dataName = TerraformJSONConfigurationName
+	case util.ConfigurationHCL:
+		dataName = TerraformHCLConfigurationName
+	}
+	data := map[string]string{dataName: inputConfiguration}
+	return data
 }

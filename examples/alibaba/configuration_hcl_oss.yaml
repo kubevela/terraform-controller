@@ -25,6 +25,10 @@ spec:
       type = string
     }
 
+  backend:
+    secretSuffix: oss
+    inClusterConfig: true
+
   variable:
     bucket: "vela-website"
     acl: "private"
@@ -32,3 +36,5 @@ spec:
   writeConnectionSecretToRef:
     name: oss-conn
     namespace: default
+
+

@@ -32,6 +32,11 @@ type ConfigurationSpec struct {
 	// +kubebuilder:pruning:PreserveUnknownFields
 	Variable *runtime.RawExtension `json:"variable,omitempty"`
 
+	// Backend stores the state in a Kubernetes secret with locking done using a Lease resource.
+	// TODO(zzxwill) If a backend exists in HCL/JSON, this can be optional. Currently, if Backend is not set by users, it
+	// still will set by the controller, ignoring the settings in HCL/JSON backend
+	Backend *Backend `json:"backend,omitempty"`
+
 	// WriteConnectionSecretToReference specifies the namespace and name of a
 	// Secret to which any connection details for this managed resource should
 	// be written. Connection details frequently include the endpoint, username,
@@ -42,8 +47,6 @@ type ConfigurationSpec struct {
 
 // ConfigurationStatus defines the observed state of Configuration
 type ConfigurationStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
 	State   string              `json:"state,omitempty"`
 	Outputs map[string]Property `json:"outputs,omitempty"`
 }
@@ -51,6 +54,14 @@ type ConfigurationStatus struct {
 type Property struct {
 	Value string `json:"value,omitempty"`
 	Type  string `json:"type,omitempty"`
+}
+
+// Backend stores the state in a Kubernetes secret with locking done using a Lease resource.
+type Backend struct {
+	// SecretSuffix used when creating secrets. Secrets will be named in the format: tfstate-{workspace}-{secretSuffix}
+	SecretSuffix string `json:"secretSuffix,omitempty"`
+	// InClusterConfig Used to authenticate to the cluster from inside a pod.
+	InClusterConfig bool `json:"inClusterConfig,omitempty"`
 }
 
 // +kubebuilder:object:root=true

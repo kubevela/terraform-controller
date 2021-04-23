@@ -1,0 +1,6 @@
+terraform {
+  backend "kubernetes" {
+    secret_suffix    = {{.secretSuffix}}
+    in_cluster_config = {{.inClusterConfig}}
+  }
+}
