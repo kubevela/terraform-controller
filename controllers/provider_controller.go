@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"k8s.io/klog/v2"
 
 	"github.com/go-logr/logr"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -39,6 +40,7 @@ type ProviderReconciler struct {
 // +kubebuilder:rbac:groups=terraform.core.oam.dev,resources=providers/status,verbs=get;update;patch
 
 func (r *ProviderReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
+	klog.InfoS("reconciling Terraform Provider...", "NamespacedName", req.NamespacedName)
 	var ctx = context.Background()
 	_ = r.Log.WithValues("provider", req.NamespacedName)
 
