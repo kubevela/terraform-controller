@@ -1,0 +1,8 @@
+replicaCount: 1
+
+version: 0.0.1
+
+image:
+  name: oamdev/terraform-controller:0.0.1
+  registry: docker.io/daprio
+  imagePullPolicy: Always

@@ -1,6 +1,7 @@
 
 # Image URL to use all building/pushing image targets
-IMG ?= zzxwill/terraform-controller:latest
+IMG ?= oamdev/terraform-controller:latest
+
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true"
 
@@ -27,11 +28,11 @@ run: generate fmt vet manifests
 
 # Install CRDs into a cluster
 install: manifests
-	kustomize build config/crd | kubectl apply -f -
+	kustomize build chart/crds | kubectl apply -f -
 
 # Uninstall CRDs from a cluster
 uninstall: manifests
-	kustomize build config/crd | kubectl delete -f -
+	kustomize build chart/crds | kubectl delete -f -
 
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
 deploy: manifests
@@ -40,7 +41,7 @@ deploy: manifests
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: controller-gen
-	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=chart/crds
 
 # Run go fmt against code
 fmt: goimports
@@ -61,6 +62,10 @@ docker-build: test
 # Push the docker image
 docker-push:
 	docker push ${IMG}
+
+# Make helm chart
+chart: docker-build docker-push
+	helm package chart --destination .
 
 # find or download controller-gen
 # download controller-gen if necessary
