@@ -50,7 +50,7 @@ Terraform state file will be generated.
 
 This executor is job, which has the ability to retry and auto-recovery from failures.
 
-It's taken upon by container zzxwill/docker-terraform:0.14.10, which is built from [zzxwill/broadinstitute-docker-terraform](https://github.com/zzxwill/broadinstitute-docker-terraform.git).
+It's taken upon by container oam-dev/docker-terraform:0.14.10, which is built from [oamdev/docker-terraform](https://github.com/oam-dev/docker-terraform.git).
 
 
 - Terraform state file retriever
