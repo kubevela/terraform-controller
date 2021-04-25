@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
@@ -51,23 +50,13 @@ const (
 	WorkingVolumeMountPath              = "/data"
 	InputTFConfigurationVolumeName      = "tf-input-configuration"
 	InputTFConfigurationVolumeMountPath = "/opt/tfconfiguration"
-	//TFStateFileVolumeName               = "tf-state-file"
-	//TFStateFileVolumeMountPath          = "/opt/tfstate"
-
-	SucceededPod int32 = 1
 )
 
 const (
-	TerraformJSONConfigurationName = "main.tf.json"
-	TerraformHCLConfigurationName  = "main.tf"
-	TerraformStateNameInSecret     = "tfstate"
-)
-
-type ConfigMapName string
-
-const (
-	TFInputConfigMapSName ConfigMapName = "%s-tf-input"
-	TFStateConfigMapName  ConfigMapName = "%s-tf-state"
+	TerraformJSONConfigurationName        = "main.tf.json"
+	TerraformHCLConfigurationName         = "main.tf"
+	TerraformStateNameInSecret            = "tfstate"
+	TFInputConfigMapSName          string = "%s-tf-input"
 )
 
 type TerraformExecutionType string
@@ -93,8 +82,7 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		ctx                   = context.Background()
 		ns                    = req.Namespace
 		configurationName     = req.Name
-		tfInputConfigMapsName = fmt.Sprintf(string(TFInputConfigMapSName), configurationName)
-		tfStateConfigMapName  = fmt.Sprintf(string(TFStateConfigMapName), configurationName)
+		tfInputConfigMapsName = fmt.Sprintf(TFInputConfigMapSName, configurationName)
 	)
 	klog.InfoS("reconciling Terraform Template...", "NamespacedName", req.NamespacedName)
 
@@ -103,8 +91,8 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		klog.InfoS("performing Terraform Destroy", "Namespace", req.Namespace, "Name", req.Name)
 		if kerrors.IsNotFound(err) {
 			destroyJobName := configurationName + "-" + string(TerraformDestroy)
-			klog.InfoS("creating job", "Namespace", req.Namespace, "Name", destroyJobName)
-			err := terraformDestroy(ctx, r.Client, ns, req.Name, destroyJobName, tfInputConfigMapsName, tfStateConfigMapName)
+			klog.InfoS("Terraform destroy job", "Namespace", req.Namespace, "Name", destroyJobName)
+			err := terraformDestroy(ctx, r.Client, ns, req.Name, destroyJobName, tfInputConfigMapsName)
 			return ctrl.Result{}, errors.Wrap(err, "continue reconciling to destroy cloud resource")
 		}
 	}
@@ -129,18 +117,10 @@ func assembleAndTriggerJob(ctx context.Context, k8sClient client.Client, namespa
 	workingVolume := v1.Volume{Name: name}
 	workingVolume.EmptyDir = &v1.EmptyDirVolumeSource{}
 
-	//tfStateConfigMapName := fmt.Sprintf(string(TFStateConfigMapName), name)
-	tfStateDir := filepath.Join(WorkingVolumeMountPath, "tfstate")
-
 	inputCMVolumeSource := v1.ConfigMapVolumeSource{}
 	inputCMVolumeSource.Name = tfInputConfigMapsName
 	inputTFConfigurationVolume := v1.Volume{Name: InputTFConfigurationVolumeName}
 	inputTFConfigurationVolume.ConfigMap = &inputCMVolumeSource
-
-	//stateCMVolumeSource := v1.ConfigMapVolumeSource{}
-	//stateCMVolumeSource.Name = tfStateConfigMapName
-	//tfStateFileVolume := v1.Volume{Name: TFStateFileVolumeName}
-	//tfStateFileVolume.ConfigMap = &stateCMVolumeSource
 
 	envs, err := prepareTFVariables(ctx, k8sClient, configuration)
 	if err != nil {
@@ -159,8 +139,7 @@ func assembleAndTriggerJob(ctx context.Context, k8sClient client.Client, namespa
 				MountPath: InputTFConfigurationVolumeMountPath,
 			},
 		}
-		initContainerCMD := fmt.Sprintf("cp %s/* %s && mkdir -p %s",
-			InputTFConfigurationVolumeMountPath, WorkingVolumeMountPath, tfStateDir)
+		initContainerCMD := fmt.Sprintf("cp %s/* %s", InputTFConfigurationVolumeMountPath, WorkingVolumeMountPath)
 
 		job = &batchv1.Job{
 			TypeMeta: metav1.TypeMeta{
@@ -198,11 +177,8 @@ func assembleAndTriggerJob(ctx context.Context, k8sClient client.Client, namespa
 							},
 							VolumeMounts: initContainerVolumeMounts,
 						}},
-						// Containers has two container
-						// 1) Container terraform-executor will first copy predefined terraform.d to working directory, and then
-						// run terraform init/apply.
-						// 2) Container terraform-tfstate-retriever will wait forever for state file until it got the file
-						// and will write it to configmap for future use.
+						// Container terraform-executor will first copy predefined terraform.d to working directory, and
+						// then run terraform init/apply.
 						Containers: []v1.Container{{
 							Name:            "terraform-executor",
 							Image:           TerraformImage,
@@ -270,11 +246,8 @@ func assembleAndTriggerJob(ctx context.Context, k8sClient client.Client, namespa
 								},
 							},
 						}},
-						// Containers has two container
-						// 1) Container terraform-executor will first copy predefined terraform.d to working directory, and then
-						// run terraform init/apply.
-						// 2) Container terraform-tfstate-retriever will wait forever for state file until it got the file
-						// and will write it to configmap for future use.
+						// Container terraform-executor will first copy predefined terraform.d to working directory, and
+						// then run terraform init/apply.
 						Containers: []v1.Container{{
 							Name:            "terraform-executor",
 							Image:           TerraformImage,
@@ -320,7 +293,7 @@ func getTFOutputs(ctx context.Context, k8sClient client.Client, configuration v1
 	} else {
 		backendSecretSuffix = configuration.Name
 	}
-
+	// Secrets will be named in the format: tfstate-{workspace}-{secret_suffix}
 	k8sBackendSecretName := fmt.Sprintf("tfstate-%s-%s", TerraformWorkspace, backendSecretSuffix)
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: k8sBackendSecretName, Namespace: configuration.Namespace}, &s); err != nil {
 		return nil, err
@@ -468,7 +441,7 @@ func createOrUpdateConfigMap(ctx context.Context, k8sClient client.Client, names
 	return errors.Wrap(err, "failed to update TF configuration ConfigMap")
 }
 
-func terraformDestroy(ctx context.Context, k8sClient client.Client, namespace, configurationName, jobName, tfInputConfigMapsName, tfStateConfigMapName string) error {
+func terraformDestroy(ctx context.Context, k8sClient client.Client, namespace, configurationName, jobName, tfInputConfigMapsName string) error {
 	var destroyJob batchv1.Job
 
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: jobName, Namespace: namespace}, &destroyJob); err != nil {
@@ -479,22 +452,21 @@ func terraformDestroy(ctx context.Context, k8sClient client.Client, namespace, c
 			}
 		}
 	}
-	if destroyJob.Status.Succeeded == SucceededPod {
-		// delete Terraform input Configuration ConfigMap
+	// When the deletion Job process succeeded, clean up work is starting.
+	if destroyJob.Status.Succeeded == *pointer.Int32Ptr(1) {
+		// 1. delete Terraform input Configuration ConfigMap
 		if err := deleteConfigMap(ctx, k8sClient, namespace, tfInputConfigMapsName); err != nil {
 			return err
 		}
 
-		// delete Terraform state file Secret
-		// TODO(zzxwill) Terraform Kubernetes backend tends to keep the secret
-		//if err := deleteConfigMap(ctx, k8sClient, namespace, tfStateConfigMapName); err != nil {
-		//	return err
-		//}
+		// 2. we don't manually delete Terraform state file Secret, as Terraform Kubernetes backend tends to keep the secret
 
-		// delete Job itself
+		// 3. delete Job itself
 		if err := k8sClient.Delete(ctx, &destroyJob); err != nil {
 			return err
 		}
+
+		// TODO(zzxwill) 4. Somehow, destroy pod isn't automatically deleted after its OwnerReference Job is deleted
 		return nil
 	}
 	return errors.New("configuration deletion isn't completed.")
@@ -505,7 +477,7 @@ func terraformApply(ctx context.Context, k8sClient client.Client, namespace stri
 
 	err := k8sClient.Get(ctx, client.ObjectKey{Name: applyJobName, Namespace: namespace}, &gotJob)
 	if err == nil {
-		if gotJob.Status.Succeeded == SucceededPod {
+		if gotJob.Status.Succeeded == *pointer.Int32Ptr(1) {
 			outputs, err := getTFOutputs(ctx, k8sClient, configuration)
 			if err != nil {
 				return err
