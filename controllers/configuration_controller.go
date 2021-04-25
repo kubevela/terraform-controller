@@ -40,7 +40,7 @@ import (
 
 const (
 	// TerraformImage is the Terraform image which can run `terraform init/plan/apply`
-	// hit issue `toomanyrequests` for "zzxwill/docker-terraform:0.14.10"
+	// hit issue `toomanyrequests` for "oamdev/docker-terraform:0.14.10"
 	TerraformImage = "registry.cn-hongkong.aliyuncs.com/zzxwill/docker-terraform:0.14.10"
 
 	TFStateRetrieverImage = "zzxwill/terraform-tfstate-retriever:v0.3"
