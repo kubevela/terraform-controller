@@ -24,7 +24,11 @@ func ValidConfiguration(configuration v1beta1.Configuration) (ConfigurationType,
 	case json != "":
 		return ConfigurationJSON, json, nil
 	case hcl != "":
-		return ConfigurationHCL, hcl, nil
+		backendTF, err := renderTemplate(configuration.Spec.Backend)
+		if err != nil {
+			return "", "", errors.Wrap(err, "failed to prepare Terraform backend configuration")
+		}
+		return ConfigurationHCL, hcl + "\n" + backendTF, nil
 	}
 	return "", "", errors.New("unknown issue")
 }
