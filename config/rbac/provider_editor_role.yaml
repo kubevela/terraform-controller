@@ -1,20 +1,24 @@
-# permissions for end users to view providerconfigs.
+# permissions for end users to edit providers.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: providerconfig-viewer-role
+  name: provider-editor-role
 rules:
 - apiGroups:
   - terraform.core.oam.dev
   resources:
-  - providerconfigs
+  - providers
   verbs:
+  - create
+  - delete
   - get
   - list
+  - patch
+  - update
   - watch
 - apiGroups:
   - terraform.core.oam.dev
   resources:
-  - providerconfigs/status
+  - providers/status
   verbs:
   - get
