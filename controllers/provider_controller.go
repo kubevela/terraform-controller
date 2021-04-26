@@ -35,8 +35,8 @@ type ProviderReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-// +kubebuilder:rbac:groups=terraform.core.oam.dev,resources=providerconfigs,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=terraform.core.oam.dev,resources=providerconfigs/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=terraform.core.oam.dev,resources=providers,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=terraform.core.oam.dev,resources=providers/status,verbs=get;update;patch
 
 func (r *ProviderReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	var ctx = context.Background()
