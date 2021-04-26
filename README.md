@@ -2,7 +2,7 @@
 
 Terraform Controller is a Kubernetes Controller for Terraform, which can address the requirement of [Using Terraform HCL as IaC module in KubeVela](https://github.com/oam-dev/kubevela/issues/698)
 
-![](docs/resources/architecture.png)
+![](docs/resources/architecture.jpg)
 
 # Features
 
@@ -38,28 +38,16 @@ This init component will retrieve HCL/JSON configuration from the object and sto
 
 During creation stage, it will mount the ConfigMap to a volume and copy the Terraform configuration file to the working directory.
 
-During update stage, it will mount Terraform state file ConfigMap `aliyun-${ConfigurationName}-tf-state`, which will be generated
-after a cloud resource is successfully provisioned, to the volume and copy it to the working directory.
-
 This component is taken upon by container `pause`.
 
 - Terraform configuration executor component
 
 This executor component will perform `terrform init` and `terraform apply`. After a cloud resource is successfully provisioned,
-Terraform state file will be generated.
+Terraform state file will be stored by [Terraform Kubernetes backend](https://www.terraform.io/docs/language/settings/backends/kubernetes.html).
 
 This executor is job, which has the ability to retry and auto-recovery from failures.
 
 It's taken upon by container oam-dev/docker-terraform:0.14.10, which is built from [oamdev/docker-terraform](https://github.com/oam-dev/docker-terraform.git).
-
-
-- Terraform state file retriever
-
-This component is relatively simple, which will monitor the generation of Terraform state file. Upon the state file is
-generated, it will store the file content to ConfigMap `aliyun-${ConfigurationName}-tf-state`, which will be used during
-`Configuration` update and deletion stage.
-
-This component is taken upon by the container zzxwill/terraform-tfstate-retriever:v0.2, which  built from [terraform-tfstate-retriever](https://github.com/zzxwill/terraform-tfstate-retriever).
 
 ## Technical alternatives
 
@@ -69,7 +57,7 @@ As Terraform controller is intended to support various Cloud providers, like AWS
 Crossplane new `ProviderConfiguration` is known as it mature model for these cloud providers. By utilizing the model, this
 controller can support various cloud providers at the very first day.
 
-### Why choosing ConfigMap as the storage system over cloud shared disks or Object storage system?
+### [Deprecated] Why choosing ConfigMap as the storage system over cloud shared disks or Object storage system?
 
 By using ConfigMap to store terraform configuration files and generated state file will be a generic way for nearly all 
 Kubernetes clusters. 
@@ -105,10 +93,10 @@ $ k apply -f examples/alibaba/provider.yaml
 provider.terraform.core.oam.dev/default created
 ```
 
-### Authenticate pods to create ConfigMaps
+### Authenticate pods to create ConfigMaps and Secret
 
 Terraform state file is essential to update or destroy cloud resources. After terraform execution completes, its state file
-needs to be stored to a ConfigMap.
+will be generated as a secret by Terraform Kubernetes backend.
 
 ```shell
 $ kubectl apply -f examples/rbac.yaml
@@ -250,87 +238,6 @@ CreationTime                                 Region    StorageClass    BucketNam
 Bucket Number is: 1
 
 0.146789(s) elapsed
-```
-
-#### Check whether Terraform state file is stored
-
-```shell
-$ kubectl get cm | grep alibaba-oss
-alibaba-oss-tf-input      1      16m
-alibaba-oss-tf-state      1      11m
-
-$ kubectl get cm alibaba-oss-tf-state -o yaml
-apiVersion: v1
-data:
-  terraform.tfstate: |
-    {
-      "version": 4,
-      "terraform_version": "0.14.9",
-      "serial": 2,
-      "lineage": "61cbded2-6323-0f83-823d-9c40c000b91d",
-      "outputs": {
-        "BUCKET_NAME": {
-          "value": "vela-website.oss-cn-beijing.aliyuncs.com",
-          "type": "string"
-        }
-      },
-      "resources": [
-        {
-          "mode": "managed",
-          "type": "alicloud_oss_bucket",
-          "name": "bucket-acl",
-          "provider": "provider[\"registry.terraform.io/hashicorp/alicloud\"]",
-          "instances": [
-            {
-              "schema_version": 0,
-              "attributes": {
-                "acl": "private",
-                "bucket": "vela-website",
-                "cors_rule": [],
-                "creation_date": "2021-04-02",
-                "extranet_endpoint": "oss-cn-beijing.aliyuncs.com",
-                "force_destroy": false,
-                "id": "vela-website",
-                "intranet_endpoint": "oss-cn-beijing-internal.aliyuncs.com",
-                "lifecycle_rule": [],
-                "location": "oss-cn-beijing",
-                "logging": [],
-                "logging_isenable": null,
-                "owner": "1874279259696164",
-                "policy": "",
-                "redundancy_type": "LRS",
-                "referer_config": [],
-                "server_side_encryption_rule": [],
-                "storage_class": "Standard",
-                "tags": null,
-                "versioning": [],
-                "website": []
-              },
-              "sensitive_attributes": [],
-              "private": "bnVsbA=="
-            }
-          ]
-        }
-      ]
-    }
-kind: ConfigMap
-metadata:
-  creationTimestamp: "2021-04-02T03:37:31Z"
-  managedFields:
-  - apiVersion: v1
-    fieldsType: FieldsV1
-    fieldsV1:
-      f:data:
-        .: {}
-        f:terraform.tfstate: {}
-    manager: terraform-tfstate-retriever
-    operation: Update
-    time: "2021-04-02T03:37:31Z"
-  name: alibaba-oss-tf-state
-  namespace: default
-  resourceVersion: "33145818"
-  selfLink: /api/v1/namespaces/default/configmaps/alibaba-oss-tf-state
-  uid: 762b1912-1f8f-428c-a4c7-2a7297375579
 ```
 
 #### Check the generated connection secret
