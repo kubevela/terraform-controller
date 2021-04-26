@@ -34,3 +34,5 @@ examples/tf-native/aws/hcl/terraform.tfstate
 examples/tf-native/aws/hcl/terraform.tfstate.backup
 examples/tf-native/aws/hcl/.terraform
 examples/tf-native/aws/hcl/.terraform.lock.hcl
+
+terraform-controller-*

@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: terraform-controller
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: terraform-controller
+  template:
+    metadata:
+      labels:
+        app: terraform-controller
+        app.kubernetes.io/name: {{ .Release.Name }}
+        app.kubernetes.io/version: {{ .Values.version }}
+        app.kubernetes.io/part-of: kubevela
+        app.kubernetes.io/managed-by: helm
+    spec:
+      containers:
+        - name: terraform-controller
+          image: "{{ .Values.image.name }}"
+          imagePullPolicy: {{ .Values.image.imagePullPolicy }}
