@@ -13,7 +13,7 @@ const (
 	ConfigurationHCL  ConfigurationType = "HCL"
 )
 
-func ValidConfiguration(configuration v1beta1.Configuration) (ConfigurationType, string, error) {
+func ValidConfiguration(configuration *v1beta1.Configuration) (ConfigurationType, string, error) {
 	json := configuration.Spec.JSON
 	hcl := configuration.Spec.HCL
 	switch {
@@ -24,6 +24,14 @@ func ValidConfiguration(configuration v1beta1.Configuration) (ConfigurationType,
 	case json != "":
 		return ConfigurationJSON, json, nil
 	case hcl != "":
+		if configuration.Spec.Backend != nil {
+			if configuration.Spec.Backend.SecretSuffix == "" {
+				configuration.Spec.Backend.SecretSuffix = configuration.Name
+			}
+			configuration.Spec.Backend.InClusterConfig = true
+		} else {
+			configuration.Spec.Backend = &v1beta1.Backend{SecretSuffix: configuration.Name, InClusterConfig: true}
+		}
 		backendTF, err := renderTemplate(configuration.Spec.Backend)
 		if err != nil {
 			return "", "", errors.Wrap(err, "failed to prepare Terraform backend configuration")

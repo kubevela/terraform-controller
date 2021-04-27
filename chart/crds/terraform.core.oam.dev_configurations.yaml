@@ -46,7 +46,7 @@ spec:
               properties:
                 inClusterConfig:
                   description: InClusterConfig Used to authenticate to the cluster
-                    from inside a pod.
+                    from inside a pod. Only `true` is allowed
                   type: boolean
                 secretSuffix:
                   description: 'SecretSuffix used when creating secrets. Secrets will

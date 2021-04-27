@@ -107,6 +107,75 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	return ctrl.Result{}, nil
 }
 
+func terraformApply(ctx context.Context, k8sClient client.Client, namespace string, configuration v1beta1.Configuration, applyJobName, tfInputConfigMapName string) error {
+	var gotJob batchv1.Job
+
+	err := k8sClient.Get(ctx, client.ObjectKey{Name: applyJobName, Namespace: namespace}, &gotJob)
+	if err == nil {
+		if gotJob.Status.Succeeded == *pointer.Int32Ptr(1) {
+			outputs, err := getTFOutputs(ctx, k8sClient, configuration)
+			if err != nil {
+				return err
+			}
+			configuration.Status.State = "provisioned"
+			configuration.Status.Outputs = outputs
+			if err := k8sClient.Update(ctx, &configuration); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	if kerrors.IsNotFound(err) {
+		configurationType, inputConfiguration, err := util.ValidConfiguration(&configuration)
+		if err != nil {
+			return err
+		}
+		data := prepareTFInputConfigurationData(configurationType, inputConfiguration)
+		if err = createOrUpdateConfigMap(ctx, k8sClient, namespace, tfInputConfigMapName, data); err != nil {
+			return err
+		}
+
+		if err := assembleAndTriggerJob(ctx, k8sClient, namespace, configuration.Name, &configuration,
+			tfInputConfigMapName, TerraformApply); err != nil {
+			return err
+		}
+		return nil
+	}
+	return err
+}
+
+func terraformDestroy(ctx context.Context, k8sClient client.Client, namespace, configurationName, jobName, tfInputConfigMapsName string) error {
+	var destroyJob batchv1.Job
+
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: jobName, Namespace: namespace}, &destroyJob); err != nil {
+		if kerrors.IsNotFound(err) {
+			if err = assembleAndTriggerJob(ctx, k8sClient, namespace, configurationName, nil, tfInputConfigMapsName,
+				TerraformDestroy); err != nil {
+				return err
+			}
+		}
+	}
+	// When the deletion Job process succeeded, clean up work is starting.
+	if destroyJob.Status.Succeeded == *pointer.Int32Ptr(1) {
+		// 1. delete Terraform input Configuration ConfigMap
+		if err := deleteConfigMap(ctx, k8sClient, namespace, tfInputConfigMapsName); err != nil {
+			return err
+		}
+
+		// 2. we don't manually delete Terraform state file Secret, as Terraform Kubernetes backend tends to keep the secret
+
+		// 3. delete Job itself
+		if err := k8sClient.Delete(ctx, &destroyJob); err != nil {
+			return err
+		}
+
+		// TODO(zzxwill) 4. Somehow, destroy pod isn't automatically deleted after its OwnerReference Job is deleted
+		return nil
+	}
+	return errors.New("configuration deletion isn't completed.")
+}
+
 func assembleAndTriggerJob(ctx context.Context, k8sClient client.Client, namespace, name string, configuration *v1beta1.Configuration, tfInputConfigMapsName string, executionType TerraformExecutionType) error {
 	var job *batchv1.Job
 	jobName := name + "-" + string(executionType)
@@ -296,7 +365,7 @@ func getTFOutputs(ctx context.Context, k8sClient client.Client, configuration v1
 	// Secrets will be named in the format: tfstate-{workspace}-{secret_suffix}
 	k8sBackendSecretName := fmt.Sprintf("tfstate-%s-%s", TerraformWorkspace, backendSecretSuffix)
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: k8sBackendSecretName, Namespace: configuration.Namespace}, &s); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "terraform state file backend secret is not generated")
 	}
 	tfStateData, ok := s.Data[TerraformStateNameInSecret]
 	if !ok {
@@ -439,75 +508,6 @@ func createOrUpdateConfigMap(ctx context.Context, k8sClient client.Client, names
 	gotCM.Data = data
 	err := k8sClient.Update(ctx, &gotCM)
 	return errors.Wrap(err, "failed to update TF configuration ConfigMap")
-}
-
-func terraformDestroy(ctx context.Context, k8sClient client.Client, namespace, configurationName, jobName, tfInputConfigMapsName string) error {
-	var destroyJob batchv1.Job
-
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: jobName, Namespace: namespace}, &destroyJob); err != nil {
-		if kerrors.IsNotFound(err) {
-			if err = assembleAndTriggerJob(ctx, k8sClient, namespace, configurationName, nil, tfInputConfigMapsName,
-				TerraformDestroy); err != nil {
-				return err
-			}
-		}
-	}
-	// When the deletion Job process succeeded, clean up work is starting.
-	if destroyJob.Status.Succeeded == *pointer.Int32Ptr(1) {
-		// 1. delete Terraform input Configuration ConfigMap
-		if err := deleteConfigMap(ctx, k8sClient, namespace, tfInputConfigMapsName); err != nil {
-			return err
-		}
-
-		// 2. we don't manually delete Terraform state file Secret, as Terraform Kubernetes backend tends to keep the secret
-
-		// 3. delete Job itself
-		if err := k8sClient.Delete(ctx, &destroyJob); err != nil {
-			return err
-		}
-
-		// TODO(zzxwill) 4. Somehow, destroy pod isn't automatically deleted after its OwnerReference Job is deleted
-		return nil
-	}
-	return errors.New("configuration deletion isn't completed.")
-}
-
-func terraformApply(ctx context.Context, k8sClient client.Client, namespace string, configuration v1beta1.Configuration, applyJobName, tfInputConfigMapName string) error {
-	var gotJob batchv1.Job
-
-	err := k8sClient.Get(ctx, client.ObjectKey{Name: applyJobName, Namespace: namespace}, &gotJob)
-	if err == nil {
-		if gotJob.Status.Succeeded == *pointer.Int32Ptr(1) {
-			outputs, err := getTFOutputs(ctx, k8sClient, configuration)
-			if err != nil {
-				return err
-			}
-			configuration.Status.State = "provisioned"
-			configuration.Status.Outputs = outputs
-			if err := k8sClient.Update(ctx, &configuration); err != nil {
-				return err
-			}
-			return nil
-		}
-	}
-
-	if kerrors.IsNotFound(err) {
-		configurationType, inputConfiguration, err := util.ValidConfiguration(configuration)
-		if err != nil {
-			return err
-		}
-		data := prepareTFInputConfigurationData(configurationType, inputConfiguration)
-		if err = createOrUpdateConfigMap(ctx, k8sClient, namespace, tfInputConfigMapName, data); err != nil {
-			return err
-		}
-
-		if err := assembleAndTriggerJob(ctx, k8sClient, namespace, configuration.Name, &configuration,
-			tfInputConfigMapName, TerraformApply); err != nil {
-			return err
-		}
-		return nil
-	}
-	return err
 }
 
 func prepareTFInputConfigurationData(configurationType util.ConfigurationType, inputConfiguration string) map[string]string {
