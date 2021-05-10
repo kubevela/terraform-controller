@@ -8,6 +8,13 @@ metadata:
   creationTimestamp: null
   name: configurations.terraform.core.oam.dev
 spec:
+  additionalPrinterColumns:
+  - JSONPath: .status.state
+    name: STATE
+    type: string
+  - JSONPath: .metadata.creationTimestamp
+    name: AGE
+    type: date
   group: terraform.core.oam.dev
   names:
     kind: Configuration
@@ -15,6 +22,7 @@ spec:
     plural: configurations
     singular: configuration
   scope: Namespaced
+  subresources: {}
   validation:
     openAPIV3Schema:
       description: Configuration is the Schema for the configurations API
@@ -79,6 +87,8 @@ spec:
         status:
           description: ConfigurationStatus defines the observed state of Configuration
           properties:
+            message:
+              type: string
             outputs:
               additionalProperties:
                 properties:
@@ -89,6 +99,7 @@ spec:
                 type: object
               type: object
             state:
+              description: A ResourceState represents the status of a resource
               type: string
           type: object
       type: object

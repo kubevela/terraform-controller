@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	state "github.com/oam-dev/terraform-controller/api/types"
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
@@ -84,7 +85,7 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		configurationName     = req.Name
 		tfInputConfigMapsName = fmt.Sprintf(TFInputConfigMapSName, configurationName)
 	)
-	klog.InfoS("reconciling Terraform Template...", "NamespacedName", req.NamespacedName)
+	klog.InfoS("reconciling Terraform Configuration...", "NamespacedName", req.NamespacedName)
 
 	// Terraform destroy
 	if err := r.Get(ctx, req.NamespacedName, &configuration); err != nil {
@@ -95,21 +96,22 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 			err := terraformDestroy(ctx, r.Client, ns, req.Name, destroyJobName, tfInputConfigMapsName)
 			return ctrl.Result{}, errors.Wrap(err, "continue reconciling to destroy cloud resource")
 		}
+		return ctrl.Result{}, errors.Wrap(err, "failed to call GET resource API")
 	}
 
 	// Terraform apply (create or update)
 	klog.InfoS("performing Terraform Apply (cloud resource create/update)", "Namespace", req.Namespace, "Name", req.Name)
 	applyJobName := configurationName + "-" + string(TerraformApply)
-	klog.InfoS("creating job", "Namespace", req.Namespace, "Name", applyJobName)
 	if err := terraformApply(ctx, r.Client, ns, configuration, applyJobName, tfInputConfigMapsName); err != nil {
-		return ctrl.Result{}, err
+		return ctrl.Result{RequeueAfter: 3}, errors.Wrap(err, "failed to create/update cloud resource")
 	}
-	return ctrl.Result{}, nil
+	return ctrl.Result{RequeueAfter: 10}, nil
 }
 
 func terraformApply(ctx context.Context, k8sClient client.Client, namespace string, configuration v1beta1.Configuration, applyJobName, tfInputConfigMapName string) error {
-	var gotJob batchv1.Job
+	klog.InfoS("terraform apply job", "Namespace", namespace, "Name", applyJobName)
 
+	var gotJob batchv1.Job
 	err := k8sClient.Get(ctx, client.ObjectKey{Name: applyJobName, Namespace: namespace}, &gotJob)
 	if err == nil {
 		if gotJob.Status.Succeeded == *pointer.Int32Ptr(1) {
@@ -117,16 +119,27 @@ func terraformApply(ctx context.Context, k8sClient client.Client, namespace stri
 			if err != nil {
 				return err
 			}
-			configuration.Status.State = "provisioned"
-			configuration.Status.Outputs = outputs
-			if err := k8sClient.Update(ctx, &configuration); err != nil {
-				return err
+			if configuration.Status.State != state.Available {
+				configuration.Status.State = state.Available
+				configuration.Status.Message = "Cloud resources are deployed and ready to use."
+				configuration.Status.Outputs = outputs
+				if err := k8sClient.Update(ctx, &configuration); err != nil {
+					return err
+				}
 			}
 		}
 		return nil
 	}
 
 	if kerrors.IsNotFound(err) {
+		if configuration.Status.State != state.Provisioning {
+			configuration.Status.State = state.Provisioning
+			configuration.Status.Message = "Cloud resources are being provisioned."
+			if err := k8sClient.Update(ctx, &configuration); err != nil {
+				return err
+			}
+		}
+
 		configurationType, inputConfiguration, err := util.ValidConfiguration(&configuration)
 		if err != nil {
 			return err
@@ -141,6 +154,14 @@ func terraformApply(ctx context.Context, k8sClient client.Client, namespace stri
 			return err
 		}
 		return nil
+	}
+
+	if configuration.Status.State != state.Unavailable {
+		configuration.Status.State = state.Unavailable
+		configuration.Status.Message = fmt.Sprintf("The state of cloud resources is unavailable due to %s", err)
+		if err := k8sClient.Update(ctx, &configuration); err != nil {
+			return err
+		}
 	}
 	return err
 }
