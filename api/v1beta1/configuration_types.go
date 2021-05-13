@@ -69,6 +69,7 @@ type Backend struct {
 // +kubebuilder:object:root=true
 
 // Configuration is the Schema for the configurations API
+// +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="STATE",type="string",JSONPath=".status.state"
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
 type Configuration struct {

@@ -123,7 +123,7 @@ func terraformApply(ctx context.Context, k8sClient client.Client, namespace stri
 				configuration.Status.State = state.Available
 				configuration.Status.Message = "Cloud resources are deployed and ready to use."
 				configuration.Status.Outputs = outputs
-				if err := k8sClient.Update(ctx, &configuration); err != nil {
+				if err := k8sClient.Status().Update(ctx, &configuration); err != nil {
 					return err
 				}
 			}
@@ -135,7 +135,7 @@ func terraformApply(ctx context.Context, k8sClient client.Client, namespace stri
 		if configuration.Status.State != state.Provisioning {
 			configuration.Status.State = state.Provisioning
 			configuration.Status.Message = "Cloud resources are being provisioned."
-			if err := k8sClient.Update(ctx, &configuration); err != nil {
+			if err := k8sClient.Status().Update(ctx, &configuration); err != nil {
 				return err
 			}
 		}
@@ -159,7 +159,7 @@ func terraformApply(ctx context.Context, k8sClient client.Client, namespace stri
 	if configuration.Status.State != state.Unavailable {
 		configuration.Status.State = state.Unavailable
 		configuration.Status.Message = fmt.Sprintf("The state of cloud resources is unavailable due to %s", err)
-		if err := k8sClient.Update(ctx, &configuration); err != nil {
+		if err := k8sClient.Status().Update(ctx, &configuration); err != nil {
 			return err
 		}
 	}

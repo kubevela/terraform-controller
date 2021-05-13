@@ -22,7 +22,8 @@ spec:
     plural: configurations
     singular: configuration
   scope: Namespaced
-  subresources: {}
+  subresources:
+    status: {}
   validation:
     openAPIV3Schema:
       description: Configuration is the Schema for the configurations API
