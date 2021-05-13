@@ -17,6 +17,7 @@ limitations under the License.
 package v1beta1
 
 import (
+	state "github.com/oam-dev/terraform-controller/api/types"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
@@ -47,7 +48,8 @@ type ConfigurationSpec struct {
 
 // ConfigurationStatus defines the observed state of Configuration
 type ConfigurationStatus struct {
-	State   string              `json:"state,omitempty"`
+	State   state.ResourceState `json:"state,omitempty"`
+	Message string              `json:"message,omitempty"`
 	Outputs map[string]Property `json:"outputs,omitempty"`
 }
 
@@ -67,6 +69,9 @@ type Backend struct {
 // +kubebuilder:object:root=true
 
 // Configuration is the Schema for the configurations API
+// +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="STATE",type="string",JSONPath=".status.state"
+// +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
 type Configuration struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
