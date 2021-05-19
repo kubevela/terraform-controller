@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	state "github.com/oam-dev/terraform-controller/api/types"
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
@@ -34,6 +33,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	state "github.com/oam-dev/terraform-controller/api/types"
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
 	"github.com/oam-dev/terraform-controller/controllers/util"
 )
@@ -54,10 +54,10 @@ const (
 )
 
 const (
-	TerraformJSONConfigurationName        = "main.tf.json"
-	TerraformHCLConfigurationName         = "main.tf"
-	TerraformStateNameInSecret            = "tfstate"
-	TFInputConfigMapSName          string = "%s-tf-input"
+	TerraformJSONConfigurationName = "main.tf.json"
+	TerraformHCLConfigurationName  = "main.tf"
+	TerraformStateNameInSecret     = "tfstate"
+	TFInputConfigMapName           = "%s-tf-input"
 )
 
 type TerraformExecutionType string
@@ -70,8 +70,9 @@ const (
 // ConfigurationReconciler reconciles a Configuration object.
 type ConfigurationReconciler struct {
 	client.Client
-	Log    logr.Logger
-	Scheme *runtime.Scheme
+	Log          logr.Logger
+	Scheme       *runtime.Scheme
+	ProviderName string
 }
 
 // +kubebuilder:rbac:groups=terraform.core.oam.dev,resources=configurations,verbs=get;list;watch;create;update;patch;delete
@@ -83,7 +84,7 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		ctx                   = context.Background()
 		ns                    = req.Namespace
 		configurationName     = req.Name
-		tfInputConfigMapsName = fmt.Sprintf(TFInputConfigMapSName, configurationName)
+		tfInputConfigMapsName = fmt.Sprintf(TFInputConfigMapName, configurationName)
 	)
 	klog.InfoS("reconciling Terraform Configuration...", "NamespacedName", req.NamespacedName)
 	applyJobName := configurationName + "-" + string(TerraformApply)
@@ -94,7 +95,7 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		if kerrors.IsNotFound(err) {
 			destroyJobName := configurationName + "-" + string(TerraformDestroy)
 			klog.InfoS("Terraform destroy job", "Namespace", req.Namespace, "Name", destroyJobName)
-			err := terraformDestroy(ctx, r.Client, ns, req.Name, destroyJobName, tfInputConfigMapsName, applyJobName)
+			err := terraformDestroy(ctx, r.Client, ns, req.Name, destroyJobName, tfInputConfigMapsName, applyJobName, r.ProviderName)
 			return ctrl.Result{}, errors.Wrap(err, "continue reconciling to destroy cloud resource")
 		}
 		return ctrl.Result{}, errors.Wrap(err, "failed to call GET resource API")
@@ -102,13 +103,16 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 
 	// Terraform apply (create or update)
 	klog.InfoS("performing Terraform Apply (cloud resource create/update)", "Namespace", req.Namespace, "Name", req.Name)
-	if err := terraformApply(ctx, r.Client, ns, configuration, applyJobName, tfInputConfigMapsName); err != nil {
+	if configuration.Spec.ProviderReference != nil {
+		r.ProviderName = configuration.Spec.ProviderReference.Name
+	}
+	if err := terraformApply(ctx, r.Client, ns, configuration, applyJobName, tfInputConfigMapsName, r.ProviderName); err != nil {
 		return ctrl.Result{RequeueAfter: 3}, errors.Wrap(err, "failed to create/update cloud resource")
 	}
 	return ctrl.Result{RequeueAfter: 10}, nil
 }
 
-func terraformApply(ctx context.Context, k8sClient client.Client, namespace string, configuration v1beta1.Configuration, applyJobName, tfInputConfigMapName string) error {
+func terraformApply(ctx context.Context, k8sClient client.Client, namespace string, configuration v1beta1.Configuration, applyJobName, tfInputConfigMapName, providerName string) error {
 	klog.InfoS("terraform apply job", "Namespace", namespace, "Name", applyJobName)
 
 	var gotJob batchv1.Job
@@ -145,12 +149,12 @@ func terraformApply(ctx context.Context, k8sClient client.Client, namespace stri
 			return err
 		}
 		data := prepareTFInputConfigurationData(configurationType, inputConfiguration)
-		if err = createOrUpdateConfigMap(ctx, k8sClient, namespace, tfInputConfigMapName, data); err != nil {
+		if err := createOrUpdateConfigMap(ctx, k8sClient, namespace, tfInputConfigMapName, data); err != nil {
 			return err
 		}
 
 		if err := assembleAndTriggerJob(ctx, k8sClient, namespace, configuration.Name, &configuration,
-			tfInputConfigMapName, TerraformApply); err != nil {
+			tfInputConfigMapName, providerName, TerraformApply); err != nil {
 			return err
 		}
 		return nil
@@ -166,13 +170,13 @@ func terraformApply(ctx context.Context, k8sClient client.Client, namespace stri
 	return err
 }
 
-func terraformDestroy(ctx context.Context, k8sClient client.Client, namespace, configurationName, destroyJobName, tfInputConfigMapsName, applyJobName string) error {
+func terraformDestroy(ctx context.Context, k8sClient client.Client, namespace, configurationName, destroyJobName, tfInputConfigMapsName, applyJobName, providerName string) error {
 	var destroyJob batchv1.Job
 
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: destroyJobName, Namespace: namespace}, &destroyJob); err != nil {
 		if kerrors.IsNotFound(err) {
 			if err = assembleAndTriggerJob(ctx, k8sClient, namespace, configurationName, nil, tfInputConfigMapsName,
-				TerraformDestroy); err != nil {
+				providerName, TerraformDestroy); err != nil {
 				return err
 			}
 		}
@@ -204,7 +208,8 @@ func terraformDestroy(ctx context.Context, k8sClient client.Client, namespace, c
 	return errors.New("configuration deletion isn't completed.")
 }
 
-func assembleAndTriggerJob(ctx context.Context, k8sClient client.Client, namespace, name string, configuration *v1beta1.Configuration, tfInputConfigMapsName string, executionType TerraformExecutionType) error {
+func assembleAndTriggerJob(ctx context.Context, k8sClient client.Client, namespace, name string,
+	configuration *v1beta1.Configuration, tfInputConfigMapsName, providerName string, executionType TerraformExecutionType) error {
 	var job *batchv1.Job
 	jobName := name + "-" + string(executionType)
 	var parallelism int32 = 1
@@ -219,7 +224,7 @@ func assembleAndTriggerJob(ctx context.Context, k8sClient client.Client, namespa
 	inputTFConfigurationVolume := v1.Volume{Name: InputTFConfigurationVolumeName}
 	inputTFConfigurationVolume.ConfigMap = &inputCMVolumeSource
 
-	envs, err := prepareTFVariables(ctx, k8sClient, configuration)
+	envs, err := prepareTFVariables(ctx, k8sClient, namespace, configuration, providerName)
 	if err != nil {
 		return err
 	}
@@ -456,7 +461,7 @@ func getTFOutputs(ctx context.Context, k8sClient client.Client, configuration v1
 	return outputs, nil
 }
 
-func prepareTFVariables(ctx context.Context, k8sClient client.Client, configuration *v1beta1.Configuration) ([]v1.EnvVar, error) {
+func prepareTFVariables(ctx context.Context, k8sClient client.Client, namespace string, configuration *v1beta1.Configuration, providerName string) ([]v1.EnvVar, error) {
 	var envs []v1.EnvVar
 
 	var tfVariables *runtime.RawExtension
@@ -471,7 +476,7 @@ func prepareTFVariables(ctx context.Context, k8sClient client.Client, configurat
 		envs = append(envs, v1.EnvVar{Name: k, Value: v})
 	}
 
-	credential, err := util.GetProviderCredentials(ctx, k8sClient)
+	credential, err := util.GetProviderCredentials(ctx, k8sClient, namespace, providerName)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get credentials from the cloud provider")
 	}
