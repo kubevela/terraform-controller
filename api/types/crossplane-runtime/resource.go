@@ -52,3 +52,9 @@ type SecretReference struct {
 	// Namespace of the secret.
 	Namespace string `json:"namespace,omitempty"`
 }
+
+// A Reference to a named object.
+type Reference struct {
+	// Name of the referenced object.
+	Name string `json:"name"`
+}

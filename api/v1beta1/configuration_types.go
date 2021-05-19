@@ -44,6 +44,9 @@ type ConfigurationSpec struct {
 	// and password required to connect to the managed resource.
 	// +optional
 	WriteConnectionSecretToReference *types.SecretReference `json:"writeConnectionSecretToRef,omitempty"`
+
+	// ProviderReference specifies the reference to Provider
+	ProviderReference *types.Reference `json:"providerRef,omitempty"`
 }
 
 // ConfigurationStatus defines the observed state of Configuration
