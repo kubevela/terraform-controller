@@ -46,12 +46,20 @@ type AWSCredentials struct {
 	AWSSecretAccessKey string `yaml:"awsSecretAccessKey"`
 }
 
-func GetProviderCredentials(ctx context.Context, k8sClient client.Client) (map[string]string, error) {
+func GetProviderCredentials(ctx context.Context, k8sClient client.Client, namespace, providerName string) (map[string]string, error) {
 	var provider v1beta1.Provider
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: ProviderName, Namespace: ProviderNamespace}, &provider); err != nil {
-		errMsg := "failed to get Provider object"
-		klog.ErrorS(err, errMsg, "Name", ProviderName)
-		return nil, errors.Wrap(err, errMsg)
+	if providerName != "" {
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: providerName, Namespace: namespace}, &provider); err != nil {
+			errMsg := "failed to get Provider object"
+			klog.ErrorS(err, errMsg, "Name", providerName)
+			return nil, errors.Wrap(err, errMsg)
+		}
+	} else {
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: ProviderName, Namespace: ProviderNamespace}, &provider); err != nil {
+			errMsg := "failed to get Provider object"
+			klog.ErrorS(err, errMsg, "Name", ProviderName)
+			return nil, errors.Wrap(err, errMsg)
+		}
 	}
 
 	region := provider.Spec.Region
