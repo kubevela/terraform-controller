@@ -86,6 +86,7 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		tfInputConfigMapsName = fmt.Sprintf(TFInputConfigMapSName, configurationName)
 	)
 	klog.InfoS("reconciling Terraform Configuration...", "NamespacedName", req.NamespacedName)
+	applyJobName := configurationName + "-" + string(TerraformApply)
 
 	// Terraform destroy
 	if err := r.Get(ctx, req.NamespacedName, &configuration); err != nil {
@@ -93,7 +94,7 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		if kerrors.IsNotFound(err) {
 			destroyJobName := configurationName + "-" + string(TerraformDestroy)
 			klog.InfoS("Terraform destroy job", "Namespace", req.Namespace, "Name", destroyJobName)
-			err := terraformDestroy(ctx, r.Client, ns, req.Name, destroyJobName, tfInputConfigMapsName)
+			err := terraformDestroy(ctx, r.Client, ns, req.Name, destroyJobName, tfInputConfigMapsName, applyJobName)
 			return ctrl.Result{}, errors.Wrap(err, "continue reconciling to destroy cloud resource")
 		}
 		return ctrl.Result{}, errors.Wrap(err, "failed to call GET resource API")
@@ -101,7 +102,6 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 
 	// Terraform apply (create or update)
 	klog.InfoS("performing Terraform Apply (cloud resource create/update)", "Namespace", req.Namespace, "Name", req.Name)
-	applyJobName := configurationName + "-" + string(TerraformApply)
 	if err := terraformApply(ctx, r.Client, ns, configuration, applyJobName, tfInputConfigMapsName); err != nil {
 		return ctrl.Result{RequeueAfter: 3}, errors.Wrap(err, "failed to create/update cloud resource")
 	}
@@ -166,10 +166,10 @@ func terraformApply(ctx context.Context, k8sClient client.Client, namespace stri
 	return err
 }
 
-func terraformDestroy(ctx context.Context, k8sClient client.Client, namespace, configurationName, jobName, tfInputConfigMapsName string) error {
+func terraformDestroy(ctx context.Context, k8sClient client.Client, namespace, configurationName, destroyJobName, tfInputConfigMapsName, applyJobName string) error {
 	var destroyJob batchv1.Job
 
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: jobName, Namespace: namespace}, &destroyJob); err != nil {
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: destroyJobName, Namespace: namespace}, &destroyJob); err != nil {
 		if kerrors.IsNotFound(err) {
 			if err = assembleAndTriggerJob(ctx, k8sClient, namespace, configurationName, nil, tfInputConfigMapsName,
 				TerraformDestroy); err != nil {
@@ -186,12 +186,19 @@ func terraformDestroy(ctx context.Context, k8sClient client.Client, namespace, c
 
 		// 2. we don't manually delete Terraform state file Secret, as Terraform Kubernetes backend tends to keep the secret
 
-		// 3. delete Job itself
-		if err := k8sClient.Delete(ctx, &destroyJob); err != nil {
+		// 3. delete apply job
+		var applyJob batchv1.Job
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: applyJobName, Namespace: namespace}, &applyJob); err == nil {
+			if err := k8sClient.Delete(ctx, &applyJob, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
+				return err
+			}
+		}
+
+		// 4. delete destroy job
+		if err := k8sClient.Delete(ctx, &destroyJob, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
 			return err
 		}
 
-		// TODO(zzxwill) 4. Somehow, destroy pod isn't automatically deleted after its OwnerReference Job is deleted
 		return nil
 	}
 	return errors.New("configuration deletion isn't completed.")
