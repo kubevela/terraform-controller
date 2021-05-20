@@ -65,6 +65,15 @@ spec:
             hcl:
               description: HCL is the Terraform HCL type configuration
               type: string
+            providerRef:
+              description: ProviderReference specifies the reference to Provider
+              properties:
+                name:
+                  description: Name of the referenced object.
+                  type: string
+              required:
+              - name
+              type: object
             variable:
               type: object
               x-kubernetes-preserve-unknown-fields: true
