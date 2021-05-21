@@ -29,7 +29,7 @@ This component is taken upon by container `pause`.
 
 - Terraform configuration executor component
 
-This executor component will perform `terrform init` and `terraform apply`. After a cloud resource is successfully provisioned,
+This executor component will perform `terraform init` and `terraform apply`. After a cloud resource is successfully provisioned,
 Terraform state file will be generated.
 
 This executor is job, which has the ability to retry and auto-recovery from failures.
