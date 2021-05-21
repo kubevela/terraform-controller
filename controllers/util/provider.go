@@ -24,6 +24,7 @@ type CloudProvider string
 const (
 	Alibaba CloudProvider = "alibaba"
 	AWS     CloudProvider = "aws"
+	Azure   CloudProvider = "azure"
 )
 
 const (
@@ -34,6 +35,11 @@ const (
 	EnvAWSAccessKeyID     = "AWS_ACCESS_KEY_ID"
 	EnvAWSSecretAccessKey = "AWS_SECRET_ACCESS_KEY"
 	EnvAWSDefaultRegion   = "AWS_DEFAULT_REGION"
+
+	EnvARMClientID       = "ARM_CLIENT_ID"
+	EnvARMClientSecret   = "ARM_CLIENT_SECRET"
+	EnvARMSubscriptionID = "ARM_SUBSCRIPTION_ID"
+	EnvARMTenantID       = "ARM_TENANT_ID"
 )
 
 type AlibabaCloudCredentials struct {
@@ -44,6 +50,13 @@ type AlibabaCloudCredentials struct {
 type AWSCredentials struct {
 	AWSAccessKeyID     string `yaml:"awsAccessKeyID"`
 	AWSSecretAccessKey string `yaml:"awsSecretAccessKey"`
+}
+
+type AzureCredentials struct {
+	ARMClientID       string `yaml:"armClientID"`
+	ARMClientSecret   string `yaml:"armClientSecret"`
+	ARMSubscriptionID string `yaml:"armSubscriptionID"`
+	ARMTenantID       string `yaml:"armTenantID"`
 }
 
 func GetProviderCredentials(ctx context.Context, k8sClient client.Client, namespace, providerName string) (map[string]string, error) {
@@ -96,6 +109,19 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, namesp
 				EnvAWSAccessKeyID:     ak.AWSAccessKeyID,
 				EnvAWSSecretAccessKey: ak.AWSSecretAccessKey,
 				EnvAWSDefaultRegion:   region,
+			}, nil
+		case string(Azure):
+			var cred AzureCredentials
+			if err := yaml.Unmarshal(secret.Data[secretRef.Key], &cred); err != nil {
+				errMsg := "failed to convert the credentials of Secret from Provider"
+				klog.ErrorS(err, errMsg, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
+				return nil, errors.Wrap(err, errMsg)
+			}
+			return map[string]string{
+				EnvARMClientID:       cred.ARMClientID,
+				EnvARMClientSecret:   cred.ARMClientSecret,
+				EnvARMSubscriptionID: cred.ARMSubscriptionID,
+				EnvARMTenantID:       cred.ARMTenantID,
 			}, nil
 
 		}
