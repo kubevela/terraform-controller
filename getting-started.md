@@ -299,3 +299,80 @@ s3-conn   Opaque   1      7m37s
 $ aws s3 ls
 2021-04-12 19:03:32 vela-website
 ```
+
+# For GCP
+
+### Apply Provider configuration
+
+```shell
+$ export GOOGLE_CREDENTIALS=xxx;export GOOGLE_PROJECT=yyy
+
+$ sh hack/prepare-gcp-credentials.sh
+
+$ kubectl get secret -n vela-system
+NAME                                              TYPE                                  DATA   AGE
+gcp-account-creds                                 Opaque                                1      52s
+
+$ k apply -f examples/gcp/provider.yaml
+provider.terraform.core.oam.dev/default created
+
+$ kubectl apply -f examples/rbac.yaml
+clusterrole.rbac.authorization.k8s.io/tf-clusterrole created
+clusterrolebinding.rbac.authorization.k8s.io/tf-binding created
+```
+
+### Apply Terraform Configuration
+
+Apply Terraform configuration [configuration_hcl_s3.yaml](./examples/gcp/configuration_hcl_bucket.yaml) to provision a storage bucket.
+
+```yaml
+apiVersion: terraform.core.oam.dev/v1beta1
+kind: Configuration
+metadata:
+  name: gcp-bucket
+spec:
+  hcl: |
+    resource "google_storage_bucket" "bucket" {
+      name = var.bucket
+    }
+
+    output "BUCKET_URL" {
+      value = google_storage_bucket.bucket.url
+    }
+
+    variable "bucket" {
+      default = "vela-website"
+    }
+
+  variable:
+    bucket: "vela-website"
+    acl: "private"
+
+  writeConnectionSecretToRef:
+    name: bucket-conn
+    namespace: default
+```
+
+```shell
+$ kubectl get configuration.terraform.core.oam.dev
+NAME     AGE
+aws-s3   6m48s
+
+$ kubectl describe configuration.terraform.core.oam.dev gcp-bucket
+apiVersion: terraform.core.oam.dev/v1beta1
+kind: Configuration
+...
+  Write Connection Secret To Ref:
+    Name:       bucket-conn
+    Namespace:  default
+Status:
+  Outputs:
+    BUCKET_URL:
+      Type:   string
+      Value:  gs://vela-website
+  State:      provisioned
+
+$ kubectl get secret bucket-conn
+NAME      TYPE     DATA   AGE
+bucket-conn   Opaque   1      7m37s
+```
