@@ -62,13 +62,13 @@ type AWSCredentials struct {
 type GCPCredentials struct {
 	GCPCredentialsJSON string `yaml:"gcpCredentialsJSON"`
 	GCPProject         string `yaml:"gcpProject"`
+}
 
 type AzureCredentials struct {
 	ARMClientID       string `yaml:"armClientID"`
 	ARMClientSecret   string `yaml:"armClientSecret"`
 	ARMSubscriptionID string `yaml:"armSubscriptionID"`
 	ARMTenantID       string `yaml:"armTenantID"`
-
 }
 
 func GetProviderCredentials(ctx context.Context, k8sClient client.Client, namespace, providerName string) (map[string]string, error) {
