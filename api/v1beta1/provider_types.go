@@ -28,7 +28,7 @@ type ProviderSpec struct {
 	Provider string `json:"provider"`
 
 	// Region is cloud provider's region
-	Region string `json:"region"`
+	Region string `json:"region,omitempty"`
 
 	// Credentials required to authenticate to this provider.
 	Credentials ProviderCredentials `json:"credentials"`
