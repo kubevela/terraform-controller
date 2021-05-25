@@ -229,10 +229,6 @@ aws-account-creds                                 Opaque                        
 
 $ kubectl apply -f examples/aws/provider.yaml
 provider.terraform.core.oam.dev/default created
-
-$ kubectl apply -f examples/rbac.yaml
-clusterrole.rbac.authorization.k8s.io/tf-clusterrole created
-clusterrolebinding.rbac.authorization.k8s.io/tf-binding created
 ```
 
 ### Apply Terraform Configuration
@@ -315,10 +311,6 @@ gcp-account-creds                                 Opaque                        
 
 $ kubectl apply -f examples/gcp/provider.yaml
 provider.terraform.core.oam.dev/default created
-
-$ kubectl apply -f examples/rbac.yaml
-clusterrole.rbac.authorization.k8s.io/tf-clusterrole created
-clusterrolebinding.rbac.authorization.k8s.io/tf-binding created
 ```
 
 ### Apply Terraform Configuration
