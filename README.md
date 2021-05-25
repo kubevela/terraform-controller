@@ -10,6 +10,7 @@ Terraform Controller is a Kubernetes Controller for Terraform, which can address
 
 - Alibaba Cloud
 - AWS
+- Azure
 
 ## Supported Terraform Configuration
 

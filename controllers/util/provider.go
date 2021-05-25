@@ -25,6 +25,7 @@ const (
 	Alibaba CloudProvider = "alibaba"
 	AWS     CloudProvider = "aws"
 	GCP     CloudProvider = "gcp"
+	Azure   CloudProvider = "azure"
 )
 
 const (
@@ -36,9 +37,16 @@ const (
 	EnvAWSSecretAccessKey = "AWS_SECRET_ACCESS_KEY"
 	EnvAWSDefaultRegion   = "AWS_DEFAULT_REGION"
 
+
 	EnvGCPCredentialsJSON = "GOOGLE_CREDENTIALS"
 	EnvGCPRegion          = "GOOGLE_REGION"
 	EnvGCPProject         = "GOOGLE_PROJECT"
+
+	EnvARMClientID       = "ARM_CLIENT_ID"
+	EnvARMClientSecret   = "ARM_CLIENT_SECRET"
+	EnvARMSubscriptionID = "ARM_SUBSCRIPTION_ID"
+	EnvARMTenantID       = "ARM_TENANT_ID"
+
 )
 
 type AlibabaCloudCredentials struct {
@@ -54,6 +62,13 @@ type AWSCredentials struct {
 type GCPCredentials struct {
 	GCPCredentialsJSON string `yaml:"gcpCredentialsJSON"`
 	GCPProject         string `yaml:"gcpProject"`
+
+type AzureCredentials struct {
+	ARMClientID       string `yaml:"armClientID"`
+	ARMClientSecret   string `yaml:"armClientSecret"`
+	ARMSubscriptionID string `yaml:"armSubscriptionID"`
+	ARMTenantID       string `yaml:"armTenantID"`
+
 }
 
 func GetProviderCredentials(ctx context.Context, k8sClient client.Client, namespace, providerName string) (map[string]string, error) {
@@ -119,6 +134,19 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, namesp
                 EnvGCPProject:         ak.GCPProject,
         		EnvGCPRegion:          region,
         	}, nil
+		case string(Azure):
+			var cred AzureCredentials
+			if err := yaml.Unmarshal(secret.Data[secretRef.Key], &cred); err != nil {
+				errMsg := "failed to convert the credentials of Secret from Provider"
+				klog.ErrorS(err, errMsg, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
+				return nil, errors.Wrap(err, errMsg)
+			}
+			return map[string]string{
+				EnvARMClientID:       cred.ARMClientID,
+				EnvARMClientSecret:   cred.ARMClientSecret,
+				EnvARMSubscriptionID: cred.ARMSubscriptionID,
+				EnvARMTenantID:       cred.ARMTenantID,
+			}, nil
 		}
 	default:
 		errMsg := "the credentials type is not supported."
