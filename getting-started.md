@@ -300,7 +300,7 @@ $ aws s3 ls
 
 ### Apply Provider configuration
 
-For authentication with GCP, the GOOGLE CREDENTIALS variable containing the Google authentication JSON must be exported.
+For authentication with GCP, the GOOGLE_CREDENTIALS variable containing the Google authentication JSON must be exported.
 At this time, the file path is not supported. 
 
 ```shell
