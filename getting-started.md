@@ -300,8 +300,12 @@ $ aws s3 ls
 
 ### Apply Provider configuration
 
+For authentication with GCP, the GOOGLE CREDENTIALS variable containing the Google authentication JSON must be exported.
+At this time, the file path is not supported. 
+
 ```shell
-$ export GOOGLE_CREDENTIALS=xxx;export GOOGLE_PROJECT=yyy
+$ export GOOGLE_CREDENTIALS='{ "type": "service_account", "project_id": "example-project-123456", "private_key_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "private_key": "-----BEGIN PRIVATE KEY-----\\n-----END PRIVATE KEY-----\n", "client_email": "test@developer.gserviceaccount.com", "client_id": "123456789012345678901", "auth_uri": "https://accounts.google.com/o/oauth2/auth", "token_uri": "https://oauth2.googleapis.com/token", "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs", "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/test%40developer.gserviceaccount.com" }'
+$ export GOOGLE_PROJECT=yyy
 
 $ sh hack/prepare-gcp-credentials.sh
 
