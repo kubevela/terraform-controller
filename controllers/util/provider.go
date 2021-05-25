@@ -24,6 +24,7 @@ type CloudProvider string
 const (
 	Alibaba CloudProvider = "alibaba"
 	AWS     CloudProvider = "aws"
+	GCP     CloudProvider = "gcp"
 )
 
 const (
@@ -34,6 +35,10 @@ const (
 	EnvAWSAccessKeyID     = "AWS_ACCESS_KEY_ID"
 	EnvAWSSecretAccessKey = "AWS_SECRET_ACCESS_KEY"
 	EnvAWSDefaultRegion   = "AWS_DEFAULT_REGION"
+
+	EnvGCPCredentialsJSON = "GOOGLE_CREDENTIALS"
+	EnvGCPRegion          = "GOOGLE_REGION"
+	EnvGCPProject         = "GOOGLE_PROJECT"
 )
 
 type AlibabaCloudCredentials struct {
@@ -44,6 +49,11 @@ type AlibabaCloudCredentials struct {
 type AWSCredentials struct {
 	AWSAccessKeyID     string `yaml:"awsAccessKeyID"`
 	AWSSecretAccessKey string `yaml:"awsSecretAccessKey"`
+}
+
+type GCPCredentials struct {
+	GCPCredentialsJSON string `yaml:"gcpCredentialsJSON"`
+	GCPProject         string `yaml:"gcpProject"`
 }
 
 func GetProviderCredentials(ctx context.Context, k8sClient client.Client, namespace, providerName string) (map[string]string, error) {
@@ -97,7 +107,18 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, namesp
 				EnvAWSSecretAccessKey: ak.AWSSecretAccessKey,
 				EnvAWSDefaultRegion:   region,
 			}, nil
-
+		case string(GCP):
+        	var ak GCPCredentials
+        	if err := yaml.Unmarshal(secret.Data[secretRef.Key], &ak); err != nil {
+            	errMsg := "failed to convert the credentials of Secret from Provider"
+        		klog.ErrorS(err, errMsg, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
+        		return nil, errors.Wrap(err, errMsg)
+        	}
+        	return map[string]string{
+        	    EnvGCPCredentialsJSON: ak.GCPCredentialsJSON,
+                EnvGCPProject:         ak.GCPProject,
+        		EnvGCPRegion:          region,
+        	}, nil
 		}
 	default:
 		errMsg := "the credentials type is not supported."
