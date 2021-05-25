@@ -33,7 +33,7 @@ $ kubectl get secret -n vela-system
 NAME                                              TYPE                                  DATA   AGE
 alibaba-account-creds                             Opaque                                1      11s
 
-$ k apply -f examples/alibaba/provider.yaml
+$ kubectl apply -f examples/alibaba/provider.yaml
 provider.terraform.core.oam.dev/default created
 ```
 
@@ -227,7 +227,7 @@ $ kubectl get secret -n vela-system
 NAME                                              TYPE                                  DATA   AGE
 aws-account-creds                                 Opaque                                1      52s
 
-$ k apply -f examples/aws/provider.yaml
+$ kubectl apply -f examples/aws/provider.yaml
 provider.terraform.core.oam.dev/default created
 
 $ kubectl apply -f examples/rbac.yaml
@@ -313,7 +313,7 @@ $ kubectl get secret -n vela-system
 NAME                                              TYPE                                  DATA   AGE
 gcp-account-creds                                 Opaque                                1      52s
 
-$ k apply -f examples/gcp/provider.yaml
+$ kubectl apply -f examples/gcp/provider.yaml
 provider.terraform.core.oam.dev/default created
 
 $ kubectl apply -f examples/rbac.yaml
