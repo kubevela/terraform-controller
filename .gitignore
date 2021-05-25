@@ -35,4 +35,11 @@ examples/tf-native/aws/hcl/terraform.tfstate.backup
 examples/tf-native/aws/hcl/.terraform
 examples/tf-native/aws/hcl/.terraform.lock.hcl
 
+examples/tf-native/azure/terraform.tfstate
+examples/tf-native/azure/terraform.tfstate.backup
+examples/tf-native/azure/.terraform
+examples/tf-native/azure/.terraform.lock.hcl
+
 terraform-controller-*
+
+bin/manager

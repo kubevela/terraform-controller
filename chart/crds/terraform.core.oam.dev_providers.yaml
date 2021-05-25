@@ -75,7 +75,6 @@ spec:
           required:
           - credentials
           - provider
-          - region
           type: object
         status:
           description: ProviderStatus defines the observed state of Provider.
