@@ -33,7 +33,7 @@ $ kubectl get secret -n vela-system
 NAME                                              TYPE                                  DATA   AGE
 alibaba-account-creds                             Opaque                                1      11s
 
-$ k apply -f examples/alibaba/provider.yaml
+$ kubectl apply -f examples/alibaba/provider.yaml
 provider.terraform.core.oam.dev/default created
 ```
 
@@ -227,12 +227,8 @@ $ kubectl get secret -n vela-system
 NAME                                              TYPE                                  DATA   AGE
 aws-account-creds                                 Opaque                                1      52s
 
-$ k apply -f examples/aws/provider.yaml
+$ kubectl apply -f examples/aws/provider.yaml
 provider.terraform.core.oam.dev/default created
-
-$ kubectl apply -f examples/rbac.yaml
-clusterrole.rbac.authorization.k8s.io/tf-clusterrole created
-clusterrolebinding.rbac.authorization.k8s.io/tf-binding created
 ```
 
 ### Apply Terraform Configuration
@@ -298,4 +294,81 @@ s3-conn   Opaque   1      7m37s
 
 $ aws s3 ls
 2021-04-12 19:03:32 vela-website
+```
+
+# For GCP
+
+### Apply Provider configuration
+
+For authentication with GCP, the GOOGLE_CREDENTIALS variable containing the Google authentication JSON must be exported.
+At this time, the file path is not supported. 
+
+```shell
+$ export GOOGLE_CREDENTIALS='{ "type": "service_account", "project_id": "example-project-123456", "private_key_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "private_key": "-----BEGIN PRIVATE KEY-----\\n-----END PRIVATE KEY-----\n", "client_email": "test@developer.gserviceaccount.com", "client_id": "123456789012345678901", "auth_uri": "https://accounts.google.com/o/oauth2/auth", "token_uri": "https://oauth2.googleapis.com/token", "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs", "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/test%40developer.gserviceaccount.com" }'
+$ export GOOGLE_PROJECT=yyy
+
+$ sh hack/prepare-gcp-credentials.sh
+
+$ kubectl get secret -n vela-system
+NAME                                              TYPE                                  DATA   AGE
+gcp-account-creds                                 Opaque                                1      52s
+
+$ kubectl apply -f examples/gcp/provider.yaml
+provider.terraform.core.oam.dev/default created
+```
+
+### Apply Terraform Configuration
+
+Apply Terraform configuration [configuration_hcl_s3.yaml](./examples/gcp/configuration_hcl_bucket.yaml) to provision a storage bucket.
+
+```yaml
+apiVersion: terraform.core.oam.dev/v1beta1
+kind: Configuration
+metadata:
+  name: gcp-bucket
+spec:
+  hcl: |
+    resource "google_storage_bucket" "bucket" {
+      name = var.bucket
+    }
+
+    output "BUCKET_URL" {
+      value = google_storage_bucket.bucket.url
+    }
+
+    variable "bucket" {
+      default = "vela-website"
+    }
+
+  variable:
+    bucket: "vela-website"
+    acl: "private"
+
+  writeConnectionSecretToRef:
+    name: bucket-conn
+    namespace: default
+```
+
+```shell
+$ kubectl get configuration.terraform.core.oam.dev
+NAME     AGE
+aws-s3   6m48s
+
+$ kubectl describe configuration.terraform.core.oam.dev gcp-bucket
+apiVersion: terraform.core.oam.dev/v1beta1
+kind: Configuration
+...
+  Write Connection Secret To Ref:
+    Name:       bucket-conn
+    Namespace:  default
+Status:
+  Outputs:
+    BUCKET_URL:
+      Type:   string
+      Value:  gs://vela-website
+  State:      provisioned
+
+$ kubectl get secret bucket-conn
+NAME      TYPE     DATA   AGE
+bucket-conn   Opaque   1      7m37s
 ```

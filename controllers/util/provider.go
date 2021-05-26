@@ -24,6 +24,7 @@ type CloudProvider string
 const (
 	Alibaba CloudProvider = "alibaba"
 	AWS     CloudProvider = "aws"
+	GCP     CloudProvider = "gcp"
 	Azure   CloudProvider = "azure"
 )
 
@@ -36,10 +37,16 @@ const (
 	EnvAWSSecretAccessKey = "AWS_SECRET_ACCESS_KEY"
 	EnvAWSDefaultRegion   = "AWS_DEFAULT_REGION"
 
+
+	EnvGCPCredentialsJSON = "GOOGLE_CREDENTIALS"
+	EnvGCPRegion          = "GOOGLE_REGION"
+	EnvGCPProject         = "GOOGLE_PROJECT"
+
 	EnvARMClientID       = "ARM_CLIENT_ID"
 	EnvARMClientSecret   = "ARM_CLIENT_SECRET"
 	EnvARMSubscriptionID = "ARM_SUBSCRIPTION_ID"
 	EnvARMTenantID       = "ARM_TENANT_ID"
+
 )
 
 type AlibabaCloudCredentials struct {
@@ -50,6 +57,11 @@ type AlibabaCloudCredentials struct {
 type AWSCredentials struct {
 	AWSAccessKeyID     string `yaml:"awsAccessKeyID"`
 	AWSSecretAccessKey string `yaml:"awsSecretAccessKey"`
+}
+
+type GCPCredentials struct {
+	GCPCredentialsJSON string `yaml:"gcpCredentialsJSON"`
+	GCPProject         string `yaml:"gcpProject"`
 }
 
 type AzureCredentials struct {
@@ -110,6 +122,18 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, namesp
 				EnvAWSSecretAccessKey: ak.AWSSecretAccessKey,
 				EnvAWSDefaultRegion:   region,
 			}, nil
+		case string(GCP):
+        	var ak GCPCredentials
+        	if err := yaml.Unmarshal(secret.Data[secretRef.Key], &ak); err != nil {
+            	errMsg := "failed to convert the credentials of Secret from Provider"
+        		klog.ErrorS(err, errMsg, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
+        		return nil, errors.Wrap(err, errMsg)
+        	}
+        	return map[string]string{
+        	    EnvGCPCredentialsJSON: ak.GCPCredentialsJSON,
+                EnvGCPProject:         ak.GCPProject,
+        		EnvGCPRegion:          region,
+        	}, nil
 		case string(Azure):
 			var cred AzureCredentials
 			if err := yaml.Unmarshal(secret.Data[secretRef.Key], &cred); err != nil {
@@ -123,7 +147,6 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, namesp
 				EnvARMSubscriptionID: cred.ARMSubscriptionID,
 				EnvARMTenantID:       cred.ARMTenantID,
 			}, nil
-
 		}
 	default:
 		errMsg := "the credentials type is not supported."
