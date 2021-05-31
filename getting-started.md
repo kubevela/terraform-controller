@@ -8,10 +8,10 @@ Refer to [Helm official Doc](https://helm.sh/docs/intro/install/) to install `he
 
 - Install Terraform Kubernetes Controller
 
-Download the latest chart, like `terraform-controller-0.1.2.tgz`, from the latest [releases](https://github.com/oam-dev/terraform-controller/releases) and install it.
+Download the latest chart, like `terraform-controller-0.1.8.tgz`, from the latest [releases](https://github.com/oam-dev/terraform-controller/releases) and install it.
 
 ```shell
-$ helm install terraform-controller terraform-controller-0.1.2.tgz
+$ helm install terraform-controller terraform-controller-0.1.8.tgz
 NAME: terraform-controller
 LAST DEPLOYED: Mon Apr 26 15:55:35 2021
 NAMESPACE: default
@@ -319,7 +319,7 @@ provider.terraform.core.oam.dev/default created
 
 ### Apply Terraform Configuration
 
-Apply Terraform configuration [configuration_hcl_s3.yaml](./examples/gcp/configuration_hcl_bucket.yaml) to provision a storage bucket.
+Apply Terraform configuration [configuration_hcl_bucket.yaml](./examples/gcp/configuration_hcl_bucket.yaml) to provision a storage bucket.
 
 ```yaml
 apiVersion: terraform.core.oam.dev/v1beta1
@@ -351,8 +351,8 @@ spec:
 
 ```shell
 $ kubectl get configuration.terraform.core.oam.dev
-NAME     AGE
-aws-s3   6m48s
+NAME         AGE
+gcp-bucket   6m48s
 
 $ kubectl describe configuration.terraform.core.oam.dev gcp-bucket
 apiVersion: terraform.core.oam.dev/v1beta1
