@@ -1,0 +1,190 @@
+apiVersion: terraform.core.oam.dev/v1beta1
+kind: Configuration
+metadata:
+  name: vsphere-vm
+spec:
+  hcl: |
+    # output
+    output "vm-name" {
+      description = "The vm of vsphere"
+      value       = "${var.vm-name-prefix}-${var.vm-name}-*"
+    }
+
+    # variables
+    variable "vsphere-datacenter" {
+      type        = string
+      description = "VMware vSphere datacenter"
+    }
+
+    variable "vsphere-cluster" {
+      type        = string
+      description = "VMware vSphere cluster"
+    }
+
+    variable "vsphere-template-folder" {
+      type        = string
+      description = "Template folder"
+      default     = ""
+    }
+
+    variable "vm-count" {
+      type        = number
+      description = "Number of VM"
+      default     = 1
+    }
+
+    variable "vm-name-prefix" {
+      type        = string
+      description = "Name of VM prefix"
+      default     = "terraform"
+    }
+
+    variable "vm-datastore" {
+      type        = string
+      description = "Datastore used for the vSphere virtual machines"
+    }
+
+    variable "vm-network" {
+      type        = string
+      description = "Network used for the vSphere virtual machines"
+    }
+
+    variable "vm-cpu" {
+      type        = number
+      description = "Number of vCPU for the vSphere virtual machines"
+      default     = 2
+    }
+
+    variable "vm-memory" {
+      type        = string
+      description = "Amount of memory for the vSphere virtual machines (example: 2048)"
+    }
+
+    variable "vm-disk-size" {
+      type        = number
+      description = "Amount of Disk for the vSphere virtual machines (example: 80)"
+      default     = 30
+    }
+
+    variable "vm-name" {
+      type        = string
+      description = "The name of the vSphere virtual machines and the hostname of the machine"
+    }
+
+    variable "vm-template-name" {
+      type        = string
+      description = "The template to clone to crate the VM"
+    }
+
+    variable "vm-domain" {
+      type        = string
+      description = "Linux virtual machine domain name for the machine. This, along with host_name, make up the FQDN of the virtual machine"
+      default     = ""
+    }
+
+    variable "vm-folder" {
+      type        = string
+      description = "The VM folder"
+    }
+
+    variable "vm-net-ipv4-gateway" {
+      type        = string
+      description = "The vm network ipv4 gateway"
+    }
+
+    variable "vm-net-ipv4-address" {
+      type        = list(string)
+      description = "The vm network ipv4 address list"
+    }
+
+    variable "vm-net-ipv4-netmask" {
+      type        = number
+      description = "The vm network ipvc netmask"
+    }
+
+    data "vsphere_datacenter" "dc" {
+      name = var.vsphere-datacenter
+    }
+
+    data "vsphere_datastore" "datastore" {
+      name          = var.vm-datastore
+      datacenter_id = data.vsphere_datacenter.dc.id
+    }
+
+    data "vsphere_compute_cluster" "cluster" {
+      name          = var.vsphere-cluster
+      datacenter_id = data.vsphere_datacenter.dc.id
+    }
+
+    data "vsphere_network" "network" {
+      name          = var.vm-network
+      datacenter_id = data.vsphere_datacenter.dc.id
+    }
+
+    data "vsphere_virtual_machine" "template" {
+      name          = "/${var.vsphere-datacenter}/vm/${var.vsphere-template-folder}/${var.vm-template-name}"
+      datacenter_id = data.vsphere_datacenter.dc.id
+    }
+
+    # vm
+    resource "vsphere_virtual_machine" "vm" {
+      count            = var.vm-count
+      name             = "${var.vm-name-prefix}-${var.vm-name}-${count.index + 1}"
+      resource_pool_id = data.vsphere_compute_cluster.cluster.resource_pool_id
+      datastore_id     = data.vsphere_datastore.datastore.id
+      folder           = var.vm-folder
+      num_cpus         = var.vm-cpu
+      memory           = var.vm-memory
+      guest_id         = data.vsphere_virtual_machine.template.guest_id
+
+      network_interface {
+        network_id = data.vsphere_network.network.id
+      }
+
+      disk {
+        label = "${var.vm-name-prefix}-${var.vm-name}-${count.index + 1}-disk"
+        size  = var.vm-disk-size
+      }
+
+      clone {
+        template_uuid = data.vsphere_virtual_machine.template.id
+        customize {
+          linux_options {
+            host_name = "${var.vm-name-prefix}-${var.vm-name}-${count.index + 1}"
+            domain    = var.vm-domain
+          }
+          network_interface {
+            ipv4_address = var.vm-net-ipv4-address[count.index]
+            ipv4_netmask = var.vm-net-ipv4-netmask
+          }
+          ipv4_gateway = var.vm-net-ipv4-gateway
+        }
+      }
+    }
+
+  variable:
+    vsphere-datacenter: Datacenter01
+    vsphere-cluster: Cluster01
+    vsphere-template-folder: ""
+    vm-count: 3
+    vm-name-prefix: "terraform"
+    vm-name: "test"
+    vm-domain: ""
+    vm-datastore: "nv7030_vol1_T1"
+    vm-network: "VM Network"
+    vm-folder: "test"
+    vm-cpu: 2
+    vm-memory: 2048
+    vm-disk-size: 30
+    vm-template-name: "CentOS-76-vmx13-30G"
+    vm-annotation: "Create by Terraform"
+    vm-net-ipv4-gateway: "10.0.0.1"
+    vm-net-ipv4-netmask: 24
+    vm-net-ipv4-address: '["10.0.0.101", "10.0.0.102", "10.0.0.103"]'
+
+  writeConnectionSecretToRef:
+    name: vm-outputs
+    namespace: default
+
+  providerRef:
+    name: vsphere
