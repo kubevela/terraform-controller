@@ -4,6 +4,7 @@ go 1.16
 
 require (
 	github.com/Masterminds/sprig/v3 v3.2.2
+	github.com/crossplane/crossplane-runtime v0.10.0
 	github.com/ghodss/yaml v1.0.0
 	github.com/go-logr/logr v0.4.0
 	github.com/go-logr/zapr v0.4.0 // indirect
