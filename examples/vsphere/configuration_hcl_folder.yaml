@@ -46,7 +46,7 @@ spec:
     folder-type: vm
 
   writeConnectionSecretToRef:
-    name: vm-outputs
+    name: folder-outputs
     namespace: default
 
   providerRef:
