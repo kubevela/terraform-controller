@@ -26,6 +26,7 @@ const (
 	AWS     CloudProvider = "aws"
 	GCP     CloudProvider = "gcp"
 	Azure   CloudProvider = "azure"
+	VSphere CloudProvider = "vsphere"
 )
 
 const (
@@ -47,6 +48,10 @@ const (
 	EnvARMSubscriptionID = "ARM_SUBSCRIPTION_ID"
 	EnvARMTenantID       = "ARM_TENANT_ID"
 
+	EnvVSphereUser               = "VSPHERE_USER"
+	EnvVSpherePassword           = "VSPHERE_PASSWORD"
+	EnvVSphereServer             = "VSPHERE_SERVER"
+	EnvVSphereAllowUnverifiedSSL = "VSPHERE_ALLOW_UNVERIFIED_SSL"
 )
 
 type AlibabaCloudCredentials struct {
@@ -69,6 +74,13 @@ type AzureCredentials struct {
 	ARMClientSecret   string `yaml:"armClientSecret"`
 	ARMSubscriptionID string `yaml:"armSubscriptionID"`
 	ARMTenantID       string `yaml:"armTenantID"`
+}
+
+type VSphereCredentials struct {
+	VSphereUser               string `yaml:"vSphereUser"`
+	VSpherePassword           string `yaml:"vSpherePassword"`
+	VSphereServer             string `yaml:"vSphereServer"`
+	VSphereAllowUnverifiedSSL string `yaml:"vSphereAllowUnverifiedSSL,omitempty"`
 }
 
 func GetProviderCredentials(ctx context.Context, k8sClient client.Client, namespace, providerName string) (map[string]string, error) {
@@ -146,6 +158,19 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, namesp
 				EnvARMClientSecret:   cred.ARMClientSecret,
 				EnvARMSubscriptionID: cred.ARMSubscriptionID,
 				EnvARMTenantID:       cred.ARMTenantID,
+			}, nil
+		case string(VSphere):
+			var cred VSphereCredentials
+			if err := yaml.Unmarshal(secret.Data[secretRef.Key], &cred); err != nil {
+				errMsg := "failed to convert the credentials of Secret from Provider"
+				klog.ErrorS(err, errMsg, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
+				return nil, errors.Wrap(err, errMsg)
+			}
+			return map[string]string{
+				EnvVSphereUser:               cred.VSphereUser,
+				EnvVSpherePassword:           cred.VSpherePassword,
+				EnvVSphereServer:             cred.VSphereServer,
+				EnvVSphereAllowUnverifiedSSL: cred.VSphereAllowUnverifiedSSL,
 			}, nil
 		}
 	default:

@@ -1,0 +1,53 @@
+apiVersion: terraform.core.oam.dev/v1beta1
+kind: Configuration
+metadata:
+  name: vsphere-folder
+spec:
+  hcl: |
+    #############
+    # Variables #
+    #############
+    variable "vsphere-datacenter" {
+      type        = string
+      description = "VMware vSphere datacenter"
+    }
+
+    variable "folder-name" {
+      type        = string
+      description = "The name of folder"
+    }
+
+    variable "folder-type" {
+      type        = string
+      description = "The type of folder"
+    }
+
+    ##########
+    # Folder #
+    ##########
+
+    data "vsphere_datacenter" "dc" {
+      name = var.vsphere-datacenter
+    }
+
+    resource "vsphere_folder" "folder" {
+      path          = var.folder-name
+      type          = var.folder-type
+      datacenter_id = data.vsphere_datacenter.dc.id
+    }
+
+    output "folder" {
+        value       = "folder-${var.folder-type}-${var.folder-name}"
+    }
+
+  variable:
+    vsphere-datacenter: Datacenter01
+    folder-name: test
+    folder-type: vm
+
+  writeConnectionSecretToRef:
+    name: vm-outputs
+    namespace: default
+
+  providerRef:
+    name: vsphere
