@@ -12,6 +12,7 @@ Terraform Controller is a Kubernetes Controller for Terraform, which can address
 - AWS
 - Azure
 - GCP
+- [VMware vSphere](https://www.vmware.com/hk/products/vsphere.html)
 
 ## Supported Terraform Configuration
 
