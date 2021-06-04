@@ -293,7 +293,7 @@ func assembleAndTriggerJob(ctx context.Context, k8sClient client.Client, namespa
 						// state file directory in advance
 						InitContainers: []v1.Container{{
 							Name:            "prepare-input-terraform-configurations",
-							Image:           "registry.k8s.com:9980/cmp/busybox:1.28",
+							Image:           "busybox",
 							ImagePullPolicy: v1.PullAlways,
 							Command: []string{
 								"sh",
@@ -353,7 +353,7 @@ func assembleAndTriggerJob(ctx context.Context, k8sClient client.Client, namespa
 						// state file directory in advance
 						InitContainers: []v1.Container{{
 							Name:            "prepare-input-terraform-configurations",
-							Image:           "registry.k8s.com:9980/cmp/busybox:1.28",
+							Image:           "busybox",
 							ImagePullPolicy: v1.PullAlways,
 							Command: []string{
 								"sh",
