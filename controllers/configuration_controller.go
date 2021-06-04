@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
@@ -33,6 +34,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	state "github.com/oam-dev/terraform-controller/api/types"
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
 	"github.com/oam-dev/terraform-controller/controllers/util"
@@ -67,6 +69,10 @@ const (
 	TerraformDestroy TerraformExecutionType = "destroy"
 )
 
+const (
+	configurationFinalizer = "configuration.finalizers.terraform-controller"
+)
+
 // ConfigurationReconciler reconciles a Configuration object.
 type ConfigurationReconciler struct {
 	client.Client
@@ -89,16 +95,33 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	klog.InfoS("reconciling Terraform Configuration...", "NamespacedName", req.NamespacedName)
 	applyJobName := configurationName + "-" + string(TerraformApply)
 
-	// Terraform destroy
 	if err := r.Get(ctx, req.NamespacedName, &configuration); err != nil {
-		klog.InfoS("performing Terraform Destroy", "Namespace", req.Namespace, "Name", req.Name)
 		if kerrors.IsNotFound(err) {
+			klog.ErrorS(err, "unable to fetch Configuration", "NamespacedName", req.NamespacedName)
+			err = nil
+		}
+		return ctrl.Result{}, err
+	}
+
+	if configuration.ObjectMeta.DeletionTimestamp.IsZero() {
+		if !meta.FinalizerExists(&configuration, configurationFinalizer) {
+			meta.AddFinalizer(&configuration, configurationFinalizer)
+			return ctrl.Result{}, errors.Wrap(r.Client.Update(ctx, &configuration), configurationFinalizer)
+		}
+	} else {
+		// terraform destroy
+		if meta.FinalizerExists(&configuration, configurationFinalizer) {
+			klog.InfoS("performing Terraform Destroy", "Namespace", req.Namespace, "Name", req.Name)
 			destroyJobName := configurationName + "-" + string(TerraformDestroy)
 			klog.InfoS("Terraform destroy job", "Namespace", req.Namespace, "Name", destroyJobName)
-			err := terraformDestroy(ctx, r.Client, ns, req.Name, destroyJobName, tfInputConfigMapsName, applyJobName, r.ProviderName)
-			return ctrl.Result{}, errors.Wrap(err, "continue reconciling to destroy cloud resource")
+			err := terraformDestroy(ctx, r.Client, ns, configuration, req.Name, destroyJobName, tfInputConfigMapsName, applyJobName, r.ProviderName)
+			if err != nil {
+				return ctrl.Result{RequeueAfter: 3 * time.Second}, errors.Wrap(err, "continue reconciling to destroy cloud resource")
+			}
+			meta.RemoveFinalizer(&configuration, configurationFinalizer)
+			return ctrl.Result{}, errors.Wrap(r.Client.Update(ctx, &configuration), configurationFinalizer)
 		}
-		return ctrl.Result{}, errors.Wrap(err, "failed to call GET resource API")
+		return ctrl.Result{}, nil
 	}
 
 	// Terraform apply (create or update)
@@ -107,9 +130,9 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		r.ProviderName = configuration.Spec.ProviderReference.Name
 	}
 	if err := terraformApply(ctx, r.Client, ns, configuration, applyJobName, tfInputConfigMapsName, r.ProviderName); err != nil {
-		return ctrl.Result{RequeueAfter: 3}, errors.Wrap(err, "failed to create/update cloud resource")
+		return ctrl.Result{RequeueAfter: 3 * time.Second}, errors.Wrap(err, "failed to create/update cloud resource")
 	}
-	return ctrl.Result{RequeueAfter: 10}, nil
+	return ctrl.Result{}, nil
 }
 
 func terraformApply(ctx context.Context, k8sClient client.Client, namespace string, configuration v1beta1.Configuration, applyJobName, tfInputConfigMapName, providerName string) error {
@@ -170,12 +193,12 @@ func terraformApply(ctx context.Context, k8sClient client.Client, namespace stri
 	return err
 }
 
-func terraformDestroy(ctx context.Context, k8sClient client.Client, namespace, configurationName, destroyJobName, tfInputConfigMapsName, applyJobName, providerName string) error {
+func terraformDestroy(ctx context.Context, k8sClient client.Client, namespace string, configuration v1beta1.Configuration, configurationName, destroyJobName, tfInputConfigMapsName, applyJobName, providerName string) error {
 	var destroyJob batchv1.Job
 
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: destroyJobName, Namespace: namespace}, &destroyJob); err != nil {
 		if kerrors.IsNotFound(err) {
-			if err = assembleAndTriggerJob(ctx, k8sClient, namespace, configurationName, nil, tfInputConfigMapsName,
+			if err = assembleAndTriggerJob(ctx, k8sClient, namespace, configurationName, &configuration, tfInputConfigMapsName,
 				providerName, TerraformDestroy); err != nil {
 				return err
 			}
@@ -270,7 +293,7 @@ func assembleAndTriggerJob(ctx context.Context, k8sClient client.Client, namespa
 						// state file directory in advance
 						InitContainers: []v1.Container{{
 							Name:            "prepare-input-terraform-configurations",
-							Image:           "busybox",
+							Image:           "registry.k8s.com:9980/cmp/busybox:1.28",
 							ImagePullPolicy: v1.PullAlways,
 							Command: []string{
 								"sh",
@@ -330,7 +353,7 @@ func assembleAndTriggerJob(ctx context.Context, k8sClient client.Client, namespa
 						// state file directory in advance
 						InitContainers: []v1.Container{{
 							Name:            "prepare-input-terraform-configurations",
-							Image:           "busybox",
+							Image:           "registry.k8s.com:9980/cmp/busybox:1.28",
 							ImagePullPolicy: v1.PullAlways,
 							Command: []string{
 								"sh",
