@@ -1,6 +1,6 @@
-########################
-# Deploying vSphere VM #
-########################
+############################
+# Deploying vSphere Folder #
+############################
 
 provider "vsphere" {
   user           = var.vsphere-user
