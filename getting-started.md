@@ -8,10 +8,10 @@ Refer to [Helm official Doc](https://helm.sh/docs/intro/install/) to install `he
 
 - Install Terraform Kubernetes Controller
 
-Download the latest chart, like `terraform-controller-0.1.2.tgz`, from the latest [releases](https://github.com/oam-dev/terraform-controller/releases) and install it.
+Download the latest chart, like `terraform-controller-0.1.8.tgz`, from the latest [releases](https://github.com/oam-dev/terraform-controller/releases) and install it.
 
 ```shell
-$ helm install terraform-controller terraform-controller-0.1.2.tgz
+$ helm install terraform-controller terraform-controller-0.1.8.tgz
 NAME: terraform-controller
 LAST DEPLOYED: Mon Apr 26 15:55:35 2021
 NAMESPACE: default
@@ -319,7 +319,7 @@ provider.terraform.core.oam.dev/default created
 
 ### Apply Terraform Configuration
 
-Apply Terraform configuration [configuration_hcl_s3.yaml](./examples/gcp/configuration_hcl_bucket.yaml) to provision a storage bucket.
+Apply Terraform configuration [configuration_hcl_bucket.yaml](./examples/gcp/configuration_hcl_bucket.yaml) to provision a storage bucket.
 
 ```yaml
 apiVersion: terraform.core.oam.dev/v1beta1
@@ -351,8 +351,8 @@ spec:
 
 ```shell
 $ kubectl get configuration.terraform.core.oam.dev
-NAME     AGE
-aws-s3   6m48s
+NAME         AGE
+gcp-bucket   6m48s
 
 $ kubectl describe configuration.terraform.core.oam.dev gcp-bucket
 apiVersion: terraform.core.oam.dev/v1beta1
@@ -371,4 +371,110 @@ Status:
 $ kubectl get secret bucket-conn
 NAME      TYPE     DATA   AGE
 bucket-conn   Opaque   1      7m37s
+```
+
+# For VMware vSphere
+
+### Apply Provider configuration
+
+```shell script
+$ export VSPHERE_USER=xxx
+$ export VSPHERE_PASSWORD=yyy
+$ export VSPHERE_SERVER=zzz
+# If you have a self-signed cert, you will need this.
+$ export VSPHERE_ALLOW_UNVERIFIED_SSL=true
+
+$ sh hack/prepare-vsphere-credentials.sh
+
+$ kubectl get secret -n vela-system
+NAME                             TYPE                                  DATA   AGE
+vsphere-account-creds            Opaque                                1      1m
+
+$ kubectl apply -f examples/vsphere/provider.yaml
+```
+
+### Apply Terraform configuration
+
+Apply Terraform configuration [configuration_hcl_folder.yaml](./examples/vsphere/provider.yaml) to provision a folder.
+
+```yaml
+apiVersion: terraform.core.oam.dev/v1beta1
+kind: Configuration
+metadata:
+  name: vsphere-folder
+spec:
+  hcl: |
+    #############
+    # Variables #
+    #############
+    variable "vsphere-datacenter" {
+      type        = string
+      description = "VMware vSphere datacenter"
+    }
+
+    variable "folder-name" {
+      type        = string
+      description = "The name of folder"
+    }
+
+    variable "folder-type" {
+      type        = string
+      description = "The type of folder"
+    }
+
+    ##########
+    # Folder #
+    ##########
+
+    data "vsphere_datacenter" "dc" {
+      name = var.vsphere-datacenter
+    }
+
+    resource "vsphere_folder" "folder" {
+      path          = var.folder-name
+      type          = var.folder-type
+      datacenter_id = data.vsphere_datacenter.dc.id
+    }
+
+    output "folder" {
+        value       = "folder-${var.folder-type}-${var.folder-name}"
+    }
+
+  variable:
+    vsphere-datacenter: Datacenter01
+    folder-name: test
+    folder-type: vm
+
+  writeConnectionSecretToRef:
+    name: folder-outputs
+    namespace: default
+
+  providerRef:
+    name: vsphere
+```
+
+```shell script
+$ kubectl get configuration.terraform.core.oam.dev
+NAME             STATE       AGE
+vsphere-folder   Available   17m
+
+$ kubectl describe configuration.terraform.core.oam.dev vsphere-folder
+Name:         vsphere-folder
+Namespace:    default
+Labels:       <none>
+Annotations:  API Version:  terraform.core.oam.dev/v1beta1
+Kind:         Configuration
+...
+Status:
+  Message:  Cloud resources are deployed and ready to use.
+  Outputs:
+    Folder:
+      Type:   string
+      Value:  folder-vm-test
+  State:      Available
+Events:       <none>
+
+$ kubectl get secret folder-outputs
+NAME         TYPE     DATA   AGE
+vm-outputs   Opaque   1      18m
 ```
