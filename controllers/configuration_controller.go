@@ -106,7 +106,9 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	if configuration.ObjectMeta.DeletionTimestamp.IsZero() {
 		if !controllerutil.ContainsFinalizer(&configuration, configurationFinalizer) {
 			controllerutil.AddFinalizer(&configuration, configurationFinalizer)
-			return ctrl.Result{}, errors.Wrap(r.Client.Update(ctx, &configuration), configurationFinalizer)
+			if err := r.Update(ctx, &configuration); err != nil {
+				return ctrl.Result{RequeueAfter: 3 * time.Second}, errors.Wrap(err, "failed to add finalizer")
+			}
 		}
 	} else {
 		// terraform destroy
@@ -119,7 +121,9 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 				return ctrl.Result{RequeueAfter: 3 * time.Second}, errors.Wrap(err, "continue reconciling to destroy cloud resource")
 			}
 			controllerutil.RemoveFinalizer(&configuration, configurationFinalizer)
-			return ctrl.Result{}, errors.Wrap(r.Client.Update(ctx, &configuration), configurationFinalizer)
+			if err := r.Update(ctx, &configuration); err != nil {
+				return ctrl.Result{RequeueAfter: 3 * time.Second}, errors.Wrap(err, "failed to remove finalizer")
+			}
 		}
 		return ctrl.Result{}, nil
 	}
