@@ -34,10 +34,10 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	state "github.com/oam-dev/terraform-controller/api/types"
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
 	"github.com/oam-dev/terraform-controller/controllers/util"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 const (
@@ -104,13 +104,13 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	}
 
 	if configuration.ObjectMeta.DeletionTimestamp.IsZero() {
-		if !meta.FinalizerExists(&configuration, configurationFinalizer) {
-			meta.AddFinalizer(&configuration, configurationFinalizer)
+		if !controllerutil.ContainsFinalizer(&configuration, configurationFinalizer) {
+			controllerutil.AddFinalizer(&configuration, configurationFinalizer)
 			return ctrl.Result{}, errors.Wrap(r.Client.Update(ctx, &configuration), configurationFinalizer)
 		}
 	} else {
 		// terraform destroy
-		if meta.FinalizerExists(&configuration, configurationFinalizer) {
+		if controllerutil.ContainsFinalizer(&configuration, configurationFinalizer) {
 			klog.InfoS("performing Terraform Destroy", "Namespace", req.Namespace, "Name", req.Name)
 			destroyJobName := configurationName + "-" + string(TerraformDestroy)
 			klog.InfoS("Terraform destroy job", "Namespace", req.Namespace, "Name", destroyJobName)
@@ -118,7 +118,7 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 			if err != nil {
 				return ctrl.Result{RequeueAfter: 3 * time.Second}, errors.Wrap(err, "continue reconciling to destroy cloud resource")
 			}
-			meta.RemoveFinalizer(&configuration, configurationFinalizer)
+			controllerutil.RemoveFinalizer(&configuration, configurationFinalizer)
 			return ctrl.Result{}, errors.Wrap(r.Client.Update(ctx, &configuration), configurationFinalizer)
 		}
 		return ctrl.Result{}, nil
