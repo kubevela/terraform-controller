@@ -1,6 +1,6 @@
 replicaCount: 1
 
-version: 0.0.1
+version: 0.1.9
 
 image:
   name: oamdev/terraform-controller:latest
