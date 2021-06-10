@@ -1,6 +1,6 @@
 # Terraform Controller
 
-Terraform Controller is a Kubernetes Controller for Terraform, which can address the requirement of [Using Terraform HCL as IaC module in KubeVela](https://github.com/oam-dev/kubevela/issues/698)
+Terraform Controller is a Kubernetes Controller for Terraform.
 
 ![](docs/resources/architecture.jpg)
 
@@ -8,10 +8,10 @@ Terraform Controller is a Kubernetes Controller for Terraform, which can address
 
 ## Supported Cloud Providers
 
-- Alibaba Cloud
-- AWS
-- Azure
-- GCP
+- [Alibaba Cloud](https://www.alibabacloud.com/)
+- [AWS](https://aws.amazon.com/)
+- [Azure](https://portal.azure.com/)
+- [GCP](https://cloud.google.com/)
 - [VMware vSphere](https://www.vmware.com/hk/products/vsphere.html)
 
 ## Supported Terraform Configuration
@@ -19,10 +19,10 @@ Terraform Controller is a Kubernetes Controller for Terraform, which can address
 - HCL
 - JSON
 
-# Design
-
-Please refer to [Design](./DESIGN.md).
-
 # Get started
 
 See our [Getting Started](./getting-started.md) guide please.
+
+# Design
+
+Please refer to [Design](./DESIGN.md).
