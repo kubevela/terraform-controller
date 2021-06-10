@@ -73,6 +73,11 @@ const (
 	configurationFinalizer = "configuration.finalizers.terraform-controller"
 )
 
+const (
+	MessageDestoryJobNotCompleted = "configuration deletion isn't completed"
+	MessageApplyJobNotCompleted   = "cloud resources are not created completed"
+)
+
 // ConfigurationReconciler reconciles a Configuration object.
 type ConfigurationReconciler struct {
 	client.Client
@@ -116,9 +121,12 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 			klog.InfoS("performing Terraform Destroy", "Namespace", req.Namespace, "Name", req.Name)
 			destroyJobName := configurationName + "-" + string(TerraformDestroy)
 			klog.InfoS("Terraform destroy job", "Namespace", req.Namespace, "Name", destroyJobName)
-			err := terraformDestroy(ctx, r.Client, ns, configuration, req.Name, destroyJobName, tfInputConfigMapsName, applyJobName, r.ProviderName)
-			if err != nil {
-				return ctrl.Result{RequeueAfter: 3 * time.Second}, errors.Wrap(err, "continue reconciling to destroy cloud resource")
+			if err := terraformDestroy(ctx, r.Client, ns, configuration, req.Name, destroyJobName, tfInputConfigMapsName, applyJobName, r.ProviderName); err != nil {
+				if err.Error() == MessageDestoryJobNotCompleted {
+					return ctrl.Result{RequeueAfter: 3 * time.Second}, nil
+				} else {
+					return ctrl.Result{RequeueAfter: 3 * time.Second}, errors.Wrap(err, "continue reconciling to destroy cloud resource")
+				}
 			}
 			controllerutil.RemoveFinalizer(&configuration, configurationFinalizer)
 			if err := r.Update(ctx, &configuration); err != nil {
@@ -134,7 +142,11 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		r.ProviderName = configuration.Spec.ProviderReference.Name
 	}
 	if err := terraformApply(ctx, r.Client, ns, configuration, applyJobName, tfInputConfigMapsName, r.ProviderName); err != nil {
-		return ctrl.Result{RequeueAfter: 3 * time.Second}, errors.Wrap(err, "failed to create/update cloud resource")
+		if err.Error() == MessageApplyJobNotCompleted {
+			return ctrl.Result{RequeueAfter: 3 * time.Second}, nil
+		} else {
+			return ctrl.Result{RequeueAfter: 3 * time.Second}, errors.Wrap(err, "failed to create/update cloud resource")
+		}
 	}
 	return ctrl.Result{}, nil
 }
@@ -158,8 +170,9 @@ func terraformApply(ctx context.Context, k8sClient client.Client, namespace stri
 					return err
 				}
 			}
+			return nil
 		}
-		return nil
+		return errors.New(MessageApplyJobNotCompleted)
 	}
 
 	if kerrors.IsNotFound(err) {
@@ -232,7 +245,7 @@ func terraformDestroy(ctx context.Context, k8sClient client.Client, namespace st
 
 		return nil
 	}
-	return errors.New("configuration deletion isn't completed.")
+	return errors.New(MessageDestoryJobNotCompleted)
 }
 
 func assembleAndTriggerJob(ctx context.Context, k8sClient client.Client, namespace, name string,
