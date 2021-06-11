@@ -74,7 +74,7 @@ const (
 )
 
 const (
-	MessageDestoryJobNotCompleted = "configuration deletion isn't completed"
+	MessageDestroyJobNotCompleted = "configuration deletion isn't completed"
 	MessageApplyJobNotCompleted   = "cloud resources are not created completed"
 )
 
@@ -121,8 +121,8 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 			klog.InfoS("performing Terraform Destroy", "Namespace", req.Namespace, "Name", req.Name)
 			destroyJobName := configurationName + "-" + string(TerraformDestroy)
 			klog.InfoS("Terraform destroy job", "Namespace", req.Namespace, "Name", destroyJobName)
-			if err := terraformDestroy(ctx, r.Client, ns, configuration, req.Name, destroyJobName, tfInputConfigMapsName, applyJobName, r.ProviderName); err != nil {
-				if err.Error() == MessageDestoryJobNotCompleted {
+			if err := terraformDestroy(ctx, r.Client, ns, configuration, destroyJobName, tfInputConfigMapsName, applyJobName, r.ProviderName); err != nil {
+				if err.Error() == MessageDestroyJobNotCompleted {
 					return ctrl.Result{RequeueAfter: 3 * time.Second}, nil
 				} else {
 					return ctrl.Result{RequeueAfter: 3 * time.Second}, errors.Wrap(err, "continue reconciling to destroy cloud resource")
@@ -210,12 +210,12 @@ func terraformApply(ctx context.Context, k8sClient client.Client, namespace stri
 	return err
 }
 
-func terraformDestroy(ctx context.Context, k8sClient client.Client, namespace string, configuration v1beta1.Configuration, configurationName, destroyJobName, tfInputConfigMapsName, applyJobName, providerName string) error {
+func terraformDestroy(ctx context.Context, k8sClient client.Client, namespace string, configuration v1beta1.Configuration, destroyJobName, tfInputConfigMapsName, applyJobName, providerName string) error {
 	var destroyJob batchv1.Job
 
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: destroyJobName, Namespace: namespace}, &destroyJob); err != nil {
 		if kerrors.IsNotFound(err) {
-			if err = assembleAndTriggerJob(ctx, k8sClient, namespace, configurationName, &configuration, tfInputConfigMapsName,
+			if err = assembleAndTriggerJob(ctx, k8sClient, namespace, configuration.Name, &configuration, tfInputConfigMapsName,
 				providerName, TerraformDestroy); err != nil {
 				return err
 			}
@@ -245,7 +245,7 @@ func terraformDestroy(ctx context.Context, k8sClient client.Client, namespace st
 
 		return nil
 	}
-	return errors.New(MessageDestoryJobNotCompleted)
+	return errors.New(MessageDestroyJobNotCompleted)
 }
 
 func assembleAndTriggerJob(ctx context.Context, k8sClient client.Client, namespace, name string,
