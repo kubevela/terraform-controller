@@ -38,7 +38,6 @@ const (
 	EnvAWSSecretAccessKey = "AWS_SECRET_ACCESS_KEY"
 	EnvAWSDefaultRegion   = "AWS_DEFAULT_REGION"
 
-
 	EnvGCPCredentialsJSON = "GOOGLE_CREDENTIALS"
 	EnvGCPRegion          = "GOOGLE_REGION"
 	EnvGCPProject         = "GOOGLE_PROJECT"
@@ -135,17 +134,17 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, namesp
 				EnvAWSDefaultRegion:   region,
 			}, nil
 		case string(GCP):
-        	var ak GCPCredentials
-        	if err := yaml.Unmarshal(secret.Data[secretRef.Key], &ak); err != nil {
-            	errMsg := "failed to convert the credentials of Secret from Provider"
-        		klog.ErrorS(err, errMsg, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
-        		return nil, errors.Wrap(err, errMsg)
-        	}
-        	return map[string]string{
-        	    EnvGCPCredentialsJSON: ak.GCPCredentialsJSON,
-                EnvGCPProject:         ak.GCPProject,
-        		EnvGCPRegion:          region,
-        	}, nil
+			var ak GCPCredentials
+			if err := yaml.Unmarshal(secret.Data[secretRef.Key], &ak); err != nil {
+				errMsg := "failed to convert the credentials of Secret from Provider"
+				klog.ErrorS(err, errMsg, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
+				return nil, errors.Wrap(err, errMsg)
+			}
+			return map[string]string{
+				EnvGCPCredentialsJSON: ak.GCPCredentialsJSON,
+				EnvGCPProject:         ak.GCPProject,
+				EnvGCPRegion:          region,
+			}, nil
 		case string(Azure):
 			var cred AzureCredentials
 			if err := yaml.Unmarshal(secret.Data[secretRef.Key], &cred); err != nil {
