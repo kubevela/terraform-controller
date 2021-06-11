@@ -30,6 +30,7 @@ rules:
     - "create"
     - "update"
     - "get"
+    - "list"  
     - "delete"
 - apiGroups:
     - "coordination.k8s.io"
