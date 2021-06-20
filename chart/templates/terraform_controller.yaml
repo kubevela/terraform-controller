@@ -20,3 +20,4 @@ spec:
         - name: terraform-controller
           image: "{{ .Values.image.name }}"
           imagePullPolicy: {{ .Values.image.imagePullPolicy }}
+      serviceAccountName: tf-controller-service-account

@@ -8,5 +8,5 @@ roleRef:
   name: tf-api-role
 subjects:
 - kind: ServiceAccount
-  name: default
+  name: tf-controller-service-account
   namespace: {{.Release.Namespace}}
