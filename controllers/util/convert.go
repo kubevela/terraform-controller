@@ -30,8 +30,9 @@ import (
 var backendTF = `
 terraform {
   backend "kubernetes" {
-    secret_suffix    = "{{.SecretSuffix}}"
+    secret_suffix     = "{{.SecretSuffix}}"
     in_cluster_config = {{.InClusterConfig}}
+    namespace         = "{{.Namespace}}"
   }
 }
 `

@@ -11,7 +11,7 @@ Refer to [Helm official Doc](https://helm.sh/docs/intro/install/) to install `he
 Download the latest chart, like `terraform-controller-0.1.8.tgz`, from the latest [releases](https://github.com/oam-dev/terraform-controller/releases) and install it.
 
 ```shell
-$ helm install terraform-controller terraform-controller-0.1.8.tgz
+$ helm install -n tf-controller terraform-controller terraform-controller-0.1.8.tgz
 NAME: terraform-controller
 LAST DEPLOYED: Mon Apr 26 15:55:35 2021
 NAMESPACE: default

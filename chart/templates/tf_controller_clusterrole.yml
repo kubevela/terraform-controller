@@ -1,25 +1,30 @@
 apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
+kind: ClusterRole
 metadata:
-  name: tf-executor-role
-  namespace: {{ .Release.Namespace }}
+  name: tf-controller-clusterrole
 rules:
   # Required to read provider credentials and write terraform outputs
   - apiGroups:
       - ""
     resources:
+      - "configmaps"
       - "secrets"
     verbs:
+      - "create"
+      - "update"
       - "get"
       - "list"
-      - "create"
-      - "update"
+      - "watch"
   - apiGroups:
-      - "coordination.k8s.io"
+      - ""
     resources:
-      - "leases"
+      - "configmaps"
     verbs:
-      - "create"
-      - "update"
-      - "get"
-      - "delete"
+      - "list"
+  - apiGroups:
+      - "batch"
+    resources:
+      - "jobs"
+    verbs:
+      - "list"
+      - "watch"
