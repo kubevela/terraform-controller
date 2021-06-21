@@ -250,176 +250,124 @@ func terraformDestroy(ctx context.Context, k8sClient client.Client, namespace st
 
 func assembleAndTriggerJob(ctx context.Context, k8sClient client.Client, namespace, name string,
 	configuration *v1beta1.Configuration, tfInputConfigMapsName, providerName string, executionType TerraformExecutionType) error {
-	var job *batchv1.Job
 	jobName := name + "-" + string(executionType)
-	var parallelism int32 = 1
-	var completions int32 = 1
-	var ttlSecondsAfterFinished int32 = 0
-
-	workingVolume := v1.Volume{Name: name}
-	workingVolume.EmptyDir = &v1.EmptyDirVolumeSource{}
-
-	inputCMVolumeSource := v1.ConfigMapVolumeSource{}
-	inputCMVolumeSource.Name = tfInputConfigMapsName
-	inputTFConfigurationVolume := v1.Volume{Name: InputTFConfigurationVolumeName}
-	inputTFConfigurationVolume.ConfigMap = &inputCMVolumeSource
 
 	envs, err := prepareTFVariables(ctx, k8sClient, namespace, configuration, providerName)
 	if err != nil {
 		return err
 	}
 
-	if executionType == TerraformApply {
-		volumes := []v1.Volume{workingVolume, inputTFConfigurationVolume}
-		initContainerVolumeMounts := []v1.VolumeMount{
-			{
-				Name:      name,
-				MountPath: WorkingVolumeMountPath,
-			},
-			{
-				Name:      InputTFConfigurationVolumeName,
-				MountPath: InputTFConfigurationVolumeMountPath,
-			},
-		}
-		initContainerCMD := fmt.Sprintf("cp %s/* %s", InputTFConfigurationVolumeMountPath, WorkingVolumeMountPath)
+	job := assembleTerraformJob(namespace, name, jobName, configuration, tfInputConfigMapsName, envs, executionType)
 
-		job = &batchv1.Job{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "Job",
-				APIVersion: "batch/v1",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      jobName,
-				Namespace: namespace,
-				OwnerReferences: []metav1.OwnerReference{{
-					APIVersion: configuration.APIVersion,
-					Kind:       configuration.Kind,
-					Name:       configuration.Name,
-					UID:        configuration.UID,
-					Controller: pointer.BoolPtr(false),
-				}},
-			},
-			Spec: batchv1.JobSpec{
-				// TODO(zzxwill) Not enabled in Kubernetes cluster lower than v1.21
-				TTLSecondsAfterFinished: &ttlSecondsAfterFinished,
-				Parallelism:             &parallelism,
-				Completions:             &completions,
-				Template: v1.PodTemplateSpec{
-					Spec: v1.PodSpec{
-						// InitContainer will copy Terraform configuration files to working directory and create Terraform
-						// state file directory in advance
-						InitContainers: []v1.Container{{
-							Name:            "prepare-input-terraform-configurations",
-							Image:           "busybox",
-							ImagePullPolicy: v1.PullAlways,
-							Command: []string{
-								"sh",
-								"-c",
-								initContainerCMD,
-							},
-							VolumeMounts: initContainerVolumeMounts,
-						}},
-						// Container terraform-executor will first copy predefined terraform.d to working directory, and
-						// then run terraform init/apply.
-						Containers: []v1.Container{{
-							Name:            "terraform-executor",
-							Image:           TerraformImage,
-							ImagePullPolicy: v1.PullAlways,
-							Command: []string{
-								"bash",
-								"-c",
-								fmt.Sprintf("cp -r /root/terraform.d %s && terraform init &&"+
-									" terraform apply -auto-approve", WorkingVolumeMountPath),
-							},
-							VolumeMounts: []v1.VolumeMount{
-								{
-									Name:      name,
-									MountPath: WorkingVolumeMountPath,
-								},
-								{
-									Name:      InputTFConfigurationVolumeName,
-									MountPath: InputTFConfigurationVolumeMountPath,
-								},
-							},
-							Env: envs,
-						},
-						},
-						ServiceAccountName: "tf-controller-service-account",
-						Volumes:            volumes,
-						RestartPolicy:      v1.RestartPolicyOnFailure,
-					},
-				},
-			},
-		}
-	} else if executionType == TerraformDestroy {
-		job = &batchv1.Job{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "Job",
-				APIVersion: "batch/v1",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      jobName,
-				Namespace: namespace,
-			},
-			Spec: batchv1.JobSpec{
-				TTLSecondsAfterFinished: &ttlSecondsAfterFinished,
-				Parallelism:             &parallelism,
-				Completions:             &completions,
-				Template: v1.PodTemplateSpec{
-					Spec: v1.PodSpec{
-						// InitContainer will copy Terraform configuration files to working directory and create Terraform
-						// state file directory in advance
-						InitContainers: []v1.Container{{
-							Name:            "prepare-input-terraform-configurations",
-							Image:           "busybox",
-							ImagePullPolicy: v1.PullAlways,
-							Command: []string{
-								"sh",
-								"-c",
-								fmt.Sprintf("cp %s/* %s", InputTFConfigurationVolumeMountPath, WorkingVolumeMountPath),
-							},
-							VolumeMounts: []v1.VolumeMount{
-								{
-									Name:      name,
-									MountPath: WorkingVolumeMountPath,
-								},
-								{
-									Name:      InputTFConfigurationVolumeName,
-									MountPath: InputTFConfigurationVolumeMountPath,
-								},
-							},
-						}},
-						// Container terraform-executor will first copy predefined terraform.d to working directory, and
-						// then run terraform init/apply.
-						Containers: []v1.Container{{
-							Name:            "terraform-executor",
-							Image:           TerraformImage,
-							ImagePullPolicy: v1.PullAlways,
-							Command: []string{
-								"bash",
-								"-c",
-								fmt.Sprintf("cp -r /root/terraform.d %s && terraform init && terraform destroy -auto-approve",
-									WorkingVolumeMountPath),
-							},
-							VolumeMounts: []v1.VolumeMount{
-								{
-									Name:      name,
-									MountPath: WorkingVolumeMountPath,
-								},
-							},
-							Env: envs,
-						}},
-						Volumes:       []v1.Volume{workingVolume, inputTFConfigurationVolume},
-						RestartPolicy: v1.RestartPolicyOnFailure,
-					},
-				},
-			},
-		}
-	}
 	if err := k8sClient.Create(ctx, job); err != nil {
 		return err
 	}
 	return nil
+}
+
+func assembleTerraformJob(namespace, name, jobName string, configuration *v1beta1.Configuration, tfInputConfigMapsName string,
+	envs []v1.EnvVar, executionType TerraformExecutionType) *batchv1.Job {
+	var parallelism int32 = 1
+	var completions int32 = 1
+	var ttlSecondsAfterFinished int32 = 0
+
+	initContainerVolumeMounts := []v1.VolumeMount{
+		{
+			Name:      name,
+			MountPath: WorkingVolumeMountPath,
+		},
+		{
+			Name:      InputTFConfigurationVolumeName,
+			MountPath: InputTFConfigurationVolumeMountPath,
+		},
+	}
+	initContainerCMD := fmt.Sprintf("cp %s/* %s", InputTFConfigurationVolumeMountPath, WorkingVolumeMountPath)
+
+	executorVolumes := assembleExecutorVolumes(name, tfInputConfigMapsName)
+
+	return &batchv1.Job{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Job",
+			APIVersion: "batch/v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      jobName,
+			Namespace: namespace,
+			OwnerReferences: []metav1.OwnerReference{{
+				APIVersion: configuration.APIVersion,
+				Kind:       configuration.Kind,
+				Name:       configuration.Name,
+				UID:        configuration.UID,
+				Controller: pointer.BoolPtr(false),
+			}},
+		},
+		Spec: batchv1.JobSpec{
+			// TODO(zzxwill) Not enabled in Kubernetes cluster lower than v1.21
+			TTLSecondsAfterFinished: &ttlSecondsAfterFinished,
+			Parallelism:             &parallelism,
+			Completions:             &completions,
+			Template: v1.PodTemplateSpec{
+				Spec: v1.PodSpec{
+					// InitContainer will copy Terraform configuration files to working directory and create Terraform
+					// state file directory in advance
+					InitContainers: []v1.Container{{
+						Name:            "prepare-input-terraform-configurations",
+						Image:           "busybox",
+						ImagePullPolicy: v1.PullAlways,
+						Command: []string{
+							"sh",
+							"-c",
+							initContainerCMD,
+						},
+						VolumeMounts: initContainerVolumeMounts,
+					}},
+					// Container terraform-executor will first copy predefined terraform.d to working directory, and
+					// then run terraform init/apply.
+					Containers: []v1.Container{{
+						Name:            "terraform-executor",
+						Image:           TerraformImage,
+						ImagePullPolicy: v1.PullAlways,
+						Command: []string{
+							"bash",
+							"-c",
+							fmt.Sprintf("cp -r /root/terraform.d %s && terraform init &&"+
+								" terraform %s -auto-approve", WorkingVolumeMountPath, executionType),
+						},
+						VolumeMounts: []v1.VolumeMount{
+							{
+								Name:      name,
+								MountPath: WorkingVolumeMountPath,
+							},
+							{
+								Name:      InputTFConfigurationVolumeName,
+								MountPath: InputTFConfigurationVolumeMountPath,
+							},
+						},
+						Env: envs,
+					},
+					},
+					ServiceAccountName: "tf-executor-service-account",
+					Volumes:            executorVolumes,
+					RestartPolicy:      v1.RestartPolicyOnFailure,
+				},
+			},
+		},
+	}
+}
+
+func assembleExecutorVolumes(name, tfInputConfigMapsName string) []v1.Volume {
+	workingVolume := v1.Volume{Name: name}
+	workingVolume.EmptyDir = &v1.EmptyDirVolumeSource{}
+	inputTFConfigurationVolume := createConfigurationVolume(tfInputConfigMapsName)
+	return []v1.Volume{workingVolume, inputTFConfigurationVolume}
+}
+
+func createConfigurationVolume(tfInputConfigMapsName string) v1.Volume {
+	inputCMVolumeSource := v1.ConfigMapVolumeSource{}
+	inputCMVolumeSource.Name = tfInputConfigMapsName
+	inputTFConfigurationVolume := v1.Volume{Name: InputTFConfigurationVolumeName}
+	inputTFConfigurationVolume.ConfigMap = &inputCMVolumeSource
+	return inputTFConfigurationVolume
 }
 
 type TFState struct {
