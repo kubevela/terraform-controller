@@ -12,6 +12,7 @@ rules:
     - "create"
     - "update"
     - "get"
+    - "list"
 - apiGroups:
     - ""
   resources:
