@@ -384,11 +384,7 @@ func getTFOutputs(ctx context.Context, k8sClient client.Client, configuration v1
 	}
 	// Secrets will be named in the format: tfstate-{workspace}-{secret_suffix}
 	k8sBackendSecretName := fmt.Sprintf("tfstate-%s-%s", TerraformWorkspace, backendSecretSuffix)
-	stateSecretNamespace := controllerNamespace
-	if configuration.Spec.Backend != nil && configuration.Spec.Backend.Namespace != "" {
-		stateSecretNamespace = configuration.Spec.Backend.Namespace
-	}
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: k8sBackendSecretName, Namespace: stateSecretNamespace}, &s); err != nil {
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: k8sBackendSecretName, Namespace: controllerNamespace}, &s); err != nil {
 		return nil, errors.Wrap(err, "terraform state file backend secret is not generated")
 	}
 	tfStateData, ok := s.Data[TerraformStateNameInSecret]

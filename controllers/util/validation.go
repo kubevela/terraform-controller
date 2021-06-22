@@ -28,18 +28,14 @@ func ValidConfiguration(configuration *v1beta1.Configuration, controllerNamespac
 			if configuration.Spec.Backend.SecretSuffix == "" {
 				configuration.Spec.Backend.SecretSuffix = configuration.Name
 			}
-			if configuration.Spec.Backend.Namespace != "" {
-				configuration.Spec.Backend.Namespace = controllerNamespace
-			}
 			configuration.Spec.Backend.InClusterConfig = true
 		} else {
 			configuration.Spec.Backend = &v1beta1.Backend{
 				SecretSuffix:    configuration.Name,
 				InClusterConfig: true,
-				Namespace:       controllerNamespace,
 			}
 		}
-		backendTF, err := renderTemplate(configuration.Spec.Backend)
+		backendTF, err := renderTemplate(configuration.Spec.Backend, controllerNamespace)
 		if err != nil {
 			return "", "", errors.Wrap(err, "failed to prepare Terraform backend configuration")
 		}

@@ -65,8 +65,6 @@ type Property struct {
 type Backend struct {
 	// SecretSuffix used when creating secrets. Secrets will be named in the format: tfstate-{workspace}-{secretSuffix}
 	SecretSuffix string `json:"secretSuffix,omitempty"`
-	// Namespace used to specify which namespace the state secret should be created in
-	Namespace string `json:"namespace,omitempty"`
 	// InClusterConfig Used to authenticate to the cluster from inside a pod. Only `true` is allowed
 	InClusterConfig bool `json:"inClusterConfig,omitempty"`
 }

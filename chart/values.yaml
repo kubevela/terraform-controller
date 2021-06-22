@@ -5,3 +5,5 @@ version: 0.1.9
 image:
   name: oamdev/terraform-controller:latest
   imagePullPolicy: Always
+
+velaNamespace: vela-system
