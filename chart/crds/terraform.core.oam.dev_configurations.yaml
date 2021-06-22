@@ -57,10 +57,6 @@ spec:
                   description: InClusterConfig Used to authenticate to the cluster
                     from inside a pod. Only `true` is allowed
                   type: boolean
-                namespace:
-                  description: Namespace used to specify which namespace the state
-                    secret should be created in
-                  type: string
                 secretSuffix:
                   description: 'SecretSuffix used when creating secrets. Secrets will
                     be named in the format: tfstate-{workspace}-{secretSuffix}'

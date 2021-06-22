@@ -3,24 +3,23 @@ kind: ClusterRole
 metadata:
   name: tf-controller-clusterrole
 rules:
-  # Required to read provider credentials and write terraform outputs
   - apiGroups:
       - ""
     resources:
       - "configmaps"
-      - "secrets"
     verbs:
-      - "create"
-      - "update"
-      - "get"
       - "list"
       - "watch"
+  # Required to write terraform outputs
   - apiGroups:
       - ""
     resources:
-      - "configmaps"
+      - "secrets"
     verbs:
       - "list"
+      - "create"
+      - "update"
+      - "watch"
   - apiGroups:
       - "batch"
     resources:

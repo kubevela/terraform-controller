@@ -4,7 +4,7 @@ metadata:
   name: tf-executor-role
   namespace: {{ .Release.Namespace }}
 rules:
-  # Required to read provider credentials and write terraform outputs
+  # Required to read/write terraform state
   - apiGroups:
       - ""
     resources:
