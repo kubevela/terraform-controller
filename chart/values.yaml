@@ -6,4 +6,4 @@ image:
   name: oamdev/terraform-controller:latest
   imagePullPolicy: Always
 
-velaNamespace: vela-system
+credentialsNamespace: vela-system
