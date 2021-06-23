@@ -10,7 +10,6 @@ spec:
       app: terraform-controller
   template:
     metadata:
-      namespace: {{ .Release.Namespace }}
       labels:
         app: terraform-controller
         app.kubernetes.io/name: {{ .Release.Name }}
