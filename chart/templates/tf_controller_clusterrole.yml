@@ -1,0 +1,29 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: tf-controller-clusterrole
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - "configmaps"
+    verbs:
+      - "list"
+      - "watch"
+  # Required to write terraform outputs
+  - apiGroups:
+      - ""
+    resources:
+      - "secrets"
+    verbs:
+      - "list"
+      - "create"
+      - "update"
+      - "watch"
+  - apiGroups:
+      - "batch"
+    resources:
+      - "jobs"
+    verbs:
+      - "list"
+      - "watch"

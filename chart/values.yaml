@@ -4,7 +4,6 @@ version: 0.1.9
 
 image:
   name: oamdev/terraform-controller:latest
-  registry: docker.io/daprio
   imagePullPolicy: Always
 
-namespace: default
+credentialsNamespace: vela-system

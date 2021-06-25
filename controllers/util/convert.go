@@ -30,8 +30,9 @@ import (
 var backendTF = `
 terraform {
   backend "kubernetes" {
-    secret_suffix    = "{{.SecretSuffix}}"
+    secret_suffix     = "{{.SecretSuffix}}"
     in_cluster_config = {{.InClusterConfig}}
+    namespace         = "{{.Namespace}}"
   }
 }
 `
@@ -54,13 +55,25 @@ func RawExtension2Map(raw *runtime.RawExtension) (map[string]interface{}, error)
 	return ret, err
 }
 
-func renderTemplate(backend *v1beta1.Backend) (string, error) {
+type backendVars struct {
+	SecretSuffix    string
+	InClusterConfig bool
+	Namespace       string
+}
+
+func renderTemplate(backend *v1beta1.Backend, namespace string) (string, error) {
 	tmpl, err := template.New("backend").Funcs(template.FuncMap(sprig.FuncMap())).Parse(backendTF)
 	if err != nil {
 		return "", err
 	}
+
+	templateVars := backendVars{
+		SecretSuffix:    backend.SecretSuffix,
+		InClusterConfig: backend.InClusterConfig,
+		Namespace:       namespace,
+	}
 	var wr bytes.Buffer
-	err = tmpl.Execute(&wr, backend)
+	err = tmpl.Execute(&wr, templateVars)
 	if err != nil {
 		return "", err
 	}

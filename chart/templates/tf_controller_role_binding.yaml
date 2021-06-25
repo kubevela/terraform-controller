@@ -1,12 +1,27 @@
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
+kind: RoleBinding
 metadata:
-  name: terraform-controller-rolebinding
+  name: tf-controller-rolebinding
+  namespace: {{ .Release.Namespace }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
+  kind: Role
   name: tf-controller-role
 subjects:
 - kind: ServiceAccount
-  name: default
-  namespace: {{.Release.Namespace}}
+  name: tf-controller-service-account
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: tf-controller-read-provider-creds-rolebinding
+  namespace: {{ .Values.credentialsNamespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: read-provider-creds
+subjects:
+  - kind: ServiceAccount
+    name: tf-contoller-service-account
+    namespace: {{ .Release.Namespace }}
