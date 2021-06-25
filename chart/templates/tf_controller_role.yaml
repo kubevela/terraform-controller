@@ -1,9 +1,8 @@
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
+kind: Role
 metadata:
   name: tf-controller-role
 rules:
-# All below are rules needed by pod to create ConfigMaps/Secrets/Jobs
 - apiGroups:
     - ""
   resources:
@@ -12,33 +11,12 @@ rules:
     - "create"
     - "update"
     - "get"
-    - "list"
-- apiGroups:
-    - ""
-  resources:
-    - "secrets"
-  verbs:
-    - "create"
-    - "update"
-    - "get"
-    - "list"
-    - "watch"
+    - "delete"
 - apiGroups:
     - "batch"
   resources:
     - "jobs"
   verbs:
     - "create"
-    - "update"
-    - "get"
-    - "list"  
-    - "delete"
-- apiGroups:
-    - "coordination.k8s.io"
-  resources:
-    - "leases"
-  verbs:
-    - "create"
-    - "update"
     - "get"
     - "delete"

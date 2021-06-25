@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: terraform-controller
+  namespace: {{ .Release.Namespace }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
@@ -20,3 +21,9 @@ spec:
         - name: terraform-controller
           image: "{{ .Values.image.name }}"
           imagePullPolicy: {{ .Values.image.imagePullPolicy }}
+          env:
+            - name: CONTROLLER_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+      serviceAccountName: tf-controller-service-account

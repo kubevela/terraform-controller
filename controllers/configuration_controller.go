@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -43,10 +44,8 @@ import (
 const (
 	// TerraformImage is the Terraform image which can run `terraform init/plan/apply`
 	// hit issue `toomanyrequests` for "oamdev/docker-terraform:0.14.10"
-	TerraformImage = "registry.cn-hongkong.aliyuncs.com/zzxwill/docker-terraform:0.14.11"
-
-	TFStateRetrieverImage = "zzxwill/terraform-tfstate-retriever:v0.3"
-	TerraformWorkspace    = "default"
+	TerraformImage     = "registry.cn-hongkong.aliyuncs.com/zzxwill/docker-terraform:0.14.11"
+	TerraformWorkspace = "default"
 )
 
 const (
@@ -86,6 +85,8 @@ type ConfigurationReconciler struct {
 	ProviderName string
 }
 
+var controllerNamespace = os.Getenv("CONTROLLER_NAMESPACE")
+
 // +kubebuilder:rbac:groups=terraform.core.oam.dev,resources=configurations,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=terraform.core.oam.dev,resources=configurations/status,verbs=get;update;patch
 
@@ -93,7 +94,6 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	var (
 		configuration         v1beta1.Configuration
 		ctx                   = context.Background()
-		ns                    = req.Namespace
 		configurationName     = req.Name
 		tfInputConfigMapsName = fmt.Sprintf(TFInputConfigMapName, configurationName)
 	)
@@ -121,7 +121,7 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 			klog.InfoS("performing Terraform Destroy", "Namespace", req.Namespace, "Name", req.Name)
 			destroyJobName := configurationName + "-" + string(TerraformDestroy)
 			klog.InfoS("Terraform destroy job", "Namespace", req.Namespace, "Name", destroyJobName)
-			if err := terraformDestroy(ctx, r.Client, ns, configuration, destroyJobName, tfInputConfigMapsName, applyJobName, r.ProviderName); err != nil {
+			if err := terraformDestroy(ctx, r.Client, req.Namespace, configuration, destroyJobName, tfInputConfigMapsName, applyJobName, r.ProviderName); err != nil {
 				if err.Error() == MessageDestroyJobNotCompleted {
 					return ctrl.Result{RequeueAfter: 3 * time.Second}, nil
 				} else {
@@ -141,7 +141,7 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	if configuration.Spec.ProviderReference != nil {
 		r.ProviderName = configuration.Spec.ProviderReference.Name
 	}
-	if err := terraformApply(ctx, r.Client, ns, configuration, applyJobName, tfInputConfigMapsName, r.ProviderName); err != nil {
+	if err := terraformApply(ctx, r.Client, req.Namespace, configuration, applyJobName, tfInputConfigMapsName, r.ProviderName); err != nil {
 		if err.Error() == MessageApplyJobNotCompleted {
 			return ctrl.Result{RequeueAfter: 3 * time.Second}, nil
 		} else {
@@ -155,7 +155,7 @@ func terraformApply(ctx context.Context, k8sClient client.Client, namespace stri
 	klog.InfoS("terraform apply job", "Namespace", namespace, "Name", applyJobName)
 
 	var gotJob batchv1.Job
-	err := k8sClient.Get(ctx, client.ObjectKey{Name: applyJobName, Namespace: namespace}, &gotJob)
+	err := k8sClient.Get(ctx, client.ObjectKey{Name: applyJobName, Namespace: controllerNamespace}, &gotJob)
 	if err == nil {
 		if gotJob.Status.Succeeded == *pointer.Int32Ptr(1) {
 			outputs, err := getTFOutputs(ctx, k8sClient, configuration)
@@ -184,17 +184,16 @@ func terraformApply(ctx context.Context, k8sClient client.Client, namespace stri
 			}
 		}
 
-		configurationType, inputConfiguration, err := util.ValidConfiguration(&configuration)
+		configurationType, inputConfiguration, err := util.ValidConfiguration(&configuration, controllerNamespace)
 		if err != nil {
 			return err
 		}
 		data := prepareTFInputConfigurationData(configurationType, inputConfiguration)
-		if err := createOrUpdateConfigMap(ctx, k8sClient, namespace, tfInputConfigMapName, data); err != nil {
+		if err := createOrUpdateConfigMap(ctx, k8sClient, tfInputConfigMapName, data); err != nil {
 			return err
 		}
 
-		if err := assembleAndTriggerJob(ctx, k8sClient, namespace, configuration.Name, &configuration,
-			tfInputConfigMapName, providerName, TerraformApply); err != nil {
+		if err := assembleAndTriggerJob(ctx, k8sClient, configuration.Name, &configuration, tfInputConfigMapName, namespace, providerName, TerraformApply); err != nil {
 			return err
 		}
 		return nil
@@ -213,10 +212,9 @@ func terraformApply(ctx context.Context, k8sClient client.Client, namespace stri
 func terraformDestroy(ctx context.Context, k8sClient client.Client, namespace string, configuration v1beta1.Configuration, destroyJobName, tfInputConfigMapsName, applyJobName, providerName string) error {
 	var destroyJob batchv1.Job
 
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: destroyJobName, Namespace: namespace}, &destroyJob); err != nil {
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: destroyJobName, Namespace: controllerNamespace}, &destroyJob); err != nil {
 		if kerrors.IsNotFound(err) {
-			if err = assembleAndTriggerJob(ctx, k8sClient, namespace, configuration.Name, &configuration, tfInputConfigMapsName,
-				providerName, TerraformDestroy); err != nil {
+			if err = assembleAndTriggerJob(ctx, k8sClient, configuration.Name, &configuration, tfInputConfigMapsName, namespace, providerName, TerraformDestroy); err != nil {
 				return err
 			}
 		}
@@ -224,7 +222,7 @@ func terraformDestroy(ctx context.Context, k8sClient client.Client, namespace st
 	// When the deletion Job process succeeded, clean up work is starting.
 	if destroyJob.Status.Succeeded == *pointer.Int32Ptr(1) {
 		// 1. delete Terraform input Configuration ConfigMap
-		if err := deleteConfigMap(ctx, k8sClient, namespace, tfInputConfigMapsName); err != nil {
+		if err := deleteConfigMap(ctx, k8sClient, tfInputConfigMapsName); err != nil {
 			return err
 		}
 
@@ -232,7 +230,7 @@ func terraformDestroy(ctx context.Context, k8sClient client.Client, namespace st
 
 		// 3. delete apply job
 		var applyJob batchv1.Job
-		if err := k8sClient.Get(ctx, client.ObjectKey{Name: applyJobName, Namespace: namespace}, &applyJob); err == nil {
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: applyJobName, Namespace: controllerNamespace}, &applyJob); err == nil {
 			if err := k8sClient.Delete(ctx, &applyJob, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
 				return err
 			}
@@ -248,177 +246,126 @@ func terraformDestroy(ctx context.Context, k8sClient client.Client, namespace st
 	return errors.New(MessageDestroyJobNotCompleted)
 }
 
-func assembleAndTriggerJob(ctx context.Context, k8sClient client.Client, namespace, name string,
-	configuration *v1beta1.Configuration, tfInputConfigMapsName, providerName string, executionType TerraformExecutionType) error {
-	var job *batchv1.Job
+func assembleAndTriggerJob(ctx context.Context, k8sClient client.Client, name string, configuration *v1beta1.Configuration,
+	tfInputConfigMapsName, providerNamespace, providerName string, executionType TerraformExecutionType) error {
 	jobName := name + "-" + string(executionType)
-	var parallelism int32 = 1
-	var completions int32 = 1
-	var ttlSecondsAfterFinished int32 = 0
 
-	workingVolume := v1.Volume{Name: name}
-	workingVolume.EmptyDir = &v1.EmptyDirVolumeSource{}
-
-	inputCMVolumeSource := v1.ConfigMapVolumeSource{}
-	inputCMVolumeSource.Name = tfInputConfigMapsName
-	inputTFConfigurationVolume := v1.Volume{Name: InputTFConfigurationVolumeName}
-	inputTFConfigurationVolume.ConfigMap = &inputCMVolumeSource
-
-	envs, err := prepareTFVariables(ctx, k8sClient, namespace, configuration, providerName)
+	envs, err := prepareTFVariables(ctx, k8sClient, configuration, providerName, providerNamespace)
 	if err != nil {
 		return err
 	}
 
-	if executionType == TerraformApply {
-		volumes := []v1.Volume{workingVolume, inputTFConfigurationVolume}
-		initContainerVolumeMounts := []v1.VolumeMount{
-			{
-				Name:      name,
-				MountPath: WorkingVolumeMountPath,
-			},
-			{
-				Name:      InputTFConfigurationVolumeName,
-				MountPath: InputTFConfigurationVolumeMountPath,
-			},
-		}
-		initContainerCMD := fmt.Sprintf("cp %s/* %s", InputTFConfigurationVolumeMountPath, WorkingVolumeMountPath)
+	job := assembleTerraformJob(name, jobName, configuration, tfInputConfigMapsName, envs, executionType)
 
-		job = &batchv1.Job{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "Job",
-				APIVersion: "batch/v1",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      jobName,
-				Namespace: namespace,
-				OwnerReferences: []metav1.OwnerReference{{
-					APIVersion: configuration.APIVersion,
-					Kind:       configuration.Kind,
-					Name:       configuration.Name,
-					UID:        configuration.UID,
-					Controller: pointer.BoolPtr(false),
-				}},
-			},
-			Spec: batchv1.JobSpec{
-				// TODO(zzxwill) Not enabled in Kubernetes cluster lower than v1.21
-				TTLSecondsAfterFinished: &ttlSecondsAfterFinished,
-				Parallelism:             &parallelism,
-				Completions:             &completions,
-				Template: v1.PodTemplateSpec{
-					Spec: v1.PodSpec{
-						// InitContainer will copy Terraform configuration files to working directory and create Terraform
-						// state file directory in advance
-						InitContainers: []v1.Container{{
-							Name:            "prepare-input-terraform-configurations",
-							Image:           "busybox",
-							ImagePullPolicy: v1.PullAlways,
-							Command: []string{
-								"sh",
-								"-c",
-								initContainerCMD,
-							},
-							VolumeMounts: initContainerVolumeMounts,
-						}},
-						// Container terraform-executor will first copy predefined terraform.d to working directory, and
-						// then run terraform init/apply.
-						Containers: []v1.Container{{
-							Name:            "terraform-executor",
-							Image:           TerraformImage,
-							ImagePullPolicy: v1.PullAlways,
-							Command: []string{
-								"bash",
-								"-c",
-								fmt.Sprintf("cp -r /root/terraform.d %s && terraform init &&"+
-									" terraform apply -auto-approve", WorkingVolumeMountPath),
-							},
-							VolumeMounts: []v1.VolumeMount{
-								{
-									Name:      name,
-									MountPath: WorkingVolumeMountPath,
-								},
-								{
-									Name:      InputTFConfigurationVolumeName,
-									MountPath: InputTFConfigurationVolumeMountPath,
-								},
-							},
-							Env: envs,
-						},
-						},
-						Volumes:       volumes,
-						RestartPolicy: v1.RestartPolicyOnFailure,
-					},
-				},
-			},
-		}
-	} else if executionType == TerraformDestroy {
-		job = &batchv1.Job{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "Job",
-				APIVersion: "batch/v1",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      jobName,
-				Namespace: namespace,
-			},
-			Spec: batchv1.JobSpec{
-				TTLSecondsAfterFinished: &ttlSecondsAfterFinished,
-				Parallelism:             &parallelism,
-				Completions:             &completions,
-				Template: v1.PodTemplateSpec{
-					Spec: v1.PodSpec{
-						// InitContainer will copy Terraform configuration files to working directory and create Terraform
-						// state file directory in advance
-						InitContainers: []v1.Container{{
-							Name:            "prepare-input-terraform-configurations",
-							Image:           "busybox",
-							ImagePullPolicy: v1.PullAlways,
-							Command: []string{
-								"sh",
-								"-c",
-								fmt.Sprintf("cp %s/* %s", InputTFConfigurationVolumeMountPath, WorkingVolumeMountPath),
-							},
-							VolumeMounts: []v1.VolumeMount{
-								{
-									Name:      name,
-									MountPath: WorkingVolumeMountPath,
-								},
-								{
-									Name:      InputTFConfigurationVolumeName,
-									MountPath: InputTFConfigurationVolumeMountPath,
-								},
-							},
-						}},
-						// Container terraform-executor will first copy predefined terraform.d to working directory, and
-						// then run terraform init/apply.
-						Containers: []v1.Container{{
-							Name:            "terraform-executor",
-							Image:           TerraformImage,
-							ImagePullPolicy: v1.PullAlways,
-							Command: []string{
-								"bash",
-								"-c",
-								fmt.Sprintf("cp -r /root/terraform.d %s && terraform init && terraform destroy -auto-approve",
-									WorkingVolumeMountPath),
-							},
-							VolumeMounts: []v1.VolumeMount{
-								{
-									Name:      name,
-									MountPath: WorkingVolumeMountPath,
-								},
-							},
-							Env: envs,
-						}},
-						Volumes:       []v1.Volume{workingVolume, inputTFConfigurationVolume},
-						RestartPolicy: v1.RestartPolicyOnFailure,
-					},
-				},
-			},
-		}
-	}
 	if err := k8sClient.Create(ctx, job); err != nil {
 		return err
 	}
 	return nil
+}
+
+func assembleTerraformJob(name, jobName string, configuration *v1beta1.Configuration, tfInputConfigMapsName string,
+	envs []v1.EnvVar, executionType TerraformExecutionType) *batchv1.Job {
+	var parallelism int32 = 1
+	var completions int32 = 1
+	var ttlSecondsAfterFinished int32 = 0
+
+	initContainerVolumeMounts := []v1.VolumeMount{
+		{
+			Name:      name,
+			MountPath: WorkingVolumeMountPath,
+		},
+		{
+			Name:      InputTFConfigurationVolumeName,
+			MountPath: InputTFConfigurationVolumeMountPath,
+		},
+	}
+	initContainerCMD := fmt.Sprintf("cp %s/* %s", InputTFConfigurationVolumeMountPath, WorkingVolumeMountPath)
+
+	executorVolumes := assembleExecutorVolumes(name, tfInputConfigMapsName)
+
+	return &batchv1.Job{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Job",
+			APIVersion: "batch/v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      jobName,
+			Namespace: controllerNamespace,
+			OwnerReferences: []metav1.OwnerReference{{
+				APIVersion: configuration.APIVersion,
+				Kind:       configuration.Kind,
+				Name:       configuration.Name,
+				UID:        configuration.UID,
+				Controller: pointer.BoolPtr(false),
+			}},
+		},
+		Spec: batchv1.JobSpec{
+			// TODO(zzxwill) Not enabled in Kubernetes cluster lower than v1.21
+			TTLSecondsAfterFinished: &ttlSecondsAfterFinished,
+			Parallelism:             &parallelism,
+			Completions:             &completions,
+			Template: v1.PodTemplateSpec{
+				Spec: v1.PodSpec{
+					// InitContainer will copy Terraform configuration files to working directory and create Terraform
+					// state file directory in advance
+					InitContainers: []v1.Container{{
+						Name:            "prepare-input-terraform-configurations",
+						Image:           "busybox",
+						ImagePullPolicy: v1.PullAlways,
+						Command: []string{
+							"sh",
+							"-c",
+							initContainerCMD,
+						},
+						VolumeMounts: initContainerVolumeMounts,
+					}},
+					// Container terraform-executor will first copy predefined terraform.d to working directory, and
+					// then run terraform init/apply.
+					Containers: []v1.Container{{
+						Name:            "terraform-executor",
+						Image:           TerraformImage,
+						ImagePullPolicy: v1.PullAlways,
+						Command: []string{
+							"bash",
+							"-c",
+							fmt.Sprintf("cp -r /root/terraform.d %s && terraform init &&"+
+								" terraform %s -auto-approve", WorkingVolumeMountPath, executionType),
+						},
+						VolumeMounts: []v1.VolumeMount{
+							{
+								Name:      name,
+								MountPath: WorkingVolumeMountPath,
+							},
+							{
+								Name:      InputTFConfigurationVolumeName,
+								MountPath: InputTFConfigurationVolumeMountPath,
+							},
+						},
+						Env: envs,
+					},
+					},
+					ServiceAccountName: "tf-executor-service-account",
+					Volumes:            executorVolumes,
+					RestartPolicy:      v1.RestartPolicyOnFailure,
+				},
+			},
+		},
+	}
+}
+
+func assembleExecutorVolumes(name, tfInputConfigMapsName string) []v1.Volume {
+	workingVolume := v1.Volume{Name: name}
+	workingVolume.EmptyDir = &v1.EmptyDirVolumeSource{}
+	inputTFConfigurationVolume := createConfigurationVolume(tfInputConfigMapsName)
+	return []v1.Volume{workingVolume, inputTFConfigurationVolume}
+}
+
+func createConfigurationVolume(tfInputConfigMapsName string) v1.Volume {
+	inputCMVolumeSource := v1.ConfigMapVolumeSource{}
+	inputCMVolumeSource.Name = tfInputConfigMapsName
+	inputTFConfigurationVolume := v1.Volume{Name: InputTFConfigurationVolumeName}
+	inputTFConfigurationVolume.ConfigMap = &inputCMVolumeSource
+	return inputTFConfigurationVolume
 }
 
 type TFState struct {
@@ -437,7 +384,7 @@ func getTFOutputs(ctx context.Context, k8sClient client.Client, configuration v1
 	}
 	// Secrets will be named in the format: tfstate-{workspace}-{secret_suffix}
 	k8sBackendSecretName := fmt.Sprintf("tfstate-%s-%s", TerraformWorkspace, backendSecretSuffix)
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: k8sBackendSecretName, Namespace: configuration.Namespace}, &s); err != nil {
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: k8sBackendSecretName, Namespace: controllerNamespace}, &s); err != nil {
 		return nil, errors.Wrap(err, "terraform state file backend secret is not generated")
 	}
 	tfStateData, ok := s.Data[TerraformStateNameInSecret]
@@ -501,7 +448,7 @@ func getTFOutputs(ctx context.Context, k8sClient client.Client, configuration v1
 	return outputs, nil
 }
 
-func prepareTFVariables(ctx context.Context, k8sClient client.Client, namespace string, configuration *v1beta1.Configuration, providerName string) ([]v1.EnvVar, error) {
+func prepareTFVariables(ctx context.Context, k8sClient client.Client, configuration *v1beta1.Configuration, providerName, providerNamespace string) ([]v1.EnvVar, error) {
 	var envs []v1.EnvVar
 
 	var tfVariables *runtime.RawExtension
@@ -516,7 +463,7 @@ func prepareTFVariables(ctx context.Context, k8sClient client.Client, namespace 
 		envs = append(envs, v1.EnvVar{Name: k, Value: v})
 	}
 
-	credential, err := util.GetProviderCredentials(ctx, k8sClient, namespace, providerName)
+	credential, err := util.GetProviderCredentials(ctx, k8sClient, providerNamespace, providerName)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get credentials from the cloud provider")
 	}
@@ -551,9 +498,9 @@ func getTerraformJSONVariable(tfVariables *runtime.RawExtension) (map[string]str
 	return environments, nil
 }
 
-func deleteConfigMap(ctx context.Context, k8sClient client.Client, namespace, name string) error {
+func deleteConfigMap(ctx context.Context, k8sClient client.Client, name string) error {
 	var cm v1.ConfigMap
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: name, Namespace: namespace}, &cm); err == nil {
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: name, Namespace: controllerNamespace}, &cm); err == nil {
 		if err := k8sClient.Delete(ctx, &cm); err != nil {
 			return err
 		}
@@ -561,15 +508,15 @@ func deleteConfigMap(ctx context.Context, k8sClient client.Client, namespace, na
 	return nil
 }
 
-func createOrUpdateConfigMap(ctx context.Context, k8sClient client.Client, namespace, name string, data map[string]string) error {
+func createOrUpdateConfigMap(ctx context.Context, k8sClient client.Client, name string, data map[string]string) error {
 	var gotCM v1.ConfigMap
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: name, Namespace: namespace}, &gotCM); err != nil {
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: name, Namespace: controllerNamespace}, &gotCM); err != nil {
 		if kerrors.IsNotFound(err) {
 			cm := v1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      name,
-					Namespace: namespace,
+					Namespace: controllerNamespace,
 				},
 				Data: data,
 			}
