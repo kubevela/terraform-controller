@@ -33,6 +33,7 @@ const (
 	EnvAlicloudAcessKey  = "ALICLOUD_ACCESS_KEY"
 	EnvAlicloudSecretKey = "ALICLOUD_SECRET_KEY"
 	EnvAlicloudRegion    = "ALICLOUD_REGION"
+	EnvAliCloudStsToken  = "ALICLOUD_SECURITY_TOKEN"
 
 	EnvAWSAccessKeyID     = "AWS_ACCESS_KEY_ID"
 	EnvAWSSecretAccessKey = "AWS_SECRET_ACCESS_KEY"
@@ -51,11 +52,13 @@ const (
 	EnvVSpherePassword           = "VSPHERE_PASSWORD"
 	EnvVSphereServer             = "VSPHERE_SERVER"
 	EnvVSphereAllowUnverifiedSSL = "VSPHERE_ALLOW_UNVERIFIED_SSL"
+	errConvertCredentials        = "failed to convert the credentials of Secret from Provider"
 )
 
 type AlibabaCloudCredentials struct {
 	AccessKeyID     string `yaml:"accessKeyID"`
 	AccessKeySecret string `yaml:"accessKeySecret"`
+	SecurityToken   string `yaml:"securityToken"`
 }
 
 type AWSCredentials struct {
@@ -112,21 +115,20 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, namesp
 		case string(Alibaba):
 			var ak AlibabaCloudCredentials
 			if err := yaml.Unmarshal(secret.Data[secretRef.Key], &ak); err != nil {
-				errMsg := "failed to convert the credentials of Secret from Provider"
-				klog.ErrorS(err, errMsg, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
-				return nil, errors.Wrap(err, errMsg)
+				klog.ErrorS(err, errConvertCredentials, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
+				return nil, errors.Wrap(err, errConvertCredentials)
 			}
 			return map[string]string{
 				EnvAlicloudAcessKey:  ak.AccessKeyID,
 				EnvAlicloudSecretKey: ak.AccessKeySecret,
 				EnvAlicloudRegion:    region,
+				EnvAliCloudStsToken:  ak.SecurityToken,
 			}, nil
 		case string(AWS):
 			var ak AWSCredentials
 			if err := yaml.Unmarshal(secret.Data[secretRef.Key], &ak); err != nil {
-				errMsg := "failed to convert the credentials of Secret from Provider"
-				klog.ErrorS(err, errMsg, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
-				return nil, errors.Wrap(err, errMsg)
+				klog.ErrorS(err, errConvertCredentials, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
+				return nil, errors.Wrap(err, errConvertCredentials)
 			}
 			return map[string]string{
 				EnvAWSAccessKeyID:     ak.AWSAccessKeyID,
@@ -136,9 +138,8 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, namesp
 		case string(GCP):
 			var ak GCPCredentials
 			if err := yaml.Unmarshal(secret.Data[secretRef.Key], &ak); err != nil {
-				errMsg := "failed to convert the credentials of Secret from Provider"
-				klog.ErrorS(err, errMsg, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
-				return nil, errors.Wrap(err, errMsg)
+				klog.ErrorS(err, errConvertCredentials, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
+				return nil, errors.Wrap(err, errConvertCredentials)
 			}
 			return map[string]string{
 				EnvGCPCredentialsJSON: ak.GCPCredentialsJSON,
@@ -148,9 +149,8 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, namesp
 		case string(Azure):
 			var cred AzureCredentials
 			if err := yaml.Unmarshal(secret.Data[secretRef.Key], &cred); err != nil {
-				errMsg := "failed to convert the credentials of Secret from Provider"
-				klog.ErrorS(err, errMsg, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
-				return nil, errors.Wrap(err, errMsg)
+				klog.ErrorS(err, errConvertCredentials, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
+				return nil, errors.Wrap(err, errConvertCredentials)
 			}
 			return map[string]string{
 				EnvARMClientID:       cred.ARMClientID,
@@ -161,9 +161,8 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, namesp
 		case string(VSphere):
 			var cred VSphereCredentials
 			if err := yaml.Unmarshal(secret.Data[secretRef.Key], &cred); err != nil {
-				errMsg := "failed to convert the credentials of Secret from Provider"
-				klog.ErrorS(err, errMsg, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
-				return nil, errors.Wrap(err, errMsg)
+				klog.ErrorS(err, errConvertCredentials, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
+				return nil, errors.Wrap(err, errConvertCredentials)
 			}
 			return map[string]string{
 				EnvVSphereUser:               cred.VSphereUser,
