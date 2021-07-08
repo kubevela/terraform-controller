@@ -20,26 +20,11 @@
 
 .DS_Store
 
-examples/tf-native/alibaba/json/terraform.tfstate
-examples/tf-native/alibaba/json/terraform.tfstate.backup
-examples/tf-native/alibaba/json/.terraform
-examples/tf-native/alibaba/json/.terraform.lock.hcl
-
-examples/tf-native/alibaba/hcl/terraform.tfstate
-examples/tf-native/alibaba/hcl/terraform.tfstate.backup
-examples/tf-native/alibaba/hcl/.terraform
-examples/tf-native/alibaba/hcl/.terraform.lock.hcl
-
-examples/tf-native/aws/hcl/terraform.tfstate
-examples/tf-native/aws/hcl/terraform.tfstate.backup
-examples/tf-native/aws/hcl/.terraform
-examples/tf-native/aws/hcl/.terraform.lock.hcl
-
-examples/tf-native/azure/terraform.tfstate
-examples/tf-native/azure/terraform.tfstate.backup
-examples/tf-native/azure/.terraform
-examples/tf-native/azure/.terraform.lock.hcl
-
+# Terraform
+terraform.tfstate
+terraform.tfstate.backup
+.terraform
+.terraform.lock.hcl
 terraform-controller-*
 
 bin/manager
