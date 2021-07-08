@@ -1,0 +1,190 @@
+module "kubernetes" {
+  source = "github.com/zzxwill/terraform-alicloud-kubernetes"
+
+  new_nat_gateway = true
+  vpc_name = var.vpc_name
+  vpc_cidr = var.vpc_cidr
+  vswitch_name_prefix = var.vswitch_name_prefix
+  vswitch_cidrs = var.vswitch_cidrs
+  master_instance_types = var.master_instance_types
+  worker_instance_types = var.worker_instance_types
+  k8s_pod_cidr = var.k8s_pod_cidr
+  k8s_service_cidr = var.k8s_service_cidr
+  k8s_worker_number = var.k8s_worker_number
+  cpu_core_count = var.cpu_core_count
+  memory_size = var.memory_size
+  zone_id = var.zone_id
+}
+
+######################
+# Instance types variables
+######################
+variable "cpu_core_count" {
+  description = "CPU core count is used to fetch instance types."
+  type = number
+  default = 4
+}
+
+variable "memory_size" {
+  description = "Memory size used to fetch instance types."
+  type = number
+  default = 8
+}
+
+######################
+# VPC variables
+######################
+variable "vpc_name" {
+  description = "The vpc name used to create a new vpc when 'vpc_id' is not specified. Default to variable `example_name`"
+  type = string
+  default = "tf-k8s-vpc"
+}
+
+
+variable "example_name" {
+  description = "The name as prefix used to create resources."
+  type = string
+  default = "tf-example-kubernetes"
+}
+
+variable "vpc_cidr" {
+  description = "The cidr block used to launch a new vpc when 'vpc_id' is not specified."
+  type = string
+  default = "10.0.0.0/8"
+}
+
+######################
+# VSwitch variables
+######################
+variable "vswitch_name_prefix" {
+  type = string
+  description = "The vswitch name prefix used to create several new vswitches. Default to variable 'example_name'."
+  default = "tf-k8s-vsw"
+}
+
+variable "number_format" {
+  description = "The number format used to output."
+  type = string
+  default = "%02d"
+}
+
+variable "vswitch_ids" {
+  description = "List of existing vswitch id."
+  type = list(string)
+  default = []
+}
+
+variable "vswitch_cidrs" {
+  description = "List of cidr blocks used to create several new vswitches when 'vswitch_ids' is not specified."
+  type = list(string)
+  default = [
+    "10.1.0.0/16",
+    "10.2.0.0/16",
+    "10.3.0.0/16"]
+}
+
+variable "k8s_name_prefix" {
+  description = "The name prefix used to create several kubernetes clusters. Default to variable `example_name`"
+  type = string
+  default = ""
+}
+
+variable "new_nat_gateway" {
+  type = bool
+  description = "Whether to create a new nat gateway. In this template, a new nat gateway will create a nat gateway, eip and server snat entries."
+  default = true
+}
+
+variable "master_instance_types" {
+  description = "The ecs instance types used to launch master nodes."
+  type = list(string)
+  default =  [
+    "ecs.n4.xlarge",
+    "ecs.n1.large",
+    "ecs.sn1.large",
+    "ecs.s6-c1m2.xlarge",
+    "ecs.c6e.xlarge"]
+}
+
+variable "worker_instance_types" {
+  description = "The ecs instance types used to launch worker nodes."
+  type = list(string)
+  default = [
+    "ecs.c4.xlarge",
+    "ecs.c6e.xlarge",
+    "ecs.n4.xlarge",
+    "ecs.n1.large",
+    "ecs.sn1.large",
+    "ecs.s6-c1m2.xlarge"]
+}
+
+variable "node_cidr_mask" {
+  type = number
+  description = "The node cidr block to specific how many pods can run on single node. Valid values: [24-28]."
+  default = 24
+}
+
+variable "enable_ssh" {
+  description = "Enable login to the node through SSH."
+  type = bool
+  default = true
+}
+
+variable "install_cloud_monitor" {
+  description = "Install cloud monitor agent on ECS."
+  type = bool
+  default = true
+}
+
+variable "cpu_policy" {
+  type = string
+  description = "kubelet cpu policy. Valid values: 'none','static'. Default to 'none'."
+  default = "none"
+}
+
+variable "proxy_mode" {
+  description = "Proxy mode is option of kube-proxy. Valid values: 'ipvs','iptables'. Default to 'iptables'."
+  type = string
+  default = "iptables"
+}
+
+variable "password" {
+  description = "The password of ECS instance."
+  type = string
+  default = "Just4Test"
+}
+
+variable "k8s_worker_number" {
+  description = "The number of worker nodes in kubernetes cluster."
+  type = number
+  default = 2
+}
+
+# k8s_pod_cidr is only for flannel network
+variable "k8s_pod_cidr" {
+  description = "The kubernetes pod cidr block. It cannot be equals to vpc's or vswitch's and cannot be in them."
+  type = string
+  default = "192.168.5.0/24"
+}
+
+variable "k8s_service_cidr" {
+  description = "The kubernetes service cidr block. It cannot be equals to vpc's or vswitch's or pod's and cannot be in them."
+  type = string
+  default = "192.168.2.0/24"
+}
+
+variable "k8s_version" {
+  description = "The version of the kubernetes version.  Valid values: '1.16.6-aliyun.1','1.14.8-aliyun.1'. Default to '1.16.6-aliyun.1'."
+  type = string
+  default = "1.18.8-aliyun.1"
+}
+
+variable "zone_id" {
+  description = "Availability Zone ID"
+  type = string
+  default = "cn-beijing-a"
+}
+
+output "CONNECTIONS" {
+  value = module.kubernetes.cluster_nodes
+}
