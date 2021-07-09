@@ -26,7 +26,14 @@ TEST SUITE: None
 
 ```shell
 $ export ALICLOUD_ACCESS_KEY=xxx; export ALICLOUD_SECRET_KEY=yyy
+```
 
+If you'd like to use Alicloud Security Token Service, also export `ALICLOUD_SECURITY_TOKEN`.
+```shell
+$ export ALICLOUD_SECURITY_TOKEN=zzz
+```
+
+```
 $ sh hack/prepare-alibaba-credentials.sh
 
 $ kubectl get secret -n vela-system
