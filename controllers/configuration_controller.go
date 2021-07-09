@@ -43,8 +43,7 @@ import (
 
 const (
 	// TerraformImage is the Terraform image which can run `terraform init/plan/apply`
-	// hit issue `toomanyrequests` for "oamdev/docker-terraform:0.14.10"
-	TerraformImage     = "registry.cn-hongkong.aliyuncs.com/zzxwill/docker-terraform:0.14.11"
+	TerraformImage     = "oamdev/docker-terraform:1.0.2"
 	TerraformWorkspace = "default"
 )
 
