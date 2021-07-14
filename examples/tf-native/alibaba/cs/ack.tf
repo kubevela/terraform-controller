@@ -1,3 +1,5 @@
+
+
 module "kubernetes" {
   source = "github.com/zzxwill/terraform-alicloud-kubernetes"
 
@@ -14,6 +16,8 @@ module "kubernetes" {
   cpu_core_count = var.cpu_core_count
   memory_size = var.memory_size
   zone_id = var.zone_id
+  k8s_version = var.k8s_version
+  k8s_name_prefix = var.k8s_name_prefix
 }
 
 ######################
@@ -41,12 +45,6 @@ variable "vpc_name" {
 }
 
 
-variable "example_name" {
-  description = "The name as prefix used to create resources."
-  type = string
-  default = "tf-example-kubernetes"
-}
-
 variable "vpc_cidr" {
   description = "The cidr block used to launch a new vpc when 'vpc_id' is not specified."
   type = string
@@ -70,13 +68,13 @@ variable "number_format" {
 
 variable "vswitch_ids" {
   description = "List of existing vswitch id."
-  type = list(string)
+  type = list
   default = []
 }
 
 variable "vswitch_cidrs" {
   description = "List of cidr blocks used to create several new vswitches when 'vswitch_ids' is not specified."
-  type = list(string)
+  type = list
   default = [
     "10.1.0.0/16",
     "10.2.0.0/16",
@@ -86,7 +84,7 @@ variable "vswitch_cidrs" {
 variable "k8s_name_prefix" {
   description = "The name prefix used to create several kubernetes clusters. Default to variable `example_name`"
   type = string
-  default = ""
+  default = "poc"
 }
 
 variable "new_nat_gateway" {
@@ -97,25 +95,41 @@ variable "new_nat_gateway" {
 
 variable "master_instance_types" {
   description = "The ecs instance types used to launch master nodes."
-  type = list(string)
-  default =  [
+  type = list
+  default = [
+    # hongkong
+    "ecs.sn1ne.xlarge",
+    # hongkong
+    "ecs.c6.xlarge",
+    # hongkong
+    "ecs.c4.xlarge",
+    # hongkong
+    "ecs.c5.xlarge",
     "ecs.n4.xlarge",
-    "ecs.n1.large",
-    "ecs.sn1.large",
-    "ecs.s6-c1m2.xlarge",
-    "ecs.c6e.xlarge"]
+    # "ecs.n1.large",
+    # "ecs.sn1.large",
+    # "ecs.s6-c1m2.xlarge",
+    # "ecs.c6e.xlarge"
+  ]
 }
 
 variable "worker_instance_types" {
   description = "The ecs instance types used to launch worker nodes."
-  type = list(string)
+  type = list
   default = [
+    # hongkong
+    "ecs.sn1ne.xlarge",
+    # hongkong
+    "ecs.c6.xlarge",
+    # hongkong
     "ecs.c4.xlarge",
+    # hongkong
     "ecs.c6e.xlarge",
     "ecs.n4.xlarge",
-    "ecs.n1.large",
-    "ecs.sn1.large",
-    "ecs.s6-c1m2.xlarge"]
+    //    "ecs.n1.large",
+    //    "ecs.sn1.large",
+    //    "ecs.s6-c1m2.xlarge"
+  ]
 }
 
 variable "node_cidr_mask" {
@@ -164,27 +178,32 @@ variable "k8s_worker_number" {
 variable "k8s_pod_cidr" {
   description = "The kubernetes pod cidr block. It cannot be equals to vpc's or vswitch's and cannot be in them."
   type = string
-  default = "192.168.5.0/24"
+  default = "172.20.0.0/16"
 }
 
 variable "k8s_service_cidr" {
   description = "The kubernetes service cidr block. It cannot be equals to vpc's or vswitch's or pod's and cannot be in them."
   type = string
-  default = "192.168.2.0/24"
+  default = "192.168.0.0/16"
 }
 
 variable "k8s_version" {
   description = "The version of the kubernetes version.  Valid values: '1.16.6-aliyun.1','1.14.8-aliyun.1'. Default to '1.16.6-aliyun.1'."
   type = string
-  default = "1.18.8-aliyun.1"
+  default = "1.20.4-aliyun.1"
 }
 
 variable "zone_id" {
   description = "Availability Zone ID"
   type = string
-  default = "cn-beijing-a"
+  default = "cn-hongkong-b"
+  # "cn-beijing-a"
 }
 
-output "CONNECTIONS" {
-  value = module.kubernetes.cluster_nodes
+output "name" {
+  value = module.kubernetes.name
+}
+
+output "kubeconfig" {
+  value = module.kubernetes.kubeconfig
 }
