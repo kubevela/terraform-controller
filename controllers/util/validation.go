@@ -1,7 +1,10 @@
 package util
 
 import (
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
+	v1 "k8s.io/api/core/v1"
 
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
 )
@@ -42,4 +45,12 @@ func ValidConfiguration(configuration *v1beta1.Configuration, controllerNamespac
 		return ConfigurationHCL, hcl + "\n" + backendTF, nil
 	}
 	return "", "", errors.New("unknown issue")
+}
+
+// CompareTwoContainerEnvs compares two slices of v1.EnvVar
+func CompareTwoContainerEnvs(s1 []v1.EnvVar, s2 []v1.EnvVar) bool{
+	less := func(env1 v1.EnvVar, env2 v1.EnvVar) bool {
+		return env1.Name < env2.Name
+	}
+	return cmp.Diff(s1, s2, cmpopts.SortSlices(less)) == ""
 }

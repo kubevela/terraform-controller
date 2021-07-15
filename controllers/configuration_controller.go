@@ -42,8 +42,9 @@ import (
 )
 
 const (
+	terraformInitContainerImg = "registry.cn-hangzhou.aliyuncs.com/vela/busybox:latest"
 	// TerraformImage is the Terraform image which can run `terraform init/plan/apply`
-	TerraformImage     = "oamdev/docker-terraform:1.0.2"
+	terraformImage     = "zzxwill/docker-terraform:1.0.3.alpha-2"
 	TerraformWorkspace = "default"
 )
 
@@ -93,11 +94,10 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	var (
 		configuration         v1beta1.Configuration
 		ctx                   = context.Background()
-		configurationName     = req.Name
-		tfInputConfigMapsName = fmt.Sprintf(TFInputConfigMapName, configurationName)
+		tfInputConfigMapsName = fmt.Sprintf(TFInputConfigMapName, req.Name)
 	)
 	klog.InfoS("reconciling Terraform Configuration...", "NamespacedName", req.NamespacedName)
-	applyJobName := configurationName + "-" + string(TerraformApply)
+	applyJobName := req.Name + "-" + string(TerraformApply)
 
 	if err := r.Get(ctx, req.NamespacedName, &configuration); err != nil {
 		if kerrors.IsNotFound(err) {
@@ -118,9 +118,9 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		// terraform destroy
 		if controllerutil.ContainsFinalizer(&configuration, configurationFinalizer) {
 			klog.InfoS("performing Terraform Destroy", "Namespace", req.Namespace, "Name", req.Name)
-			destroyJobName := configurationName + "-" + string(TerraformDestroy)
+			destroyJobName := req.Name + "-" + string(TerraformDestroy)
 			klog.InfoS("Terraform destroy job", "Namespace", req.Namespace, "Name", destroyJobName)
-			if err := terraformDestroy(ctx, r.Client, req.Namespace, configuration, destroyJobName, tfInputConfigMapsName, applyJobName, r.ProviderName); err != nil {
+			if err := r.terraformDestroy(ctx, req.Namespace, configuration, destroyJobName, tfInputConfigMapsName, applyJobName); err != nil {
 				if err.Error() == MessageDestroyJobNotCompleted {
 					return ctrl.Result{RequeueAfter: 3 * time.Second}, nil
 				} else {
@@ -140,22 +140,33 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	if configuration.Spec.ProviderReference != nil {
 		r.ProviderName = configuration.Spec.ProviderReference.Name
 	}
-	if err := terraformApply(ctx, r.Client, req.Namespace, configuration, applyJobName, tfInputConfigMapsName, r.ProviderName); err != nil {
+	if err := r.terraformApply(ctx, req.Namespace, configuration, applyJobName, tfInputConfigMapsName); err != nil {
 		if err.Error() == MessageApplyJobNotCompleted {
 			return ctrl.Result{RequeueAfter: 3 * time.Second}, nil
-		} else {
-			return ctrl.Result{RequeueAfter: 3 * time.Second}, errors.Wrap(err, "failed to create/update cloud resource")
 		}
+		return ctrl.Result{RequeueAfter: 3 * time.Second}, errors.Wrap(err, "failed to create/update cloud resource")
 	}
 	return ctrl.Result{}, nil
 }
 
-func terraformApply(ctx context.Context, k8sClient client.Client, namespace string, configuration v1beta1.Configuration, applyJobName, tfInputConfigMapName, providerName string) error {
+//nolint:funlen
+func (r *ConfigurationReconciler) terraformApply(ctx context.Context, namespace string, configuration v1beta1.Configuration, applyJobName, tfInputConfigMapName string) error {
 	klog.InfoS("terraform apply job", "Namespace", namespace, "Name", applyJobName)
 
+	k8sClient := r.Client
 	var gotJob batchv1.Job
 	err := k8sClient.Get(ctx, client.ObjectKey{Name: applyJobName, Namespace: controllerNamespace}, &gotJob)
 	if err == nil {
+		updated, err := r.updateTerraformJobIfNeeded(ctx, namespace, configuration, gotJob)
+		if err != nil {
+			klog.ErrorS(err, "Hit an issue to update Terraform apply job", "Name", applyJobName)
+			return err
+		}
+		if updated {
+			klog.InfoS("Terraform apply job is updated", "Name", applyJobName)
+			return nil
+		}
+
 		if gotJob.Status.Succeeded == *pointer.Int32Ptr(1) {
 			outputs, err := getTFOutputs(ctx, k8sClient, configuration)
 			if err != nil {
@@ -192,7 +203,7 @@ func terraformApply(ctx context.Context, k8sClient client.Client, namespace stri
 			return err
 		}
 
-		if err := assembleAndTriggerJob(ctx, k8sClient, configuration.Name, &configuration, tfInputConfigMapName, namespace, providerName, TerraformApply); err != nil {
+		if err := assembleAndTriggerJob(ctx, k8sClient, configuration.Name, &configuration, tfInputConfigMapName, namespace, r.ProviderName, TerraformApply); err != nil {
 			return err
 		}
 		return nil
@@ -208,16 +219,27 @@ func terraformApply(ctx context.Context, k8sClient client.Client, namespace stri
 	return err
 }
 
-func terraformDestroy(ctx context.Context, k8sClient client.Client, namespace string, configuration v1beta1.Configuration, destroyJobName, tfInputConfigMapsName, applyJobName, providerName string) error {
+func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, namespace string, configuration v1beta1.Configuration, destroyJobName, tfInputConfigMapsName, applyJobName string) error {
 	var destroyJob batchv1.Job
-
+	k8sClient := r.Client
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: destroyJobName, Namespace: controllerNamespace}, &destroyJob); err != nil {
 		if kerrors.IsNotFound(err) {
-			if err = assembleAndTriggerJob(ctx, k8sClient, configuration.Name, &configuration, tfInputConfigMapsName, namespace, providerName, TerraformDestroy); err != nil {
+			if err = assembleAndTriggerJob(ctx, k8sClient, configuration.Name, &configuration, tfInputConfigMapsName, namespace, r.ProviderName, TerraformDestroy); err != nil {
 				return err
 			}
 		}
 	}
+
+	updated, err := r.updateTerraformJobIfNeeded(ctx, namespace, configuration, destroyJob)
+	if err != nil {
+		klog.ErrorS(err, "Hit an issue to update Terraform delete job", "Name", destroyJobName)
+		return err
+	}
+	if updated {
+		klog.InfoS("Terraform delete job is updated", "Name", destroyJobName)
+		return nil
+	}
+
 	// When the deletion Job process succeeded, clean up work is starting.
 	if destroyJob.Status.Succeeded == *pointer.Int32Ptr(1) {
 		// 1. delete Terraform input Configuration ConfigMap
@@ -255,11 +277,24 @@ func assembleAndTriggerJob(ctx context.Context, k8sClient client.Client, name st
 	}
 
 	job := assembleTerraformJob(name, jobName, configuration, tfInputConfigMapsName, envs, executionType)
+	return k8sClient.Create(ctx, job)
+}
 
-	if err := k8sClient.Create(ctx, job); err != nil {
-		return err
+// updateTerraformJob will set deletion finalizer to the Terraform job if its envs are changed, which will result in
+// deleting the job. Finally a new Terraform job will be generated
+func (r *ConfigurationReconciler) updateTerraformJobIfNeeded(ctx context.Context, namespace string, configuration v1beta1.Configuration, job batchv1.Job) (bool, error) {
+	envs, err := prepareTFVariables(ctx, r.Client, &configuration, r.ProviderName, namespace)
+	if err != nil {
+		return false, err
 	}
-	return nil
+
+	if len(job.Spec.Template.Spec.Containers) == 1 && !util.CompareTwoContainerEnvs(job.Spec.Template.Spec.Containers[0].Env, envs) {
+		if err := r.Client.Delete(ctx, &job, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+	return false, nil
 }
 
 func assembleTerraformJob(name, jobName string, configuration *v1beta1.Configuration, tfInputConfigMapsName string,
@@ -309,7 +344,7 @@ func assembleTerraformJob(name, jobName string, configuration *v1beta1.Configura
 					// state file directory in advance
 					InitContainers: []v1.Container{{
 						Name:            "prepare-input-terraform-configurations",
-						Image:           "busybox",
+						Image:           terraformInitContainerImg,
 						ImagePullPolicy: v1.PullAlways,
 						Command: []string{
 							"sh",
@@ -322,13 +357,12 @@ func assembleTerraformJob(name, jobName string, configuration *v1beta1.Configura
 					// then run terraform init/apply.
 					Containers: []v1.Container{{
 						Name:            "terraform-executor",
-						Image:           TerraformImage,
+						Image:           terraformImage,
 						ImagePullPolicy: v1.PullAlways,
 						Command: []string{
 							"bash",
 							"-c",
-							fmt.Sprintf("cp -r /root/terraform.d %s && terraform init &&"+
-								" terraform %s -auto-approve", WorkingVolumeMountPath, executionType),
+							fmt.Sprintf("terraform init && terraform %s -auto-approve", executionType),
 						},
 						VolumeMounts: []v1.VolumeMount{
 							{
