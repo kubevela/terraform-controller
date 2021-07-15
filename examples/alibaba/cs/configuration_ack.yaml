@@ -1,7 +1,7 @@
 apiVersion: terraform.core.oam.dev/v1beta1
 kind: Configuration
 metadata:
-  name: alibaba-cs-ack-9
+  name: alibaba-cs-ack
 spec:
   hcl: |
     module "kubernetes" {
