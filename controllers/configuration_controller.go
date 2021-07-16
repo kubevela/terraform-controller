@@ -301,7 +301,6 @@ func assembleTerraformJob(name, jobName string, configuration *v1beta1.Configura
 	envs []v1.EnvVar, executionType TerraformExecutionType) *batchv1.Job {
 	var parallelism int32 = 1
 	var completions int32 = 1
-	var ttlSecondsAfterFinished int32 = 0
 
 	initContainerVolumeMounts := []v1.VolumeMount{
 		{
@@ -334,8 +333,6 @@ func assembleTerraformJob(name, jobName string, configuration *v1beta1.Configura
 			}},
 		},
 		Spec: batchv1.JobSpec{
-			// TODO(zzxwill) Not enabled in Kubernetes cluster lower than v1.21
-			TTLSecondsAfterFinished: &ttlSecondsAfterFinished,
 			Parallelism:             &parallelism,
 			Completions:             &completions,
 			Template: v1.PodTemplateSpec{
@@ -345,7 +342,7 @@ func assembleTerraformJob(name, jobName string, configuration *v1beta1.Configura
 					InitContainers: []v1.Container{{
 						Name:            "prepare-input-terraform-configurations",
 						Image:           terraformInitContainerImg,
-						ImagePullPolicy: v1.PullAlways,
+						ImagePullPolicy: v1.PullIfNotPresent,
 						Command: []string{
 							"sh",
 							"-c",
@@ -358,7 +355,7 @@ func assembleTerraformJob(name, jobName string, configuration *v1beta1.Configura
 					Containers: []v1.Container{{
 						Name:            "terraform-executor",
 						Image:           terraformImage,
-						ImagePullPolicy: v1.PullAlways,
+						ImagePullPolicy: v1.PullIfNotPresent,
 						Command: []string{
 							"bash",
 							"-c",
