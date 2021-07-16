@@ -342,7 +342,7 @@ func assembleTerraformJob(name, jobName string, configuration *v1beta1.Configura
 					InitContainers: []v1.Container{{
 						Name:            "prepare-input-terraform-configurations",
 						Image:           terraformInitContainerImg,
-						ImagePullPolicy: v1.PullAlways,
+						ImagePullPolicy: v1.PullIfNotPresent,
 						Command: []string{
 							"sh",
 							"-c",
@@ -355,7 +355,7 @@ func assembleTerraformJob(name, jobName string, configuration *v1beta1.Configura
 					Containers: []v1.Container{{
 						Name:            "terraform-executor",
 						Image:           terraformImage,
-						ImagePullPolicy: v1.PullAlways,
+						ImagePullPolicy: v1.PullIfNotPresent,
 						Command: []string{
 							"bash",
 							"-c",
