@@ -362,7 +362,7 @@ func assembleTerraformJob(name, jobName string, configuration *v1beta1.Configura
 						Command: []string{
 							"bash",
 							"-c",
-							fmt.Sprintf("terraform init && terraform %s -auto-approve", executionType),
+							fmt.Sprintf("terraform init && terraform %s -lock=false -auto-approve", executionType),
 						},
 						VolumeMounts: []v1.VolumeMount{
 							{
@@ -571,6 +571,6 @@ func prepareTFInputConfigurationData(configurationType util.ConfigurationType, i
 	case util.ConfigurationHCL:
 		dataName = TerraformHCLConfigurationName
 	}
-	data := map[string]string{dataName: inputConfiguration}
+	data := map[string]string{dataName: inputConfiguration, "kubeconfig": ""}
 	return data
 }
