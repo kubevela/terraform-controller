@@ -1,9 +1,7 @@
 replicaCount: 1
 
-version: 0.1.12
+version: 0.1.13
 
 image:
-  name: oamdev/terraform-controller:latest
+  name: oamdev/terraform-controller:0.1.13
   imagePullPolicy: Always
-
-credentialsNamespace: vela-system

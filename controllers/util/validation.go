@@ -48,7 +48,7 @@ func ValidConfiguration(configuration *v1beta1.Configuration, controllerNamespac
 }
 
 // CompareTwoContainerEnvs compares two slices of v1.EnvVar
-func CompareTwoContainerEnvs(s1 []v1.EnvVar, s2 []v1.EnvVar) bool{
+func CompareTwoContainerEnvs(s1 []v1.EnvVar, s2 []v1.EnvVar) bool {
 	less := func(env1 v1.EnvVar, env2 v1.EnvVar) bool {
 		return env1.Name < env2.Name
 	}

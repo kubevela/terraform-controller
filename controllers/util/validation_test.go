@@ -5,7 +5,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	v1 "k8s.io/api/core/v1"
-
 )
 
 func TestCompareTwoContainerEnvs(t *testing.T) {
