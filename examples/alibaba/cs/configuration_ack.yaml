@@ -88,7 +88,7 @@ spec:
     variable "k8s_name_prefix" {
       description = "The name prefix used to create several kubernetes clusters. Default to variable `example_name`"
       type = string
-      default = "poc1023"
+      default = "poc"
     }
 
     variable "new_nat_gateway" {
@@ -211,6 +211,24 @@ spec:
     output "kubeconfig" {
       value = module.kubernetes.kubeconfig
     }
+
+    output "cluster_ca_cert" {
+      value = module.kubernetes.cluster_ca_cert
+    }
+
+    output "client_cert" {
+      value = module.kubernetes.client_cert
+    }
+
+    output "client_key" {
+      value = module.kubernetes.client_key
+    }
+
+    output "api_server_internet" {
+      value = module.kubernetes.api_server_internet
+    }
+
+
 
 
 

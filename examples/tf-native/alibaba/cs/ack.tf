@@ -1,5 +1,3 @@
-
-
 module "kubernetes" {
   source = "github.com/zzxwill/terraform-alicloud-kubernetes"
 
@@ -206,4 +204,20 @@ output "name" {
 
 output "kubeconfig" {
   value = module.kubernetes.kubeconfig
+}
+
+output "cluster_ca_cert" {
+  value = module.kubernetes.cluster_ca_cert
+}
+
+output "client_cert" {
+  value = module.kubernetes.client_cert
+}
+
+output "client_key" {
+  value = module.kubernetes.client_key
+}
+
+output "api_server_internet" {
+  value = module.kubernetes.api_server_internet
 }
