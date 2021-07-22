@@ -324,13 +324,6 @@ func assembleTerraformJob(name, jobName string, configuration *v1beta1.Configura
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
 			Namespace: controllerNamespace,
-			OwnerReferences: []metav1.OwnerReference{{
-				APIVersion: configuration.APIVersion,
-				Kind:       configuration.Kind,
-				Name:       configuration.Name,
-				UID:        configuration.UID,
-				Controller: pointer.BoolPtr(false),
-			}},
 		},
 		Spec: batchv1.JobSpec{
 			Parallelism:             &parallelism,
