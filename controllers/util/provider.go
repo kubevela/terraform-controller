@@ -38,6 +38,7 @@ const (
 	EnvAWSAccessKeyID     = "AWS_ACCESS_KEY_ID"
 	EnvAWSSecretAccessKey = "AWS_SECRET_ACCESS_KEY"
 	EnvAWSDefaultRegion   = "AWS_DEFAULT_REGION"
+	EnvAWSSessionToken    = "AWS_SESSION_TOKEN"
 
 	EnvGCPCredentialsJSON = "GOOGLE_CREDENTIALS"
 	EnvGCPRegion          = "GOOGLE_REGION"
@@ -64,6 +65,7 @@ type AlibabaCloudCredentials struct {
 type AWSCredentials struct {
 	AWSAccessKeyID     string `yaml:"awsAccessKeyID"`
 	AWSSecretAccessKey string `yaml:"awsSecretAccessKey"`
+	AWSSessionToken    string `yaml:"awsSessionToken"`
 }
 
 type GCPCredentials struct {
@@ -133,6 +135,7 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, namesp
 			return map[string]string{
 				EnvAWSAccessKeyID:     ak.AWSAccessKeyID,
 				EnvAWSSecretAccessKey: ak.AWSSecretAccessKey,
+				EnvAWSSessionToken:    ak.AWSSessionToken,
 				EnvAWSDefaultRegion:   region,
 			}, nil
 		case string(GCP):
