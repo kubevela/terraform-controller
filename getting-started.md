@@ -227,6 +227,12 @@ Bucket Number is: 0
 
 ```shell
 $ export AWS_ACCESS_KEY_ID=xxx;export AWS_SECRET_ACCESS_KEY=yyy
+```
+
+If you'd like to use AWS session token for temporary credentials, please export `AWS_SESSION_TOKEN`.
+```shell
+$ export AWS_SESSION_TOKEN=zzz
+```
 
 $ sh hack/prepare-aws-credentials.sh
 
