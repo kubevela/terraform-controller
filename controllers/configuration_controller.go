@@ -44,7 +44,7 @@ import (
 const (
 	terraformInitContainerImg = "busybox:latest"
 	// TerraformImage is the Terraform image which can run `terraform init/plan/apply`
-	terraformImage     = "oamdev/docker-terraform:1.0.3-beta.1"
+	terraformImage     = "oamdev/docker-terraform:1.0.4"
 	TerraformWorkspace = "default"
 )
 
@@ -326,8 +326,8 @@ func assembleTerraformJob(name, jobName string, configuration *v1beta1.Configura
 			Namespace: controllerNamespace,
 		},
 		Spec: batchv1.JobSpec{
-			Parallelism:             &parallelism,
-			Completions:             &completions,
+			Parallelism: &parallelism,
+			Completions: &completions,
 			Template: v1.PodTemplateSpec{
 				Spec: v1.PodSpec{
 					// InitContainer will copy Terraform configuration files to working directory and create Terraform
