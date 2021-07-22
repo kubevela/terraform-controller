@@ -44,7 +44,7 @@ import (
 const (
 	terraformInitContainerImg = "busybox:latest"
 	// TerraformImage is the Terraform image which can run `terraform init/plan/apply`
-	terraformImage     = "oamdev/docker-terraform:1.0.3-beta.1"
+	terraformImage     = "oamdev/docker-terraform:1.0.4"
 	TerraformWorkspace = "default"
 )
 
