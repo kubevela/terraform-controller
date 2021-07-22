@@ -100,8 +100,6 @@ variable "master_instance_types" {
     # hongkong
     "ecs.c6.xlarge",
     # hongkong
-    "ecs.c4.xlarge",
-    # hongkong
     "ecs.c5.xlarge",
     "ecs.n4.xlarge",
     # "ecs.n1.large",
@@ -119,8 +117,6 @@ variable "worker_instance_types" {
     "ecs.sn1ne.xlarge",
     # hongkong
     "ecs.c6.xlarge",
-    # hongkong
-    "ecs.c4.xlarge",
     # hongkong
     "ecs.c6e.xlarge",
     "ecs.n4.xlarge",
