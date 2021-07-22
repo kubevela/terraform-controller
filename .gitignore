@@ -26,5 +26,6 @@ terraform.tfstate.backup
 .terraform
 .terraform.lock.hcl
 terraform-controller-*
+examples/tf-native/alibaba/cs/kubeconfig
 
 bin/manager
