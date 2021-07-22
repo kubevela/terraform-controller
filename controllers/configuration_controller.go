@@ -326,8 +326,8 @@ func assembleTerraformJob(name, jobName string, configuration *v1beta1.Configura
 			Namespace: controllerNamespace,
 		},
 		Spec: batchv1.JobSpec{
-			Parallelism:             &parallelism,
-			Completions:             &completions,
+			Parallelism: &parallelism,
+			Completions: &completions,
 			Template: v1.PodTemplateSpec{
 				Spec: v1.PodSpec{
 					// InitContainer will copy Terraform configuration files to working directory and create Terraform
