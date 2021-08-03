@@ -242,9 +242,17 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, namespac
 
 	// When the deletion Job process succeeded, clean up work is starting.
 	if destroyJob.Status.Succeeded == *pointer.Int32Ptr(1) {
-		// 1. delete Terraform input Configuration ConfigMap
+		// 1. delete Terraform input Configuration ConfigMap and ConnectionSecret
 		if err := deleteConfigMap(ctx, k8sClient, tfInputConfigMapsName); err != nil {
 			return err
+		}
+
+		if configuration.Spec.WriteConnectionSecretToReference != nil {
+			secretName := configuration.Spec.WriteConnectionSecretToReference.Name
+			secretNameSpace := configuration.Spec.WriteConnectionSecretToReference.Namespace
+			if err = deleteConnectionSecret(ctx, k8sClient, secretName, secretNameSpace); err != nil {
+				return err
+			}
 		}
 
 		// 2. we don't manually delete Terraform state file Secret, as Terraform Kubernetes backend tends to keep the secret
@@ -447,13 +455,6 @@ func getTFOutputs(ctx context.Context, k8sClient client.Client, configuration v1
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      name,
 					Namespace: ns,
-					OwnerReferences: []metav1.OwnerReference{{
-						APIVersion: configuration.APIVersion,
-						Kind:       configuration.Kind,
-						Name:       configuration.Name,
-						UID:        configuration.UID,
-						Controller: pointer.BoolPtr(false),
-					}},
 				},
 				TypeMeta: metav1.TypeMeta{Kind: "Secret"},
 				Data:     data,
@@ -527,6 +528,21 @@ func deleteConfigMap(ctx context.Context, k8sClient client.Client, name string) 
 		if err := k8sClient.Delete(ctx, &cm); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func deleteConnectionSecret(ctx context.Context, k8sClient client.Client, name, ns string) error {
+	if len(name) == 0 {
+		return nil
+	}
+
+	var connectionSecret v1.Secret
+	if len(ns) == 0 {
+		ns = "default"
+	}
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: name, Namespace: ns}, &connectionSecret); err == nil {
+		return k8sClient.Delete(ctx, &connectionSecret)
 	}
 	return nil
 }
