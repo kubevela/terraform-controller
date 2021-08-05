@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels: 
+    run: terraform-controller
+  name: terraform-controller
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      run: terraform-controller
+  template:
+    metadata:
+      labels:
+        app: terraform-controller
+        app.kubernetes.io/name: {{ .Release.Name }}
+        app.kubernetes.io/version: {{ .Values.version }}
+        app.kubernetes.io/part-of: kubevela
+        app.kubernetes.io/managed-by: helm
+    spec:
+      serviceAccountName: terraform-controller
+      containers:
+        - name: terraform-controller
+          image: {{ .Values.image.repository}}:{{ default .Chart.AppVersion .Values.image.tag }}
+          command: ["terraform-controller"]
+          env:
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace

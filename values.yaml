@@ -1,0 +1,10 @@
+#terraform-controller helm chart values
+replicaCount: 1
+
+version: 0.1.14
+
+image:
+  name: oamdev/terraform-controller
+  pullPolicy: Always
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: ""
