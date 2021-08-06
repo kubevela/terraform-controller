@@ -27,6 +27,7 @@ const (
 	GCP     CloudProvider = "gcp"
 	Azure   CloudProvider = "azure"
 	VSphere CloudProvider = "vsphere"
+	EC      CloudProvider = "ec"
 )
 
 const (
@@ -54,6 +55,8 @@ const (
 	EnvVSphereServer             = "VSPHERE_SERVER"
 	EnvVSphereAllowUnverifiedSSL = "VSPHERE_ALLOW_UNVERIFIED_SSL"
 	errConvertCredentials        = "failed to convert the credentials of Secret from Provider"
+
+	EnvECApiKey = "EC_API_KEY"
 )
 
 type AlibabaCloudCredentials struct {
@@ -85,6 +88,10 @@ type VSphereCredentials struct {
 	VSpherePassword           string `yaml:"vSpherePassword"`
 	VSphereServer             string `yaml:"vSphereServer"`
 	VSphereAllowUnverifiedSSL string `yaml:"vSphereAllowUnverifiedSSL,omitempty"`
+}
+
+type ECCredentials struct {
+	ECApiKey string `yaml:"ecApiKey"`
 }
 
 func GetProviderCredentials(ctx context.Context, k8sClient client.Client, namespace, providerName string) (map[string]string, error) {
@@ -172,6 +179,15 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, namesp
 				EnvVSpherePassword:           cred.VSpherePassword,
 				EnvVSphereServer:             cred.VSphereServer,
 				EnvVSphereAllowUnverifiedSSL: cred.VSphereAllowUnverifiedSSL,
+			}, nil
+		case string(EC):
+			var ak ECCredentials
+			if err := yaml.Unmarshal(secret.Data[secretRef.Key], &ak); err != nil {
+				klog.ErrorS(err, errConvertCredentials, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
+				return nil, errors.Wrap(err, errConvertCredentials)
+			}
+			return map[string]string{
+				EnvECApiKey: ak.ECApiKey,
 			}, nil
 		}
 	default:

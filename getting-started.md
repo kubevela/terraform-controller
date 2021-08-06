@@ -491,3 +491,100 @@ $ kubectl get secret folder-outputs
 NAME         TYPE     DATA   AGE
 vm-outputs   Opaque   1      18m
 ```
+
+# For EC
+
+### Apply Provider configuration
+
+```shell
+$ export EC_API_KEY=xxx
+
+$ sh hack/prepare-ec-credentials.sh
+
+$ kubectl get secret -n vela-system
+NAME                                              TYPE                                  DATA   AGE
+ec-account-creds                                 Opaque                                1      52s
+
+$ k apply -f examples/ec/provider.yaml
+provider.terraform.core.oam.dev/ec created
+```
+
+### Apply Terraform Configuration
+
+Apply Terraform configuration [configuration_hcl_ecproject.yaml](./examples/ec/configuration_hcl_ecdeployment.yaml) to provision a Elastic Cloud project.
+```yaml
+apiVersion: terraform.core.oam.dev/v1beta1
+kind: Configuration
+metadata:
+  name: ec-deployment
+spec:
+  hcl: |
+    data "ec_stack" "latest" {
+      version_regex = "latest"
+      region        = var.ec_region
+    }
+
+    resource "ec_deployment" "project" {
+      name = var.project_name
+
+      region                 = var.region
+      version                 = data.ec_stack.latest.version
+      deployment_template_id = "gcp-io-optimized"
+
+      elasticsearch {
+        autosccale = "true"
+      }
+
+      kibana {}
+    }
+
+    output "ES_HTTPS_ENDPOINT" {
+      value = ec_deployment.project.elasticsearch[0].https_endpoint
+    }
+
+    output "ES_PASSWORD" {
+      value = ec_deployment.project.elasticsearch[0].password
+      sensitive = true
+    }
+
+    variable "ec_region" {
+      default = "gcp-us-west1"
+    }
+
+    variable "project_name" {
+      default = "example"
+    }
+  variable:
+    project_name: "es-project-1"
+
+  writeConnectionSecretToRef:
+    name: es-connection
+    namespace: default
+```
+
+```shell
+$ kubectl get configuration.terraform.core.oam.dev
+NAME           AGE
+ec-deployment  6m48s
+
+$ kubectl describe configuration.terraform.core.oam.dev ec-deployment
+apiVersion: terraform.core.oam.dev/v1beta1
+kind: Configuration
+...
+  Write Connection Secret To Ref:
+    Name:       es-connection
+    Namespace:  default
+Status:
+  Outputs:
+    ES_HTTPS_ENDPOINT:
+      Type:   string
+      Value:  https://example1234.us-west1.gcp.cloud.es.io:9243
+    ES_PASSWORD:
+      Type:   string
+      Value: <sensitive>
+  State:      provisioned
+
+$ kubectl get secret es-connection
+NAME            TYPE     DATA   AGE
+es-connection   Opaque   1      7m37s
+```
