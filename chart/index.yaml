@@ -2,12 +2,12 @@ apiVersion: v1
 entries:
   terraform-controller-chart:
   - apiVersion: v1
-    created: "2021-08-08T20:52:22.872564047+05:30"
+    created: "2021-08-08T20:30:27.407081199+05:30"
     description: A Kubernetes Terraform controller
-    digest: c45a1d998197a729d783a1a124962c181b57d5c8167479cf42a1356b8520fe83
+    digest: e6f2d4ec29fc719833527001fe32a521cb029c1171726ad10358052dd742509c
     home: https://github.com/oam-dev/terraform-controller
     name: terraform-controller-chart
     urls:
-    - https://b-shj.github.io/terraform-controller/terraform-controller/terraform-controller-chart-0.1.14.tgz
+    - https://b-shj.github.io/terraform-controller/terraform-controller-chart-0.1.14.tgz
     version: 0.1.14
-generated: "2021-08-08T20:52:22.871183586+05:30"
+generated: "2021-08-08T20:30:27.405848974+05:30"
