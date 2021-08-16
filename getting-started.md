@@ -496,6 +496,7 @@ vm-outputs   Opaque   1      18m
 
 ### Apply Provider configuration
 
+To interact with the EC Terraform provider an API key is expected. Please see Elastic Cloud documentation for [generating API keys](https://www.elastic.co/guide/en/cloud-enterprise/current/ece-restful-api-authentication.html).
 ```shell
 $ export EC_API_KEY=xxx
 
