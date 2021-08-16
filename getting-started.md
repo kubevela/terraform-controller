@@ -492,7 +492,7 @@ NAME         TYPE     DATA   AGE
 vm-outputs   Opaque   1      18m
 ```
 
-# For EC
+# For Elastic Cloud
 
 ### Apply Provider configuration
 
