@@ -506,7 +506,7 @@ $ kubectl get secret -n vela-system
 NAME                                              TYPE                                  DATA   AGE
 ec-account-creds                                 Opaque                                1      52s
 
-$ k apply -f examples/ec/provider.yaml
+$ kubectl apply -f examples/ec/provider.yaml
 provider.terraform.core.oam.dev/ec created
 ```
 
