@@ -1,3 +1,12 @@
+terraform {
+  required_providers {
+    ec = {
+      source  = "elastic/ec"
+      version = "0.2.1"
+    }
+  }
+}
+
 data "ec_stack" "latest" {
   version_regex = "latest"
   region        = var.ec_region
@@ -6,12 +15,12 @@ data "ec_stack" "latest" {
 resource "ec_deployment" "project" {
   name = var.project_name
 
-  region                 = var.region
+  region                 = var.ec_region
   version                 = data.ec_stack.latest.version
   deployment_template_id = "gcp-io-optimized"
 
   elasticsearch {
-    autosccale = "true"
+    autoscale = "true"
   }
 
   kibana {}
@@ -22,7 +31,7 @@ output "ES_HTTPS_ENDPOINT" {
 }
 
 output "ES_PASSWORD" {
-  value = ec_deployment.project.elasticsearch[0].password
+  value = ec_deployment.project.elasticsearch_password
   sensitive = true
 }
 

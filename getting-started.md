@@ -496,7 +496,7 @@ vm-outputs   Opaque   1      18m
 
 ### Apply Provider configuration
 
-To interact with the EC Terraform provider an API key is expected. Please see Elastic Cloud documentation for [generating API keys](https://www.elastic.co/guide/en/cloud-enterprise/current/ece-restful-api-authentication.html).
+To interact with the EC Terraform provider an API key is expected. Please see Terraform EC provider documentation for [generating API keys](https://registry.terraform.io/providers/elastic/ec/latest/docs).
 ```shell
 $ export EC_API_KEY=xxx
 
@@ -520,6 +520,13 @@ metadata:
   name: ec-deployment
 spec:
   hcl: |
+    required_providers {
+      ec = {
+        source  = "elastic/ec"
+        version = "0.2.1"
+      }
+    }
+
     data "ec_stack" "latest" {
       version_regex = "latest"
       region        = var.ec_region
@@ -528,12 +535,12 @@ spec:
     resource "ec_deployment" "project" {
       name = var.project_name
 
-      region                 = var.region
-      version                 = data.ec_stack.latest.version
+      region                 = var.ec_region
+      version                = data.ec_stack.latest.version
       deployment_template_id = "gcp-io-optimized"
 
       elasticsearch {
-        autosccale = "true"
+        autoscale = "true"
       }
 
       kibana {}
@@ -544,7 +551,7 @@ spec:
     }
 
     output "ES_PASSWORD" {
-      value = ec_deployment.project.elasticsearch[0].password
+      value = ec_deployment.project.elasticsearch_password
       sensitive = true
     }
 
@@ -561,6 +568,9 @@ spec:
   writeConnectionSecretToRef:
     name: es-connection
     namespace: default
+
+  providerRef:
+    name: default
 ```
 
 ```shell
