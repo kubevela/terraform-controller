@@ -1,7 +1,7 @@
 apiVersion: terraform.core.oam.dev/v1beta1
 kind: Provider
 metadata:
-  name: ec
+  name: default
 spec:
   provider: ec
   credentials:
