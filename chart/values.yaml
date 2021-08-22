@@ -1,7 +1,7 @@
 replicaCount: 1
 
-version: 0.1.14
+version: 0.1.17
 
 image:
-  name: oamdev/terraform-controller:0.1.14
+  name: oamdev/terraform-controller:0.1.17
   imagePullPolicy: Always
