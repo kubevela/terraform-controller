@@ -10,8 +10,9 @@ Refer to [Helm official Doc](https://helm.sh/docs/intro/install/) to install `he
 
 Download the latest chart, like `terraform-controller-0.1.8.tgz`, from the latest [releases](https://github.com/oam-dev/terraform-controller/releases) and install it.
 
+
 ```shell
-$ helm install -n tf-controller terraform-controller terraform-controller-0.1.8.tgz
+$ helm install terraform-controller terraform-controller-0.1.8.tgz
 NAME: terraform-controller
 LAST DEPLOYED: Mon Apr 26 15:55:35 2021
 NAMESPACE: default
@@ -234,13 +235,21 @@ If you'd like to use AWS session token for temporary credentials, please export 
 $ export AWS_SESSION_TOKEN=zzz
 ```
 
+Create a namespace named `vela-system` if doesn't exist
+```shell
+$ kubectl create ns vela-system
+```
+
 $ sh hack/prepare-aws-credentials.sh
 
 $ kubectl get secret -n vela-system
+```shell
 NAME                                              TYPE                                  DATA   AGE
 aws-account-creds                                 Opaque                                1      52s
+```
 
 $ kubectl apply -f examples/aws/provider.yaml
+```shell
 provider.terraform.core.oam.dev/default created
 ```
 
@@ -286,7 +295,8 @@ spec:
 $ kubectl get configuration.terraform.core.oam.dev
 NAME     AGE
 aws-s3   6m48s
-
+```
+```shell
 $ kubectl describe configuration.terraform.core.oam.dev aws-s3
 apiVersion: terraform.core.oam.dev/v1beta1
 kind: Configuration
@@ -300,11 +310,13 @@ Status:
       Type:   string
       Value:  vela-website.s3.amazonaws.com
   State:      provisioned
-
+```
+```shell
 $ kubectl get secret s3-conn
 NAME      TYPE     DATA   AGE
 s3-conn   Opaque   1      7m37s
-
+```
+```shell
 $ aws s3 ls
 2021-04-12 19:03:32 vela-website
 ```
