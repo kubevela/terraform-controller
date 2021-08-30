@@ -8,13 +8,15 @@ Refer to [Helm official Doc](https://helm.sh/docs/intro/install/) to install `he
 
 - Install Terraform Kubernetes Controller
 
-Download the latest chart, like `terraform-controller-0.1.8.tgz`, from the latest [releases](https://github.com/oam-dev/terraform-controller/releases) and install it.
-
 ```shell
-$ helm install -n tf-controller terraform-controller terraform-controller-0.1.8.tgz
+$ helm repo add kubevela-addons https://charts.kubevela.net/addons
+"kubevela-addons" has been added to your repositories
+
+$ helm upgrade --install terraform-controller -n tf-controller --create-namespace kubevela-addons/terraform-controller
+Release "terraform-controller" does not exist. Installing it now.
 NAME: terraform-controller
-LAST DEPLOYED: Mon Apr 26 15:55:35 2021
-NAMESPACE: default
+LAST DEPLOYED: Mon Aug 30 11:23:47 2021
+NAMESPACE: tf-controller
 STATUS: deployed
 REVISION: 1
 TEST SUITE: None
