@@ -18,11 +18,11 @@ package controllers
 
 import (
 	"context"
-	"k8s.io/klog/v2"
 
 	"github.com/go-logr/logr"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -39,6 +39,7 @@ type ProviderReconciler struct {
 // +kubebuilder:rbac:groups=terraform.core.oam.dev,resources=providers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=terraform.core.oam.dev,resources=providers/status,verbs=get;update;patch
 
+// Reconcile will reconcile periodically
 func (r *ProviderReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	klog.InfoS("reconciling Terraform Provider...", "NamespacedName", req.NamespacedName)
 	var ctx = context.Background()
@@ -55,6 +56,7 @@ func (r *ProviderReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	return ctrl.Result{}, nil
 }
 
+// SetupWithManager setups with a manager
 func (r *ProviderReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&terraformv1beta1.Provider{}).
