@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"time"
 
@@ -430,6 +431,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 		initContainers []v1.Container
 		parallelism    int32 = 1
 		completions    int32 = 1
+		backoffLimit   int32 = math.MaxInt32
 	)
 
 	executorVolumes := meta.assembleExecutorVolumes()
@@ -487,8 +489,9 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 			Namespace: controllerNamespace,
 		},
 		Spec: batchv1.JobSpec{
-			Parallelism: &parallelism,
-			Completions: &completions,
+			Parallelism:  &parallelism,
+			Completions:  &completions,
+			BackoffLimit: &backoffLimit,
 			Template: v1.PodTemplateSpec{
 				Spec: v1.PodSpec{
 					// InitContainer will copy Terraform configuration files to working directory and create Terraform
