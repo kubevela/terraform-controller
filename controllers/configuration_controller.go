@@ -161,71 +161,49 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	return ctrl.Result{}, nil
 }
 
-//nolint:funlen
 func (r *ConfigurationReconciler) terraformApply(ctx context.Context, namespace string, configuration v1beta1.Configuration, applyJobName, tfInputConfigMapName string) error {
 	klog.InfoS("terraform apply job", "Namespace", namespace, "Name", applyJobName)
 
-	k8sClient := r.Client
-	var gotJob batchv1.Job
-	err := k8sClient.Get(ctx, client.ObjectKey{Name: applyJobName, Namespace: controllerNamespace}, &gotJob)
-	if err == nil {
-		updated, err := r.updateTerraformJobIfNeeded(ctx, namespace, configuration, gotJob)
-		if err != nil {
-			klog.ErrorS(err, "Hit an issue to update Terraform apply job", "Name", applyJobName)
-			return err
-		}
-		if updated {
-			klog.InfoS("Terraform apply job is updated", "Name", applyJobName)
-			return nil
-		}
+	var (
+		k8sClient = r.Client
+		gotJob    batchv1.Job
+	)
 
-		if gotJob.Status.Succeeded == *pointer.Int32Ptr(1) {
-			outputs, err := getTFOutputs(ctx, k8sClient, configuration)
-			if err != nil {
-				return err
-			}
-			if configuration.Status.State != state.Available {
-				configuration.Status.State = state.Available
-				configuration.Status.Message = "Cloud resources are deployed and ready to use."
-				configuration.Status.Outputs = outputs
+	// extract configuration(hcl/json)
+	configurationType, inputConfiguration, err := util.ValidConfiguration(&configuration, controllerNamespace)
+	if err != nil {
+		return err
+	}
+
+	// store configuration to ConfigMap
+	if err := storeTFConfiguration(ctx, k8sClient, configurationType, inputConfiguration, tfInputConfigMapName); err != nil {
+		return err
+	}
+
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: applyJobName, Namespace: controllerNamespace}, &gotJob); err != nil {
+		if kerrors.IsNotFound(err) {
+			if configuration.Status.State != state.Provisioning {
+				configuration.Status.State = state.Provisioning
+				configuration.Status.Message = "Cloud resources are being provisioned."
 				if err := k8sClient.Status().Update(ctx, &configuration); err != nil {
 					return err
 				}
 			}
-			return nil
-		}
-		return errors.New(MessageApplyJobNotCompleted)
-	}
-
-	if kerrors.IsNotFound(err) {
-		if configuration.Status.State != state.Provisioning {
-			configuration.Status.State = state.Provisioning
-			configuration.Status.Message = "Cloud resources are being provisioned."
-			if err := k8sClient.Status().Update(ctx, &configuration); err != nil {
-				return err
-			}
-		}
-
-		configurationType, inputConfiguration, err := util.ValidConfiguration(&configuration, controllerNamespace)
-		if err != nil {
-			return err
-		}
-		data := prepareTFInputConfigurationData(configurationType, inputConfiguration)
-		if err := createOrUpdateConfigMap(ctx, k8sClient, tfInputConfigMapName, data); err != nil {
-			return err
-		}
-
-		return assembleAndTriggerJob(ctx, k8sClient, configuration.Name, &configuration, tfInputConfigMapName, namespace, r.ProviderName, TerraformApply)
-	}
-
-	if configuration.Status.State != state.Unavailable {
-		configuration.Status.State = state.Unavailable
-		configuration.Status.Message = fmt.Sprintf("The state of cloud resources is unavailable due to %s", err)
-		if err := k8sClient.Status().Update(ctx, &configuration); err != nil {
-			return err
+			return assembleAndTriggerJob(ctx, k8sClient, configuration.Name, &configuration, tfInputConfigMapName, namespace, r.ProviderName, TerraformApply)
 		}
 	}
-	return err
+
+	updated, err := r.updateTerraformJobIfNeeded(ctx, namespace, configuration, gotJob, tfInputConfigMapName, configurationType)
+	if err != nil {
+		klog.ErrorS(err, "Hit an issue to update Terraform apply job", "Name", applyJobName)
+		return err
+	}
+	if updated {
+		klog.InfoS("Terraform apply job's spec is updated, recreating...", "Name", applyJobName)
+		return nil
+	}
+
+	return updateConfigurationStatus(ctx, k8sClient, configuration, gotJob)
 }
 
 func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, namespace string, configuration v1beta1.Configuration, destroyJobName, tfInputConfigMapsName, applyJobName string) error {
@@ -239,7 +217,11 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, namespac
 		}
 	}
 
-	updated, err := r.updateTerraformJobIfNeeded(ctx, namespace, configuration, destroyJob)
+	configurationType, _, err := util.ValidConfiguration(&configuration, controllerNamespace)
+	if err != nil {
+		return err
+	}
+	updated, err := r.updateTerraformJobIfNeeded(ctx, namespace, configuration, destroyJob, tfInputConfigMapsName, configurationType)
 	if err != nil {
 		klog.ErrorS(err, "Hit an issue to update Terraform delete job", "Name", destroyJobName)
 		return err
@@ -295,18 +277,49 @@ func assembleAndTriggerJob(ctx context.Context, k8sClient client.Client, name st
 
 // updateTerraformJob will set deletion finalizer to the Terraform job if its envs are changed, which will result in
 // deleting the job. Finally a new Terraform job will be generated
-func (r *ConfigurationReconciler) updateTerraformJobIfNeeded(ctx context.Context, namespace string, configuration v1beta1.Configuration, job batchv1.Job) (bool, error) {
+func (r *ConfigurationReconciler) updateTerraformJobIfNeeded(ctx context.Context, namespace string,
+	configuration v1beta1.Configuration, job batchv1.Job, tfInputConfigMapName string, configurationType util.ConfigurationType) (bool, error) {
+
 	envs, err := prepareTFVariables(ctx, r.Client, &configuration, r.ProviderName, namespace)
 	if err != nil {
 		return false, err
 	}
 
+	// check whether env changes
+	var envChanged bool
 	if len(job.Spec.Template.Spec.Containers) == 1 && !util.CompareTwoContainerEnvs(job.Spec.Template.Spec.Containers[0].Env, envs) {
+		envChanged = true
+		klog.InfoS("Job's env changed", "Previous", envs, "Current", job.Spec.Template.Spec.Containers[0].Env)
+	}
+
+	// check whether hcl/json changes
+	var cm v1.ConfigMap
+	if err := r.Client.Get(ctx, client.ObjectKey{Name: tfInputConfigMapName, Namespace: namespace}, &cm); err != nil {
+		if kerrors.IsNotFound(err) {
+			return true, nil
+		}
+	}
+
+	var configurationChanged bool
+	switch configurationType {
+	case util.ConfigurationHCL:
+		configurationChanged = cm.Data[string(configurationType)] == configuration.Spec.HCL
+	case util.ConfigurationJSON:
+		configurationChanged = cm.Data[string(configurationType)] == configuration.Spec.JSON
+	}
+
+	if configurationChanged {
+		klog.InfoS("configuration(hcl/json) changed")
+	}
+
+	// if either one changes, delete the job
+	if envChanged || configurationChanged {
 		if err := r.Client.Delete(ctx, &job, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
 			return false, err
 		}
 		return true, nil
 	}
+
 	return false, nil
 }
 
@@ -584,4 +597,41 @@ func prepareTFInputConfigurationData(configurationType util.ConfigurationType, i
 	}
 	data := map[string]string{dataName: inputConfiguration, "kubeconfig": ""}
 	return data
+}
+
+// storeTFConfiguration will store Terraform configuration to ConfigMap
+func storeTFConfiguration(ctx context.Context, k8sClient client.Client, configurationType util.ConfigurationType, inputConfiguration string, tfInputConfigMapName string, ) error {
+	data := prepareTFInputConfigurationData(configurationType, inputConfiguration)
+	if err := createOrUpdateConfigMap(ctx, k8sClient, tfInputConfigMapName, data); err != nil {
+		return err
+	}
+	return nil
+}
+
+func updateConfigurationStatus(ctx context.Context, k8sClient client.Client, configuration v1beta1.Configuration, tfJob batchv1.Job) error {
+	outputs, err := getTFOutputs(ctx, k8sClient, configuration)
+	if err != nil {
+		return err
+	}
+
+	var statusNeedsUpdate bool
+	switch {
+	case tfJob.Status.Succeeded == *pointer.Int32Ptr(1) && configuration.Status.State != state.Available:
+		configuration.Status.State = state.Available
+		configuration.Status.Message = "Cloud resources are deployed and ready to use."
+		configuration.Status.Outputs = outputs
+		statusNeedsUpdate = true
+	case configuration.Status.State != state.Unavailable:
+		configuration.Status.State = state.Unavailable
+		configuration.Status.Message = fmt.Sprintf("The state of cloud resources is unavailable due to %s", err)
+		statusNeedsUpdate = true
+	}
+
+	if statusNeedsUpdate {
+		if err := k8sClient.Status().Update(ctx, &configuration); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
