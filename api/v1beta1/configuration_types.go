@@ -56,6 +56,7 @@ type ConfigurationStatus struct {
 	Outputs map[string]Property `json:"outputs,omitempty"`
 }
 
+// Property is the property for an output
 type Property struct {
 	Value string `json:"value,omitempty"`
 	Type  string `json:"type,omitempty"`

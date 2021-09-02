@@ -45,26 +45,36 @@ const (
 	terraformInitContainerImg = "busybox:latest"
 	// TerraformImage is the Terraform image which can run `terraform init/plan/apply`
 	terraformImage     = "oamdev/docker-terraform:1.0.4"
-	TerraformWorkspace = "default"
+	terraformWorkspace = "default"
 )
 
 const (
-	WorkingVolumeMountPath              = "/data"
-	InputTFConfigurationVolumeName      = "tf-input-configuration"
+	// WorkingVolumeMountPath is the mount path for working volume
+	WorkingVolumeMountPath = "/data"
+	// InputTFConfigurationVolumeName is the volume name for input Terraform Configuration
+	InputTFConfigurationVolumeName = "tf-input-configuration"
+	// InputTFConfigurationVolumeMountPath is the volume mount path for input Terraform Configuration
 	InputTFConfigurationVolumeMountPath = "/opt/tfconfiguration"
 )
 
 const (
+	// TerraformJSONConfigurationName is the file name for Terraform json Configuration
 	TerraformJSONConfigurationName = "main.tf.json"
-	TerraformHCLConfigurationName  = "main.tf"
-	TerraformStateNameInSecret     = "tfstate"
-	TFInputConfigMapName           = "%s-tf-input"
+	// TerraformHCLConfigurationName is the file name for Terraform hcl Configuration
+	TerraformHCLConfigurationName = "main.tf"
+	// TerraformStateNameInSecret is the key name to store Terraform state
+	TerraformStateNameInSecret = "tfstate"
+	// TFInputConfigMapName is the CM name for Terraform Input Configuration
+	TFInputConfigMapName = "%s-tf-input"
 )
 
+// TerraformExecutionType is the type for Terraform execution
 type TerraformExecutionType string
 
 const (
-	TerraformApply   TerraformExecutionType = "apply"
+	// TerraformApply is the name to mark `terraform apply`
+	TerraformApply TerraformExecutionType = "apply"
+	// TerraformDestroy is the name to mark `terraform destroy`
 	TerraformDestroy TerraformExecutionType = "destroy"
 )
 
@@ -73,8 +83,10 @@ const (
 )
 
 const (
-	MessageDestroyJobNotCompleted = "configuration deletion isn't completed"
-	MessageApplyJobNotCompleted   = "cloud resources are not created completed"
+	// MessageDestroyJobNotCompleted is the message when Configuration deletion isn't completed
+	MessageDestroyJobNotCompleted = "Configuration deletion isn't completed"
+	// MessageApplyJobNotCompleted is the message when cloud resources are not created completed
+	MessageApplyJobNotCompleted = "cloud resources are not created completed"
 )
 
 // ConfigurationReconciler reconciles a Configuration object.
@@ -90,6 +102,7 @@ var controllerNamespace = os.Getenv("CONTROLLER_NAMESPACE")
 // +kubebuilder:rbac:groups=terraform.core.oam.dev,resources=configurations,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=terraform.core.oam.dev,resources=configurations/status,verbs=get;update;patch
 
+// Reconcile will reconcile periodically
 func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	var (
 		configuration         v1beta1.Configuration
@@ -123,9 +136,8 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 			if err := r.terraformDestroy(ctx, req.Namespace, configuration, destroyJobName, tfInputConfigMapsName, applyJobName); err != nil {
 				if err.Error() == MessageDestroyJobNotCompleted {
 					return ctrl.Result{RequeueAfter: 3 * time.Second}, nil
-				} else {
-					return ctrl.Result{RequeueAfter: 3 * time.Second}, errors.Wrap(err, "continue reconciling to destroy cloud resource")
 				}
+				return ctrl.Result{RequeueAfter: 3 * time.Second}, errors.Wrap(err, "continue reconciling to destroy cloud resource")
 			}
 			controllerutil.RemoveFinalizer(&configuration, configurationFinalizer)
 			if err := r.Update(ctx, &configuration); err != nil {
@@ -203,10 +215,7 @@ func (r *ConfigurationReconciler) terraformApply(ctx context.Context, namespace 
 			return err
 		}
 
-		if err := assembleAndTriggerJob(ctx, k8sClient, configuration.Name, &configuration, tfInputConfigMapName, namespace, r.ProviderName, TerraformApply); err != nil {
-			return err
-		}
-		return nil
+		return assembleAndTriggerJob(ctx, k8sClient, configuration.Name, &configuration, tfInputConfigMapName, namespace, r.ProviderName, TerraformApply)
 	}
 
 	if configuration.Status.State != state.Unavailable {
@@ -266,11 +275,7 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, namespac
 		}
 
 		// 4. delete destroy job
-		if err := k8sClient.Delete(ctx, &destroyJob, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
-			return err
-		}
-
-		return nil
+		return k8sClient.Delete(ctx, &destroyJob, client.PropagationPolicy(metav1.DeletePropagationBackground))
 	}
 	return errors.New(MessageDestroyJobNotCompleted)
 }
@@ -284,7 +289,7 @@ func assembleAndTriggerJob(ctx context.Context, k8sClient client.Client, name st
 		return err
 	}
 
-	job := assembleTerraformJob(name, jobName, configuration, tfInputConfigMapsName, envs, executionType)
+	job := assembleTerraformJob(name, jobName, tfInputConfigMapsName, envs, executionType)
 	return k8sClient.Create(ctx, job)
 }
 
@@ -305,8 +310,7 @@ func (r *ConfigurationReconciler) updateTerraformJobIfNeeded(ctx context.Context
 	return false, nil
 }
 
-func assembleTerraformJob(name, jobName string, configuration *v1beta1.Configuration, tfInputConfigMapsName string,
-	envs []v1.EnvVar, executionType TerraformExecutionType) *batchv1.Job {
+func assembleTerraformJob(name, jobName string, tfInputConfigMapsName string, envs []v1.EnvVar, executionType TerraformExecutionType) *batchv1.Job {
 	var parallelism int32 = 1
 	var completions int32 = 1
 
@@ -399,10 +403,12 @@ func createConfigurationVolume(tfInputConfigMapsName string) v1.Volume {
 	return inputTFConfigurationVolume
 }
 
+// TFState is Terraform State
 type TFState struct {
 	Outputs map[string]v1beta1.Property `json:"outputs"`
 }
 
+//nolint:funlen
 func getTFOutputs(ctx context.Context, k8sClient client.Client, configuration v1beta1.Configuration) (map[string]v1beta1.Property, error) {
 	var s = v1.Secret{}
 	// Check the existence of Terraform state secret which is used to store TF state file. For detailed information,
@@ -414,7 +420,7 @@ func getTFOutputs(ctx context.Context, k8sClient client.Client, configuration v1
 		backendSecretSuffix = configuration.Name
 	}
 	// Secrets will be named in the format: tfstate-{workspace}-{secret_suffix}
-	k8sBackendSecretName := fmt.Sprintf("tfstate-%s-%s", TerraformWorkspace, backendSecretSuffix)
+	k8sBackendSecretName := fmt.Sprintf("tfstate-%s-%s", terraformWorkspace, backendSecretSuffix)
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: k8sBackendSecretName, Namespace: controllerNamespace}, &s); err != nil {
 		return nil, errors.Wrap(err, "terraform state file backend secret is not generated")
 	}
@@ -501,8 +507,7 @@ func prepareTFVariables(ctx context.Context, k8sClient client.Client, configurat
 	return envs, nil
 }
 
-type Variable map[string]interface{}
-
+// SetupWithManager setups with a manager
 func (r *ConfigurationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1beta1.Configuration{}).

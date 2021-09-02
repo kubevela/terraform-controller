@@ -9,13 +9,17 @@ import (
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
 )
 
+// ConfigurationType is the type for Terraform Configuration
 type ConfigurationType string
 
 const (
+	// ConfigurationJSON is the json type Configuration
 	ConfigurationJSON ConfigurationType = "JSON"
-	ConfigurationHCL  ConfigurationType = "HCL"
+	// ConfigurationHCL is the HCL type Configuration
+	ConfigurationHCL ConfigurationType = "HCL"
 )
 
+// ValidConfiguration will validate a Configuration
 func ValidConfiguration(configuration *v1beta1.Configuration, controllerNamespace string) (ConfigurationType, string, error) {
 	json := configuration.Spec.JSON
 	hcl := configuration.Spec.HCL

@@ -19,63 +19,68 @@ const (
 	ProviderNamespace = "default"
 )
 
+// CloudProvider is a type for mark a Cloud Provider
 type CloudProvider string
 
 const (
-	Alibaba CloudProvider = "alibaba"
-	AWS     CloudProvider = "aws"
-	GCP     CloudProvider = "gcp"
-	Azure   CloudProvider = "azure"
-	VSphere CloudProvider = "vsphere"
-	EC      CloudProvider = "ec"
+	alibaba CloudProvider = "alibaba"
+	aws     CloudProvider = "aws"
+	gcp     CloudProvider = "gcp"
+	azure   CloudProvider = "azure"
+	vsphere CloudProvider = "vsphere"
+	ec      CloudProvider = "ec"
 )
 
 const (
-	EnvAlicloudAcessKey  = "ALICLOUD_ACCESS_KEY"
-	EnvAlicloudSecretKey = "ALICLOUD_SECRET_KEY"
-	EnvAlicloudRegion    = "ALICLOUD_REGION"
-	EnvAliCloudStsToken  = "ALICLOUD_SECURITY_TOKEN"
+	envAlicloudAcessKey  = "ALICLOUD_ACCESS_KEY"
+	envAlicloudSecretKey = "ALICLOUD_SECRET_KEY"
+	envAlicloudRegion    = "ALICLOUD_REGION"
+	envAliCloudStsToken  = "ALICLOUD_SECURITY_TOKEN"
 
-	EnvAWSAccessKeyID     = "AWS_ACCESS_KEY_ID"
-	EnvAWSSecretAccessKey = "AWS_SECRET_ACCESS_KEY"
-	EnvAWSDefaultRegion   = "AWS_DEFAULT_REGION"
-	EnvAWSSessionToken    = "AWS_SESSION_TOKEN"
+	envAWSAccessKeyID     = "AWS_ACCESS_KEY_ID"
+	envAWSSecretAccessKey = "AWS_SECRET_ACCESS_KEY"
+	envAWSDefaultRegion   = "AWS_DEFAULT_REGION"
+	envAWSSessionToken    = "AWS_SESSION_TOKEN"
 
-	EnvGCPCredentialsJSON = "GOOGLE_CREDENTIALS"
-	EnvGCPRegion          = "GOOGLE_REGION"
-	EnvGCPProject         = "GOOGLE_PROJECT"
+	envGCPCredentialsJSON = "GOOGLE_CREDENTIALS"
+	envGCPRegion          = "GOOGLE_REGION"
+	envGCPProject         = "GOOGLE_PROJECT"
 
-	EnvARMClientID       = "ARM_CLIENT_ID"
-	EnvARMClientSecret   = "ARM_CLIENT_SECRET"
-	EnvARMSubscriptionID = "ARM_SUBSCRIPTION_ID"
-	EnvARMTenantID       = "ARM_TENANT_ID"
+	envARMClientID       = "ARM_CLIENT_ID"
+	envARMClientSecret   = "ARM_CLIENT_SECRET"
+	envARMSubscriptionID = "ARM_SUBSCRIPTION_ID"
+	envARMTenantID       = "ARM_TENANT_ID"
 
-	EnvVSphereUser               = "VSPHERE_USER"
-	EnvVSpherePassword           = "VSPHERE_PASSWORD"
-	EnvVSphereServer             = "VSPHERE_SERVER"
-	EnvVSphereAllowUnverifiedSSL = "VSPHERE_ALLOW_UNVERIFIED_SSL"
+	envVSphereUser               = "VSPHERE_USER"
+	envVSpherePassword           = "VSPHERE_PASSWORD"
+	envVSphereServer             = "VSPHERE_SERVER"
+	envVSphereAllowUnverifiedSSL = "VSPHERE_ALLOW_UNVERIFIED_SSL"
 	errConvertCredentials        = "failed to convert the credentials of Secret from Provider"
 
-	EnvECApiKey = "EC_API_KEY"
+	envECApiKey = "EC_API_KEY"
 )
 
+// AlibabaCloudCredentials are credentials for Alibaba Cloud
 type AlibabaCloudCredentials struct {
 	AccessKeyID     string `yaml:"accessKeyID"`
 	AccessKeySecret string `yaml:"accessKeySecret"`
 	SecurityToken   string `yaml:"securityToken"`
 }
 
+// AWSCredentials are credentials for AWS
 type AWSCredentials struct {
 	AWSAccessKeyID     string `yaml:"awsAccessKeyID"`
 	AWSSecretAccessKey string `yaml:"awsSecretAccessKey"`
 	AWSSessionToken    string `yaml:"awsSessionToken"`
 }
 
+// GCPCredentials are credentials for GCP
 type GCPCredentials struct {
 	GCPCredentialsJSON string `yaml:"gcpCredentialsJSON"`
 	GCPProject         string `yaml:"gcpProject"`
 }
 
+// AzureCredentials are credentials for Azure
 type AzureCredentials struct {
 	ARMClientID       string `yaml:"armClientID"`
 	ARMClientSecret   string `yaml:"armClientSecret"`
@@ -83,6 +88,7 @@ type AzureCredentials struct {
 	ARMTenantID       string `yaml:"armTenantID"`
 }
 
+// VSphereCredentials are credentials for VSphere
 type VSphereCredentials struct {
 	VSphereUser               string `yaml:"vSphereUser"`
 	VSpherePassword           string `yaml:"vSpherePassword"`
@@ -90,10 +96,12 @@ type VSphereCredentials struct {
 	VSphereAllowUnverifiedSSL string `yaml:"vSphereAllowUnverifiedSSL,omitempty"`
 }
 
+// ECCredentials are credentials for Elastic CLoud
 type ECCredentials struct {
 	ECApiKey string `yaml:"ecApiKey"`
 }
 
+// GetProviderCredentials gets provider credentials by cloud provider name
 func GetProviderCredentials(ctx context.Context, k8sClient client.Client, namespace, providerName string) (map[string]string, error) {
 	var provider v1beta1.Provider
 	if providerName != "" {
@@ -121,73 +129,73 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, namesp
 			return nil, errors.Wrap(err, errMsg)
 		}
 		switch provider.Spec.Provider {
-		case string(Alibaba):
+		case string(alibaba):
 			var ak AlibabaCloudCredentials
 			if err := yaml.Unmarshal(secret.Data[secretRef.Key], &ak); err != nil {
 				klog.ErrorS(err, errConvertCredentials, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
 				return nil, errors.Wrap(err, errConvertCredentials)
 			}
 			return map[string]string{
-				EnvAlicloudAcessKey:  ak.AccessKeyID,
-				EnvAlicloudSecretKey: ak.AccessKeySecret,
-				EnvAlicloudRegion:    region,
-				EnvAliCloudStsToken:  ak.SecurityToken,
+				envAlicloudAcessKey:  ak.AccessKeyID,
+				envAlicloudSecretKey: ak.AccessKeySecret,
+				envAlicloudRegion:    region,
+				envAliCloudStsToken:  ak.SecurityToken,
 			}, nil
-		case string(AWS):
+		case string(aws):
 			var ak AWSCredentials
 			if err := yaml.Unmarshal(secret.Data[secretRef.Key], &ak); err != nil {
 				klog.ErrorS(err, errConvertCredentials, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
 				return nil, errors.Wrap(err, errConvertCredentials)
 			}
 			return map[string]string{
-				EnvAWSAccessKeyID:     ak.AWSAccessKeyID,
-				EnvAWSSecretAccessKey: ak.AWSSecretAccessKey,
-				EnvAWSSessionToken:    ak.AWSSessionToken,
-				EnvAWSDefaultRegion:   region,
+				envAWSAccessKeyID:     ak.AWSAccessKeyID,
+				envAWSSecretAccessKey: ak.AWSSecretAccessKey,
+				envAWSSessionToken:    ak.AWSSessionToken,
+				envAWSDefaultRegion:   region,
 			}, nil
-		case string(GCP):
+		case string(gcp):
 			var ak GCPCredentials
 			if err := yaml.Unmarshal(secret.Data[secretRef.Key], &ak); err != nil {
 				klog.ErrorS(err, errConvertCredentials, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
 				return nil, errors.Wrap(err, errConvertCredentials)
 			}
 			return map[string]string{
-				EnvGCPCredentialsJSON: ak.GCPCredentialsJSON,
-				EnvGCPProject:         ak.GCPProject,
-				EnvGCPRegion:          region,
+				envGCPCredentialsJSON: ak.GCPCredentialsJSON,
+				envGCPProject:         ak.GCPProject,
+				envGCPRegion:          region,
 			}, nil
-		case string(Azure):
+		case string(azure):
 			var cred AzureCredentials
 			if err := yaml.Unmarshal(secret.Data[secretRef.Key], &cred); err != nil {
 				klog.ErrorS(err, errConvertCredentials, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
 				return nil, errors.Wrap(err, errConvertCredentials)
 			}
 			return map[string]string{
-				EnvARMClientID:       cred.ARMClientID,
-				EnvARMClientSecret:   cred.ARMClientSecret,
-				EnvARMSubscriptionID: cred.ARMSubscriptionID,
-				EnvARMTenantID:       cred.ARMTenantID,
+				envARMClientID:       cred.ARMClientID,
+				envARMClientSecret:   cred.ARMClientSecret,
+				envARMSubscriptionID: cred.ARMSubscriptionID,
+				envARMTenantID:       cred.ARMTenantID,
 			}, nil
-		case string(VSphere):
+		case string(vsphere):
 			var cred VSphereCredentials
 			if err := yaml.Unmarshal(secret.Data[secretRef.Key], &cred); err != nil {
 				klog.ErrorS(err, errConvertCredentials, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
 				return nil, errors.Wrap(err, errConvertCredentials)
 			}
 			return map[string]string{
-				EnvVSphereUser:               cred.VSphereUser,
-				EnvVSpherePassword:           cred.VSpherePassword,
-				EnvVSphereServer:             cred.VSphereServer,
-				EnvVSphereAllowUnverifiedSSL: cred.VSphereAllowUnverifiedSSL,
+				envVSphereUser:               cred.VSphereUser,
+				envVSpherePassword:           cred.VSpherePassword,
+				envVSphereServer:             cred.VSphereServer,
+				envVSphereAllowUnverifiedSSL: cred.VSphereAllowUnverifiedSSL,
 			}, nil
-		case string(EC):
+		case string(ec):
 			var ak ECCredentials
 			if err := yaml.Unmarshal(secret.Data[secretRef.Key], &ak); err != nil {
 				klog.ErrorS(err, errConvertCredentials, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
 				return nil, errors.Wrap(err, errConvertCredentials)
 			}
 			return map[string]string{
-				EnvECApiKey: ak.ECApiKey,
+				envECApiKey: ak.ECApiKey,
 			}, nil
 		}
 	default:
