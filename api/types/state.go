@@ -16,14 +16,15 @@ limitations under the License.
 
 package types
 
-// A ResourceState represents the status of a resource
-type ResourceState string
+// A ConfigurationState represents the status of a resource
+type ConfigurationState string
 
 // Reasons a resource is or is not ready.
 const (
-	Available    ResourceState = "Available"
-	Unavailable  ResourceState = "Unavailable"
-	Provisioning ResourceState = "Provisioning"
+	ConfigurationIsPreChecking ConfigurationState = "Pre-checking"
+	Available                  ConfigurationState = "Available"
+	Unavailable                ConfigurationState = "Unavailable"
+	Provisioning               ConfigurationState = "Provisioning"
 )
 
 // ProviderState is the type for Provider state

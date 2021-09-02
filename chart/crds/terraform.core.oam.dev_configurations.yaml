@@ -110,7 +110,7 @@ spec:
                 type: object
               type: object
             state:
-              description: A ResourceState represents the status of a resource
+              description: A ConfigurationState represents the status of a resource
               type: string
           type: object
       type: object
