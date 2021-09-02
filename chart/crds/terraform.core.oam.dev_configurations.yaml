@@ -101,6 +101,7 @@ spec:
               type: string
             outputs:
               additionalProperties:
+                description: Property is the property for an output
                 properties:
                   type:
                     type: string
