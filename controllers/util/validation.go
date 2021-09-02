@@ -6,6 +6,7 @@ import (
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
 
+	"github.com/oam-dev/terraform-controller/api/types"
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
 )
 
@@ -20,16 +21,17 @@ const (
 )
 
 // ValidConfiguration will validate a Configuration
-func ValidConfiguration(configuration *v1beta1.Configuration, controllerNamespace string) (ConfigurationType, string, error) {
+func ValidConfiguration(configuration *v1beta1.Configuration, controllerNamespace string, cm *v1.ConfigMap) (ConfigurationType, string, bool, error) {
+	var configurationChanged bool
 	json := configuration.Spec.JSON
 	hcl := configuration.Spec.HCL
 	switch {
 	case json == "" && hcl == "":
-		return "", "", errors.New("spec.JSON or spec.HCL should be set")
+		return "", "", configurationChanged, errors.New("spec.JSON or spec.HCL should be set")
 	case json != "" && hcl != "":
-		return "", "", errors.New("spec.JSON and spec.HCL cloud not be set at the same time")
+		return "", "", configurationChanged, errors.New("spec.JSON and spec.HCL cloud not be set at the same time")
 	case json != "":
-		return ConfigurationJSON, json, nil
+		return ConfigurationJSON, json, configurationChanged, nil
 	case hcl != "":
 		if configuration.Spec.Backend != nil {
 			if configuration.Spec.Backend.SecretSuffix == "" {
@@ -44,11 +46,18 @@ func ValidConfiguration(configuration *v1beta1.Configuration, controllerNamespac
 		}
 		backendTF, err := renderTemplate(configuration.Spec.Backend, controllerNamespace)
 		if err != nil {
-			return "", "", errors.Wrap(err, "failed to prepare Terraform backend configuration")
+			return "", "", configurationChanged, errors.Wrap(err, "failed to prepare Terraform backend configuration")
 		}
-		return ConfigurationHCL, hcl + "\n" + backendTF, nil
+
+		completedConfiguration := hcl + "\n" + backendTF
+
+		if cm != nil {
+			configurationChanged = cm.Data[types.TerraformHCLConfigurationName] != completedConfiguration
+		}
+
+		return ConfigurationHCL, completedConfiguration, configurationChanged, nil
 	}
-	return "", "", errors.New("unknown issue")
+	return "", "", configurationChanged, errors.New("unknown issue")
 }
 
 // CompareTwoContainerEnvs compares two slices of v1.EnvVar
