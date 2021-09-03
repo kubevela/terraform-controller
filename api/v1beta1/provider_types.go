@@ -17,9 +17,10 @@ limitations under the License.
 package v1beta1
 
 import (
+	"github.com/oam-dev/terraform-controller/api/types"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	types "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
+	crossplanetypes "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
 )
 
 // ProviderSpec defines the desired state of Provider.
@@ -38,21 +39,24 @@ type ProviderSpec struct {
 type ProviderCredentials struct {
 	// Source of the provider credentials.
 	// +kubebuilder:validation:Enum=None;Secret;InjectedIdentity;Environment;Filesystem
-	Source types.CredentialsSource `json:"source"`
+	Source crossplanetypes.CredentialsSource `json:"source"`
 
 	// A SecretRef is a reference to a secret key that contains the credentials
 	// that must be used to connect to the provider.
 	// +optional
-	SecretRef *types.SecretKeySelector `json:"secretRef,omitempty"`
+	SecretRef *crossplanetypes.SecretKeySelector `json:"secretRef,omitempty"`
 }
 
 // ProviderStatus defines the observed state of Provider.
 type ProviderStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	State   types.ProviderState `json:"state,omitempty"`
+	Message string              `json:"message,omitempty"`
 }
 
 // +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="STATE",type="string",JSONPath=".status.state"
+// +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
 
 // Provider is the Schema for the providers API.
 type Provider struct {
