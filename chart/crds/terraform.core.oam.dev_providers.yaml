@@ -8,6 +8,13 @@ metadata:
   creationTimestamp: null
   name: providers.terraform.core.oam.dev
 spec:
+  additionalPrinterColumns:
+  - JSONPath: .status.state
+    name: STATE
+    type: string
+  - JSONPath: .metadata.creationTimestamp
+    name: AGE
+    type: date
   group: terraform.core.oam.dev
   names:
     kind: Provider
@@ -15,6 +22,8 @@ spec:
     plural: providers
     singular: provider
   scope: Namespaced
+  subresources:
+    status: {}
   validation:
     openAPIV3Schema:
       description: Provider is the Schema for the providers API.
@@ -78,6 +87,12 @@ spec:
           type: object
         status:
           description: ProviderStatus defines the observed state of Provider.
+          properties:
+            message:
+              type: string
+            state:
+              description: ProviderState is the type for Provider state
+              type: string
           type: object
       type: object
   version: v1beta1

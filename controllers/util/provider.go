@@ -2,6 +2,7 @@ package util
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/ghodss/yaml"
 	"github.com/pkg/errors"
@@ -9,6 +10,7 @@ import (
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/oam-dev/terraform-controller/api/types"
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
 )
 
@@ -103,19 +105,15 @@ type ECCredentials struct {
 
 // GetProviderCredentials gets provider credentials by cloud provider name
 func GetProviderCredentials(ctx context.Context, k8sClient client.Client, namespace, providerName string) (map[string]string, error) {
-	var provider v1beta1.Provider
-	if providerName != "" {
-		if err := k8sClient.Get(ctx, client.ObjectKey{Name: providerName, Namespace: namespace}, &provider); err != nil {
-			errMsg := "failed to get Provider object"
-			klog.ErrorS(err, errMsg, "Name", providerName)
-			return nil, errors.Wrap(err, errMsg)
-		}
-	} else {
-		if err := k8sClient.Get(ctx, client.ObjectKey{Name: ProviderName, Namespace: ProviderNamespace}, &provider); err != nil {
-			errMsg := "failed to get Provider object"
-			klog.ErrorS(err, errMsg, "Name", ProviderName)
-			return nil, errors.Wrap(err, errMsg)
-		}
+	provider, err := GetProviderFromConfiguration(ctx, k8sClient, namespace, providerName)
+	if err != nil {
+		return nil, err
+	}
+
+	if provider.Status.State != types.ProviderIsReady {
+		err := fmt.Errorf("provider is not ready: %s/%s", provider.Namespace, provider.Name)
+		klog.ErrorS(err, "failed to get credential")
+		return nil, err
 	}
 
 	region := provider.Spec.Region
@@ -205,4 +203,43 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, namesp
 		return nil, err
 	}
 	return nil, nil
+}
+
+// ValidateProviderCredentials validates provider credentials by cloud provider name
+func ValidateProviderCredentials(ctx context.Context, k8sClient client.Client, provider *v1beta1.Provider) error {
+	switch provider.Spec.Credentials.Source {
+	case "Secret":
+		var secret v1.Secret
+		secretRef := provider.Spec.Credentials.SecretRef
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: secretRef.Name, Namespace: secretRef.Namespace}, &secret); err != nil {
+			errMsg := "failed to get the Secret from Provider"
+			klog.ErrorS(err, errMsg, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
+			return errors.Wrap(err, errMsg)
+		}
+	default:
+		errMsg := "the credentials type is not supported."
+		err := errors.New(errMsg)
+		klog.ErrorS(err, "", "CredentialType", provider.Spec.Credentials.Source)
+		return err
+	}
+	return nil
+}
+
+// GetProviderFromConfiguration gets provider object from Configuration
+func GetProviderFromConfiguration(ctx context.Context, k8sClient client.Client, namespace, providerName string) (*v1beta1.Provider, error) {
+	var provider = &v1beta1.Provider{}
+	if providerName != "" {
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: providerName, Namespace: namespace}, provider); err != nil {
+			errMsg := "failed to get Provider object"
+			klog.ErrorS(err, errMsg, "Name", providerName)
+			return nil, errors.Wrap(err, errMsg)
+		}
+	} else {
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: ProviderName, Namespace: ProviderNamespace}, provider); err != nil {
+			errMsg := "failed to get Provider object"
+			klog.ErrorS(err, errMsg, "Name", ProviderName)
+			return nil, errors.Wrap(err, errMsg)
+		}
+	}
+	return provider, nil
 }
