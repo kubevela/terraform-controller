@@ -26,9 +26,12 @@ const (
 	Provisioning ResourceState = "Provisioning"
 )
 
+// ProviderState is the type for Provider state
+type ProviderState string
+
 const (
 	// ProviderIsReady is the `ready` state
-	ProviderIsReady = "ready"
+	ProviderIsReady ProviderState = "ready"
 	// ProviderIsInitializing marks the state of a Provider is initializing
-	ProviderIsInitializing = "initializing"
+	ProviderIsInitializing ProviderState = "initializing"
 )
