@@ -25,3 +25,10 @@ const (
 	Unavailable  ResourceState = "Unavailable"
 	Provisioning ResourceState = "Provisioning"
 )
+
+const (
+	// ProviderIsReady is the `ready` state
+	ProviderIsReady = "ready"
+	// ProviderIsInitializing marks the state of a Provider is initializing
+	ProviderIsInitializing = "initializing"
+)

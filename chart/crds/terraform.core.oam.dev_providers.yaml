@@ -15,6 +15,8 @@ spec:
     plural: providers
     singular: provider
   scope: Namespaced
+  subresources:
+    status: {}
   validation:
     openAPIV3Schema:
       description: Provider is the Schema for the providers API.
@@ -78,6 +80,11 @@ spec:
           type: object
         status:
           description: ProviderStatus defines the observed state of Provider.
+          properties:
+            message:
+              type: string
+            state:
+              type: string
           type: object
       type: object
   version: v1beta1
