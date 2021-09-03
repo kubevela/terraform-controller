@@ -12,6 +12,9 @@ spec:
   - JSONPath: .status.state
     name: STATE
     type: string
+  - JSONPath: .metadata.creationTimestamp
+    name: AGE
+    type: date
   group: terraform.core.oam.dev
   names:
     kind: Provider
