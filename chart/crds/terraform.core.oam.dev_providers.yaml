@@ -8,6 +8,10 @@ metadata:
   creationTimestamp: null
   name: providers.terraform.core.oam.dev
 spec:
+  additionalPrinterColumns:
+  - JSONPath: .status.state
+    name: STATE
+    type: string
   group: terraform.core.oam.dev
   names:
     kind: Provider
