@@ -48,11 +48,12 @@ type ProviderCredentials struct {
 
 // ProviderStatus defines the observed state of Provider.
 type ProviderStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	State   string `json:"state,omitempty"`
+	Message string `json:"message,omitempty"`
 }
 
 // +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
 
 // Provider is the Schema for the providers API.
 type Provider struct {
