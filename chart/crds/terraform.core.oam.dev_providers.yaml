@@ -91,6 +91,7 @@ spec:
             message:
               type: string
             state:
+              description: ProviderState is the type for Provider state
               type: string
           type: object
       type: object
