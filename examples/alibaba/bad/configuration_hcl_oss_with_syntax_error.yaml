@@ -4,7 +4,7 @@ metadata:
   name: alibaba-oss-with-syntax-error
 spec:
   hcl: |
-    resource "alicloud_oss_bucket" "bucket-acl" {
+    resourceUnknown "alicloud_oss_bucket" "bucket-acl" {
       bucket = var.bucket
       acl = var.acl
     }
