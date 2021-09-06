@@ -51,9 +51,9 @@ type ConfigurationSpec struct {
 
 // ConfigurationStatus defines the observed state of Configuration
 type ConfigurationStatus struct {
-	State   state.ResourceState `json:"state,omitempty"`
-	Message string              `json:"message,omitempty"`
-	Outputs map[string]Property `json:"outputs,omitempty"`
+	State   state.ConfigurationState `json:"state,omitempty"`
+	Message string                   `json:"message,omitempty"`
+	Outputs map[string]Property      `json:"outputs,omitempty"`
 }
 
 // Property is the property for an output
