@@ -37,6 +37,7 @@ import (
 
 	"github.com/oam-dev/terraform-controller/api/types"
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
+	cfgvalidator "github.com/oam-dev/terraform-controller/controllers/configuration"
 	"github.com/oam-dev/terraform-controller/controllers/util"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
@@ -168,27 +169,48 @@ func (r *ConfigurationReconciler) terraformApply(ctx context.Context, namespace 
 	var inputConfigurationCM v1.ConfigMap
 	r.Client.Get(ctx, client.ObjectKey{Name: tfInputConfigMapName, Namespace: namespace}, &inputConfigurationCM) //nolint:errcheck
 
-	// extract configuration(hcl/json)
-	configurationType, inputConfiguration, configurationChanged, err := util.ValidConfiguration(&configuration, controllerNamespace, &inputConfigurationCM)
+	// validation: 1) validate Configuration itself
+	configurationType, err := cfgvalidator.ValidConfigurationObject(&configuration)
+	if err != nil {
+		configuration.Status.State = types.ConfigurationStaticChecking
+		configuration.Status.Message = err.Error()
+		if err := k8sClient.Status().Update(ctx, &configuration); err != nil {
+			return err
+		}
+		return err
+	}
+
+	// validation: 2) validate Configuration syntax
+	if err := cfgvalidator.CheckConfigurationSyntax(&configuration, configurationType); err != nil {
+		configuration.Status.State = types.ConfigurationSyntaxChecking
+		configuration.Status.Message = err.Error()
+		if err := k8sClient.Status().Update(ctx, &configuration); err != nil {
+			return err
+		}
+		return err
+	}
+
+	// Compose configuration with backend, and check whether configuration(hcl/json) is changed
+	inputConfiguration, configurationChanged, err := cfgvalidator.ComposeConfiguration(&configuration, controllerNamespace, configurationType, &inputConfigurationCM)
 	if err != nil {
 		return err
 	}
 
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: applyJobName, Namespace: controllerNamespace}, &tfExecutionJob); err != nil {
 		if kerrors.IsNotFound(err) {
-			if configuration.Status.State != types.Provisioning {
-				configuration.Status.State = types.Provisioning
-				configuration.Status.Message = "Cloud resources are being provisioned."
-				if err := k8sClient.Status().Update(ctx, &configuration); err != nil {
-					return err
-				}
-			}
 			// store configuration to ConfigMap
 			if err := storeTFConfiguration(ctx, k8sClient, configurationType, inputConfiguration, tfInputConfigMapName); err != nil {
 				return err
 			}
 			return assembleAndTriggerJob(ctx, k8sClient, configuration.Name, &configuration, tfInputConfigMapName, namespace, r.ProviderName, TerraformApply)
 		}
+	}
+
+	// start provisioning
+	configuration.Status.State = types.Provisioning
+	configuration.Status.Message = "Cloud resources are being provisioned..."
+	if err := k8sClient.Status().Update(ctx, &configuration); err != nil {
+		return err
 	}
 
 	if err := r.updateTerraformJobIfNeeded(ctx, namespace, configuration, tfExecutionJob, configurationChanged); err != nil {
@@ -231,8 +253,9 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, namespac
 		}
 	}
 
+	configurationType, _ := cfgvalidator.ValidConfigurationObject(&configuration)
 	r.Client.Get(ctx, client.ObjectKey{Name: tfInputConfigMapsName, Namespace: namespace}, &inputConfigurationCM) //nolint:errcheck
-	_, _, configurationChanged, err := util.ValidConfiguration(&configuration, controllerNamespace, &inputConfigurationCM)
+	_, configurationChanged, err := cfgvalidator.ComposeConfiguration(&configuration, controllerNamespace, configurationType, &inputConfigurationCM)
 	if err != nil {
 		return err
 	}
@@ -297,7 +320,7 @@ func (r *ConfigurationReconciler) updateTerraformJobIfNeeded(ctx context.Context
 
 	// check whether env changes
 	var envChanged bool
-	if len(job.Spec.Template.Spec.Containers) == 1 && !util.CompareTwoContainerEnvs(job.Spec.Template.Spec.Containers[0].Env, envs) {
+	if len(job.Spec.Template.Spec.Containers) == 1 && !cfgvalidator.CompareTwoContainerEnvs(job.Spec.Template.Spec.Containers[0].Env, envs) {
 		envChanged = true
 		klog.InfoS("Job's env changed", "Previous", envs, "Current", job.Spec.Template.Spec.Containers[0].Env)
 	}
@@ -587,12 +610,12 @@ func createOrUpdateConfigMap(ctx context.Context, k8sClient client.Client, name 
 	return errors.Wrap(err, "failed to update TF configuration ConfigMap")
 }
 
-func prepareTFInputConfigurationData(configurationType util.ConfigurationType, inputConfiguration string) map[string]string {
+func prepareTFInputConfigurationData(configurationType types.ConfigurationType, inputConfiguration string) map[string]string {
 	var dataName string
 	switch configurationType {
-	case util.ConfigurationJSON:
+	case types.ConfigurationJSON:
 		dataName = types.TerraformJSONConfigurationName
-	case util.ConfigurationHCL:
+	case types.ConfigurationHCL:
 		dataName = types.TerraformHCLConfigurationName
 	}
 	data := map[string]string{dataName: inputConfiguration, "kubeconfig": ""}
@@ -600,7 +623,7 @@ func prepareTFInputConfigurationData(configurationType util.ConfigurationType, i
 }
 
 // storeTFConfiguration will store Terraform configuration to ConfigMap
-func storeTFConfiguration(ctx context.Context, k8sClient client.Client, configurationType util.ConfigurationType, inputConfiguration string, tfInputConfigMapName string) error {
+func storeTFConfiguration(ctx context.Context, k8sClient client.Client, configurationType types.ConfigurationType, inputConfiguration string, tfInputConfigMapName string) error {
 	data := prepareTFInputConfigurationData(configurationType, inputConfiguration)
 	return createOrUpdateConfigMap(ctx, k8sClient, tfInputConfigMapName, data)
 }

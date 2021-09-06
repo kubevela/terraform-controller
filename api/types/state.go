@@ -21,10 +21,12 @@ type ConfigurationState string
 
 // Reasons a resource is or is not ready.
 const (
-	ConfigurationIsPreChecking ConfigurationState = "Pre-checking"
-	Available                  ConfigurationState = "Available"
-	Unavailable                ConfigurationState = "Unavailable"
-	Provisioning               ConfigurationState = "Provisioning"
+	ConfigurationIsPreChecking  ConfigurationState = "PreChecking"
+	ConfigurationStaticChecking ConfigurationState = "SpecChecking"
+	ConfigurationSyntaxChecking ConfigurationState = "SyntaxChecking"
+	Available                   ConfigurationState = "Available"
+	Unavailable                 ConfigurationState = "Unavailable"
+	Provisioning                ConfigurationState = "Provisioning"
 )
 
 // ProviderState is the type for Provider state
