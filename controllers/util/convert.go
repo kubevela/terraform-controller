@@ -61,7 +61,8 @@ type backendVars struct {
 	Namespace       string
 }
 
-func renderTemplate(backend *v1beta1.Backend, namespace string) (string, error) {
+// RenderTemplate renders Backend template
+func RenderTemplate(backend *v1beta1.Backend, namespace string) (string, error) {
 	tmpl, err := template.New("backend").Funcs(template.FuncMap(sprig.FuncMap())).Parse(backendTF)
 	if err != nil {
 		return "", err
