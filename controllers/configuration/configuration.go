@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -39,12 +40,9 @@ func ValidConfigurationObject(configuration *v1beta1.Configuration) (types.Confi
 func ComposeConfiguration(configuration *v1beta1.Configuration, controllerNamespace string,
 	configurationType types.ConfigurationType, cm *v1.ConfigMap) (string, bool, error) {
 	var configurationChanged bool
-	json := configuration.Spec.JSON
-	hcl := configuration.Spec.HCL
-
 	switch configurationType {
 	case types.ConfigurationJSON:
-		return json, configurationChanged, nil
+		return configuration.Spec.JSON, configurationChanged, nil
 	case types.ConfigurationHCL:
 		if configuration.Spec.Backend != nil {
 			if configuration.Spec.Backend.SecretSuffix == "" {
@@ -62,7 +60,7 @@ func ComposeConfiguration(configuration *v1beta1.Configuration, controllerNamesp
 			return "", configurationChanged, errors.Wrap(err, "failed to prepare Terraform backend configuration")
 		}
 
-		completedConfiguration := hcl + "\n" + backendTF
+		completedConfiguration := configuration.Spec.HCL + "\n" + backendTF
 
 		if cm != nil {
 			configurationChanged = cm.Data[types.TerraformHCLConfigurationName] != completedConfiguration
@@ -85,6 +83,7 @@ func CompareTwoContainerEnvs(s1 []v1.EnvVar, s2 []v1.EnvVar) bool {
 
 // checkTerraformSyntax checks the syntax error for a HCL/JSON configuration
 func checkTerraformSyntax(configuration string) error {
+	abs, _ := filepath.Abs(".")
 	var terraform = "terraform/darwin/terraform"
 	switch runtime.GOOS {
 	case "linux":
@@ -92,13 +91,14 @@ func checkTerraformSyntax(configuration string) error {
 	case "windows":
 		terraform = "terraform/windows/terraform.exe"
 	}
+	terraform = filepath.Join(abs, "controllers", "configuration", terraform)
 	dir, _ := os.MkdirTemp(".", "tf-validate-")
 	defer os.RemoveAll(dir) //nolint:errcheck
 	tfFile := fmt.Sprintf("%s/main.tf", dir)
 	if err := os.WriteFile(tfFile, []byte(configuration), 0400); err != nil {
 		return err
 	}
-	cmd := fmt.Sprintf("cd %s && ../%s init && ../%s validate", dir, terraform, terraform)
+	cmd := fmt.Sprintf("cd %s && %s init && %s validate", dir, terraform, terraform)
 	output, _ := exec.Command("bash", "-c", cmd).CombinedOutput() //nolint:gosec
 	if strings.Contains(string(output), "Success!") {
 		return nil

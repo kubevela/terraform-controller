@@ -198,19 +198,19 @@ func (r *ConfigurationReconciler) terraformApply(ctx context.Context, namespace 
 
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: applyJobName, Namespace: controllerNamespace}, &tfExecutionJob); err != nil {
 		if kerrors.IsNotFound(err) {
-			if configuration.Status.State != types.Provisioning {
-				configuration.Status.State = types.Provisioning
-				configuration.Status.Message = "Cloud resources are being provisioned."
-				if err := k8sClient.Status().Update(ctx, &configuration); err != nil {
-					return err
-				}
-			}
 			// store configuration to ConfigMap
 			if err := storeTFConfiguration(ctx, k8sClient, configurationType, inputConfiguration, tfInputConfigMapName); err != nil {
 				return err
 			}
 			return assembleAndTriggerJob(ctx, k8sClient, configuration.Name, &configuration, tfInputConfigMapName, namespace, r.ProviderName, TerraformApply)
 		}
+	}
+
+	// start provisioning
+	configuration.Status.State = types.Provisioning
+	configuration.Status.Message = "Cloud resources are being provisioned..."
+	if err := k8sClient.Status().Update(ctx, &configuration); err != nil {
+		return err
 	}
 
 	if err := r.updateTerraformJobIfNeeded(ctx, namespace, configuration, tfExecutionJob, configurationChanged); err != nil {

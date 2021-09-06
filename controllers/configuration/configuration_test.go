@@ -1,6 +1,7 @@
 package configuration
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -128,6 +129,9 @@ variable "acl" {
 			subStr: "",
 		},
 	}
+	// As the entry point is the root folder `terraform-controller`, the unit-test locates here `./controllers/configuration`,
+	// so we change the directory
+	os.Chdir("../../")
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			err := checkTerraformSyntax(tc.configuration)
