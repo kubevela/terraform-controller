@@ -15,7 +15,7 @@ spec:
 
     variable "bucket" {
           description = "OSS bucket name"
-          default = "vela-website"
+          default = "vela-website-sample2"
           type = string
         }
 

@@ -64,6 +64,9 @@ func ComposeConfiguration(configuration *v1beta1.Configuration, controllerNamesp
 
 		if cm != nil {
 			configurationChanged = cm.Data[types.TerraformHCLConfigurationName] != completedConfiguration
+		} else {
+			// If the ConfigMap doesn't exist, we can surely say the configuration hcl/json changed
+			configurationChanged = true
 		}
 
 		return completedConfiguration, configurationChanged, nil
