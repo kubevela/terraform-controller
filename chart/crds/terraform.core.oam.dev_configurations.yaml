@@ -9,7 +9,7 @@ metadata:
   name: configurations.terraform.core.oam.dev
 spec:
   additionalPrinterColumns:
-  - JSONPath: .status.state
+  - JSONPath: .status.apply.state
     name: STATE
     type: string
   - JSONPath: .metadata.creationTimestamp
@@ -97,21 +97,36 @@ spec:
         status:
           description: ConfigurationStatus defines the observed state of Configuration
           properties:
-            message:
-              type: string
-            outputs:
-              additionalProperties:
-                description: Property is the property for an output
-                properties:
-                  type:
-                    type: string
-                  value:
-                    type: string
-                type: object
+            apply:
+              description: ConfigurationApplyStatus is the status for Configuration
+                apply
+              properties:
+                message:
+                  type: string
+                outputs:
+                  additionalProperties:
+                    description: Property is the property for an output
+                    properties:
+                      type:
+                        type: string
+                      value:
+                        type: string
+                    type: object
+                  type: object
+                state:
+                  description: A ConfigurationState represents the status of a resource
+                  type: string
               type: object
-            state:
-              description: A ConfigurationState represents the status of a resource
-              type: string
+            destroy:
+              description: ConfigurationDestroyStatus is the status for Configuration
+                destroy
+              properties:
+                message:
+                  type: string
+                state:
+                  description: A ConfigurationState represents the status of a resource
+                  type: string
+              type: object
           type: object
       type: object
   version: v1beta1
