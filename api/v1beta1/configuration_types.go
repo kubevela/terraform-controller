@@ -51,9 +51,21 @@ type ConfigurationSpec struct {
 
 // ConfigurationStatus defines the observed state of Configuration
 type ConfigurationStatus struct {
+	Apply   ConfigurationApplyStatus   `json:"apply,omitempty"`
+	Destroy ConfigurationDestroyStatus `json:"destroy,omitempty"`
+}
+
+// ConfigurationApplyStatus is the status for Configuration apply
+type ConfigurationApplyStatus struct {
 	State   state.ConfigurationState `json:"state,omitempty"`
 	Message string                   `json:"message,omitempty"`
 	Outputs map[string]Property      `json:"outputs,omitempty"`
+}
+
+// ConfigurationDestroyStatus is the status for Configuration destroy
+type ConfigurationDestroyStatus struct {
+	State   state.ConfigurationState `json:"state,omitempty"`
+	Message string                   `json:"message,omitempty"`
 }
 
 // Property is the property for an output
@@ -74,7 +86,7 @@ type Backend struct {
 
 // Configuration is the Schema for the configurations API
 // +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:name="STATE",type="string",JSONPath=".status.state"
+// +kubebuilder:printcolumn:name="STATE",type="string",JSONPath=".status.apply.state"
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
 type Configuration struct {
 	metav1.TypeMeta   `json:",inline"`
