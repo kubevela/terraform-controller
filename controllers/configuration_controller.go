@@ -31,7 +31,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -136,23 +135,23 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		}
 	}
 
-	configurationChanged, err := r.preCheck(ctx, req.Namespace, &configuration, tfInputConfigMapsName)
+	configurationChanged, err := r.preCheck(ctx, &configuration, tfInputConfigMapsName)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
 	if !configuration.ObjectMeta.DeletionTimestamp.IsZero() {
 		// terraform destroy
-		if controllerutil.ContainsFinalizer(&configuration, configurationFinalizer) {
-			klog.InfoS("performing Terraform Destroy", "Namespace", req.Namespace, "Name", req.Name)
-			destroyJobName := req.Name + "-" + string(TerraformDestroy)
-			klog.InfoS("Terraform destroy job", "Namespace", req.Namespace, "Name", destroyJobName)
-			if err := r.terraformDestroy(ctx, req.Namespace, configuration, configurationChanged, destroyJobName, tfInputConfigMapsName, applyJobName); err != nil {
-				if err.Error() == MessageDestroyJobNotCompleted {
-					return ctrl.Result{RequeueAfter: 3 * time.Second}, nil
-				}
-				return ctrl.Result{RequeueAfter: 3 * time.Second}, errors.Wrap(err, "continue reconciling to destroy cloud resource")
+		klog.InfoS("Performing Configuration Destroy", "Namespace", req.Namespace, "Name", req.Name)
+		destroyJobName := req.Name + "-" + string(TerraformDestroy)
+		klog.InfoS("Terraform destroy job", "Namespace", req.Namespace, "Name", destroyJobName)
+		if err := r.terraformDestroy(ctx, req.Namespace, configuration, configurationChanged, destroyJobName, tfInputConfigMapsName, applyJobName); err != nil {
+			if err.Error() == MessageDestroyJobNotCompleted {
+				return ctrl.Result{RequeueAfter: 3 * time.Second}, nil
 			}
+			return ctrl.Result{RequeueAfter: 3 * time.Second}, errors.Wrap(err, "continue reconciling to destroy cloud resource")
+		}
+		if controllerutil.ContainsFinalizer(&configuration, configurationFinalizer) {
 			controllerutil.RemoveFinalizer(&configuration, configurationFinalizer)
 			if err := r.Update(ctx, &configuration); err != nil {
 				return ctrl.Result{RequeueAfter: 3 * time.Second}, errors.Wrap(err, "failed to remove finalizer")
@@ -216,7 +215,6 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, namespac
 		destroyJob batchv1.Job
 		k8sClient  = r.Client
 	)
-
 	if configuration.Status.Apply.State == types.ConfigurationProvisioningAndChecking {
 		warning := fmt.Sprintf("Destroy could not complete and needs to wait for Provision to complet first: %s", MessageCloudResourceProvisioningAndChecking)
 		klog.Warning(warning)
@@ -225,8 +223,10 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, namespac
 
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: destroyJobName, Namespace: controllerNamespace}, &destroyJob); err != nil {
 		if kerrors.IsNotFound(err) {
-			if err = assembleAndTriggerJob(ctx, k8sClient, configuration.Name, &configuration, tfInputConfigMapsName, namespace, r.ProviderName, TerraformDestroy); err != nil {
-				return err
+			if err := r.Client.Get(ctx, client.ObjectKey{Name: configuration.Name, Namespace: configuration.Namespace}, &v1beta1.Configuration{}); err == nil {
+				if err = assembleAndTriggerJob(ctx, k8sClient, configuration.Name, &configuration, tfInputConfigMapsName, namespace, r.ProviderName, TerraformDestroy); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -242,7 +242,7 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, namespac
 	}
 
 	// When the deletion Job process succeeded, clean up work is starting.
-	if destroyJob.Status.Succeeded == *pointer.Int32Ptr(1) {
+	if destroyJob.Status.Succeeded == int32(1) {
 		// 1. delete Terraform input Configuration ConfigMap
 		if err := deleteConfigMap(ctx, k8sClient, tfInputConfigMapsName); err != nil {
 			return err
@@ -266,24 +266,18 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, namespac
 		}
 
 		// 4. delete destroy job
-		return k8sClient.Delete(ctx, &destroyJob, client.PropagationPolicy(metav1.DeletePropagationBackground))
+		var j batchv1.Job
+		if err := r.Client.Get(ctx, client.ObjectKey{Name: destroyJob.Name, Namespace: destroyJob.Namespace}, &j); err == nil {
+			return r.Client.Delete(ctx, &j, client.PropagationPolicy(metav1.DeletePropagationBackground))
+		}
 	}
 	return errors.New(MessageDestroyJobNotCompleted)
 }
 
-func (r *ConfigurationReconciler) preCheck(ctx context.Context, namespace string, configuration *v1beta1.Configuration, tfInputConfigMapsName string) (bool, error) {
+func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v1beta1.Configuration, tfInputConfigMapsName string) (bool, error) {
 	var (
 		k8sClient = r.Client
 	)
-
-	var inputConfigurationCM v1.ConfigMap
-	if err := r.Client.Get(ctx, client.ObjectKey{Name: tfInputConfigMapsName, Namespace: namespace}, &inputConfigurationCM); err != nil {
-		if kerrors.IsNotFound(err) {
-			klog.InfoS("The input Configuration ConfigMaps doesn't exist", "Namespace", namespace, "Name", tfInputConfigMapsName)
-		} else {
-			return false, err
-		}
-	}
 
 	// Validation: 1) validate Configuration itself
 	configurationType, err := cfgvalidator.ValidConfigurationObject(configuration)
@@ -299,8 +293,23 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, namespace string
 		updateStatus(ctx, k8sClient, *configuration, types.ConfigurationSyntaxGood, "") //nolint:errcheck
 	}
 
-	// Compose configuration with backend, and check whether configuration(hcl/json) is changed
-	completeConfiguration, configurationChanged, err := cfgvalidator.ComposeConfiguration(configuration, controllerNamespace, configurationType, &inputConfigurationCM)
+	// Render configuration with backend
+	completeConfiguration, err := cfgvalidator.RenderConfiguration(configuration, controllerNamespace, configurationType)
+	if err != nil {
+		return false, err
+	}
+
+	var inputConfigurationCM v1.ConfigMap
+	if err := r.Client.Get(ctx, client.ObjectKey{Name: tfInputConfigMapsName, Namespace: controllerNamespace}, &inputConfigurationCM); err != nil {
+		if kerrors.IsNotFound(err) {
+			klog.InfoS("The input Configuration ConfigMaps doesn't exist", "Namespace", controllerNamespace, "Name", tfInputConfigMapsName)
+		} else {
+			return false, err
+		}
+	}
+
+	// Check whether configuration(hcl/json) is changed
+	configurationChanged, err := cfgvalidator.CheckWhetherConfigurationChanges(configurationType, &inputConfigurationCM, completeConfiguration)
 	if err != nil {
 		return false, err
 	}
@@ -369,7 +378,10 @@ func (r *ConfigurationReconciler) updateTerraformJobIfNeeded(ctx context.Context
 
 	// if either one changes, delete the job
 	if envChanged || configurationChanged {
-		return r.Client.Delete(ctx, &job, client.PropagationPolicy(metav1.DeletePropagationBackground))
+		var j batchv1.Job
+		if err := r.Client.Get(ctx, client.ObjectKey{Name: job.Name, Namespace: job.Namespace}, &j); err == nil {
+			return r.Client.Delete(ctx, &job, client.PropagationPolicy(metav1.DeletePropagationBackground))
+		}
 	}
 	return nil
 }

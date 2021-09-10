@@ -78,10 +78,12 @@ func TestCompareTwoContainerEnvs(t *testing.T) {
 
 func TestCheckTFConfiguration(t *testing.T) {
 	cases := map[string]struct {
+		name          string
 		configuration string
 		subStr        string
 	}{
 		"Invalid": {
+			name: "bad",
 			configuration: `resource2 "alicloud_oss_bucket" "bucket-acl" {
   bucket = var.bucket
   acl = var.acl
@@ -106,6 +108,7 @@ variable "acl" {
 			subStr: "Error:",
 		},
 		"valid": {
+			name: "good",
 			configuration: `resource "alicloud_oss_bucket" "bucket-acl" {
   bucket = var.bucket
   acl = var.acl
@@ -134,7 +137,7 @@ variable "acl" {
 	os.Chdir("../../")
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			err := checkTerraformSyntax(tc.configuration)
+			err := checkTerraformSyntax(tc.name, tc.configuration)
 			if err != nil {
 				if !strings.Contains(err.Error(), tc.subStr) {
 					t.Errorf("\ncheckTFConfiguration(...) %s\n", cmp.Diff(err.Error(), tc.subStr))
