@@ -108,7 +108,7 @@ func checkTerraformSyntax(name, configuration string) error {
 	klog.InfoS("Validate dir", "Dir", dir)
 	defer os.RemoveAll(dir) //nolint:errcheck
 	tfFile := fmt.Sprintf("%s/main.tf", dir)
-	if err := os.WriteFile(tfFile, []byte(configuration), 0777); err != nil {
+	if err := os.WriteFile(tfFile, []byte(configuration), 0777); err != nil { //nolint
 		klog.ErrorS(err, "Failed to write Configuration hcl to main.tf", "HCL", configuration)
 		return err
 	}
