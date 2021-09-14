@@ -9,4 +9,4 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: tf-controller-service-account
-  namespace: {{.Release.Namespace}}
+  namespace: {{ .Release.Namespace }}
