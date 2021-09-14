@@ -4,18 +4,17 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
-	"runtime"
 	"strings"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/oam-dev/terraform-controller/controllers/util"
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/klog/v2"
 
 	"github.com/oam-dev/terraform-controller/api/types"
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
+	"github.com/oam-dev/terraform-controller/controllers/util"
 )
 
 // ValidConfigurationObject will validate a Configuration
@@ -35,14 +34,11 @@ func ValidConfigurationObject(configuration *v1beta1.Configuration) (types.Confi
 	return "", nil
 }
 
-// ComposeConfiguration will compose the Terraform configuration with hcl/json and backend
-// and will also check whether configuration is changed
-func ComposeConfiguration(configuration *v1beta1.Configuration, controllerNamespace string,
-	configurationType types.ConfigurationType, cm *v1.ConfigMap) (string, bool, error) {
-	var configurationChanged bool
+// RenderConfiguration will compose the Terraform configuration with hcl/json and backend
+func RenderConfiguration(configuration *v1beta1.Configuration, controllerNamespace string, configurationType types.ConfigurationType) (string, error) {
 	switch configurationType {
 	case types.ConfigurationJSON:
-		return configuration.Spec.JSON, configurationChanged, nil
+		return configuration.Spec.JSON, nil
 	case types.ConfigurationHCL:
 		if configuration.Spec.Backend != nil {
 			if configuration.Spec.Backend.SecretSuffix == "" {
@@ -57,23 +53,40 @@ func ComposeConfiguration(configuration *v1beta1.Configuration, controllerNamesp
 		}
 		backendTF, err := util.RenderTemplate(configuration.Spec.Backend, controllerNamespace)
 		if err != nil {
-			return "", configurationChanged, errors.Wrap(err, "failed to prepare Terraform backend configuration")
+			return "", errors.Wrap(err, "failed to prepare Terraform backend configuration")
 		}
 
 		completedConfiguration := configuration.Spec.HCL + "\n" + backendTF
+		return completedConfiguration, nil
 
+	}
+
+	return "", errors.New("unknown issue")
+}
+
+// CheckWhetherConfigurationChanges will check whether configuration is changed
+func CheckWhetherConfigurationChanges(configurationType types.ConfigurationType, cm *v1.ConfigMap, completedConfiguration string) (bool, error) {
+	var configurationChanged bool
+	switch configurationType {
+	case types.ConfigurationJSON:
+		return configurationChanged, nil
+	case types.ConfigurationHCL:
 		if cm != nil {
 			configurationChanged = cm.Data[types.TerraformHCLConfigurationName] != completedConfiguration
+			if configurationChanged {
+				klog.InfoS("Configuration HCL changed", "ConfigMap", cm.Data[types.TerraformHCLConfigurationName],
+					"RenderedCompletedConfiguration", completedConfiguration)
+			}
 		} else {
 			// If the ConfigMap doesn't exist, we can surely say the configuration hcl/json changed
 			configurationChanged = true
 		}
 
-		return completedConfiguration, configurationChanged, nil
+		return configurationChanged, nil
 
 	}
 
-	return "", configurationChanged, errors.New("unknown issue")
+	return configurationChanged, errors.New("unknown issue")
 }
 
 // CompareTwoContainerEnvs compares two slices of v1.EnvVar
@@ -85,24 +98,38 @@ func CompareTwoContainerEnvs(s1 []v1.EnvVar, s2 []v1.EnvVar) bool {
 }
 
 // checkTerraformSyntax checks the syntax error for a HCL/JSON configuration
-func checkTerraformSyntax(configuration string) error {
-	abs, _ := filepath.Abs(".")
-	var terraform = "terraform/darwin/terraform"
-	switch runtime.GOOS {
-	case "linux":
-		terraform = "terraform/linux/terraform"
-	case "windows":
-		terraform = "terraform/windows/terraform.exe"
+func checkTerraformSyntax(name, configuration string) error {
+	klog.InfoS("About to check the syntax issue", "configuration", configuration)
+	dir, osErr := os.MkdirTemp("", fmt.Sprintf("tf-validate-%s-", name))
+	if osErr != nil {
+		klog.ErrorS(osErr, "Failed to create folder", "Dir", dir)
+		return osErr
 	}
-	terraform = filepath.Join(abs, "controllers", "configuration", terraform)
-	dir, _ := os.MkdirTemp(".", "tf-validate-")
+	klog.InfoS("Validate dir", "Dir", dir)
 	defer os.RemoveAll(dir) //nolint:errcheck
 	tfFile := fmt.Sprintf("%s/main.tf", dir)
-	if err := os.WriteFile(tfFile, []byte(configuration), 0400); err != nil {
+	if err := os.WriteFile(tfFile, []byte(configuration), 0777); err != nil { //nolint
+		klog.ErrorS(err, "Failed to write Configuration hcl to main.tf", "HCL", configuration)
 		return err
 	}
-	cmd := fmt.Sprintf("cd %s && %s init && %s validate", dir, terraform, terraform)
-	output, _ := exec.Command("bash", "-c", cmd).CombinedOutput() //nolint:gosec
+	if err := os.Chdir(dir); err != nil {
+		klog.ErrorS(err, "Failed to change dir", "dir", dir)
+		return err
+	}
+
+	var (
+		output []byte
+		err    error
+	)
+	output, err = exec.Command("terraform", "init").CombinedOutput()
+	if err != nil {
+		klog.ErrorS(err, "The command execution isn't successful", "cmd", "terraform init", "output", string(output))
+	} else {
+		output, err = exec.Command("terraform", "validate").CombinedOutput()
+		if err != nil {
+			klog.ErrorS(err, "The command execution isn't successful", "cmd", "terraform validate", "output", string(output))
+		}
+	}
 	if strings.Contains(string(output), "Success!") {
 		return nil
 	}
@@ -118,5 +145,5 @@ func CheckConfigurationSyntax(configuration *v1beta1.Configuration, configuratio
 	case types.ConfigurationJSON:
 		template = configuration.Spec.JSON
 	}
-	return checkTerraformSyntax(template)
+	return checkTerraformSyntax(configuration.Name, template)
 }

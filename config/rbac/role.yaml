@@ -1,0 +1,48 @@
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: tf-api-role
+rules:
+- apiGroups:
+  - terraform.core.oam.dev
+  resources:
+  - configurations
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - terraform.core.oam.dev
+  resources:
+  - configurations/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - terraform.core.oam.dev
+  resources:
+  - providers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - terraform.core.oam.dev
+  resources:
+  - providers/status
+  verbs:
+  - get
+  - patch
+  - update
