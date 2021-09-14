@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 
 	"github.com/google/go-cmp/cmp"
@@ -101,10 +100,6 @@ func CompareTwoContainerEnvs(s1 []v1.EnvVar, s2 []v1.EnvVar) bool {
 // checkTerraformSyntax checks the syntax error for a HCL/JSON configuration
 func checkTerraformSyntax(name, configuration string) error {
 	klog.InfoS("About to check the syntax issue", "configuration", configuration)
-
-	abs, _ := filepath.Abs(".")
-	var terraform = "terraform/darwin/terraform"
-	terraform = filepath.Join(abs, "controllers", "configuration", terraform)
 	dir, osErr := os.MkdirTemp("", fmt.Sprintf("tf-validate-%s-", name))
 	if osErr != nil {
 		klog.ErrorS(osErr, "Failed to create folder", "Dir", dir)
