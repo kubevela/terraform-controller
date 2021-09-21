@@ -14,6 +14,7 @@ import (
 
 	"github.com/oam-dev/terraform-controller/api/types"
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
+	git "github.com/oam-dev/terraform-controller/controllers/gitrepo"
 	"github.com/oam-dev/terraform-controller/controllers/util"
 )
 
@@ -21,15 +22,18 @@ import (
 func ValidConfigurationObject(configuration *v1beta1.Configuration) (types.ConfigurationType, error) {
 	json := configuration.Spec.JSON
 	hcl := configuration.Spec.HCL
+	remote := configuration.Spec.Remote
 	switch {
-	case json == "" && hcl == "":
-		return "", errors.New("spec.JSON or spec.HCL should be set")
-	case json != "" && hcl != "":
-		return "", errors.New("spec.JSON and spec.HCL cloud not be set at the same time")
+	case json == "" && hcl == "" && remote == "":
+		return "", errors.New("spec.JSON, spec.HCL or spec.Remote should be set")
+	case json != "" && hcl != "", json != "" && remote != "", hcl != "" && remote != "":
+		return "", errors.New("spec.JSON, spec.HCL and/or spec.Remote cloud not be set at the same time")
 	case json != "":
 		return types.ConfigurationJSON, nil
 	case hcl != "":
 		return types.ConfigurationHCL, nil
+	case remote != "":
+		return types.ConfigurationRemote, nil
 	}
 	return "", nil
 }
@@ -144,6 +148,17 @@ func CheckConfigurationSyntax(configuration *v1beta1.Configuration, configuratio
 		template = configuration.Spec.HCL
 	case types.ConfigurationJSON:
 		template = configuration.Spec.JSON
+	case types.ConfigurationRemote:
+		dir, err := os.MkdirTemp("", fmt.Sprintf("tf-remote-%s-", configuration.Name))
+		if err != nil {
+			klog.ErrorS(err, "Failed to create folder", "Dir", dir)
+			return err
+		}
+		defer os.RemoveAll(dir) //nolint:errcheck
+		if err := git.Clone(dir, configuration.Spec.Remote); err != nil {
+			return err
+		}
+
 	}
 	return checkTerraformSyntax(configuration.Name, template)
 }

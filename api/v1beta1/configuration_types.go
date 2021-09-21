@@ -30,6 +30,10 @@ type ConfigurationSpec struct {
 	JSON string `json:"JSON,omitempty"`
 	// HCL is the Terraform HCL type configuration
 	HCL string `json:"hcl,omitempty"`
+
+	// Remote is a git repo which contains hcl files. Currently, only public git repos are supported.
+	Remote string `json:"remote,omitempty"`
+
 	// +kubebuilder:pruning:PreserveUnknownFields
 	Variable *runtime.RawExtension `json:"variable,omitempty"`
 
