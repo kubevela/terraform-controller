@@ -15,4 +15,6 @@ const (
 	ConfigurationJSON ConfigurationType = "JSON"
 	// ConfigurationHCL is the HCL type Configuration
 	ConfigurationHCL ConfigurationType = "HCL"
+	// ConfigurationRemote means HCL stores in a remote git repository
+	ConfigurationRemote ConfigurationType = "Remote"
 )
