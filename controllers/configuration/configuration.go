@@ -150,15 +150,7 @@ func CheckConfigurationSyntax(configuration *v1beta1.Configuration, configuratio
 	case types.ConfigurationJSON:
 		template = configuration.Spec.JSON
 	case types.ConfigurationRemote:
-		// dir, err := os.MkdirTemp("", fmt.Sprintf("tf-remote-%s-", configuration.Name))
-		// if err != nil {
-		//	klog.ErrorS(err, "Failed to create folder", "Dir", dir)
-		//	return err
-		// }
-		// defer os.RemoveAll(dir) //nolint:errcheck
-		// if err := git.Clone(dir, configuration.Spec.Remote); err != nil {
-		// 	return err
-		// }
+		// TODO(zzxwill) check syntax issue
 		return nil
 
 	}
