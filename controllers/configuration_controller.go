@@ -306,7 +306,8 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	meta.ConfigurationType = configurationType
 
 	// Validation: 2) validate Configuration syntax
-	if err := cfgvalidator.CheckConfigurationSyntax(configuration, configurationType); err != nil {
+	preState, err := cfgvalidator.CheckConfigurationSyntax(configuration, configurationType)
+	if err != nil {
 		return updateStatus(ctx, k8sClient, *configuration, types.ConfigurationSyntaxError, err.Error())
 	}
 	if configuration.Status.Apply.State == types.ConfigurationSyntaxError {
@@ -314,7 +315,7 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	}
 
 	// Render configuration with backend
-	completeConfiguration, err := cfgvalidator.RenderConfiguration(configuration, controllerNamespace, configurationType)
+	completeConfiguration, err := cfgvalidator.RenderConfiguration(configuration, controllerNamespace, configurationType, preState)
 	if err != nil {
 		return err
 	}
