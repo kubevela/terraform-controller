@@ -14,7 +14,6 @@ import (
 
 	"github.com/oam-dev/terraform-controller/api/types"
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
-	git "github.com/oam-dev/terraform-controller/controllers/gitrepo"
 	"github.com/oam-dev/terraform-controller/controllers/util"
 )
 
@@ -40,32 +39,33 @@ func ValidConfigurationObject(configuration *v1beta1.Configuration) (types.Confi
 
 // RenderConfiguration will compose the Terraform configuration with hcl/json and backend
 func RenderConfiguration(configuration *v1beta1.Configuration, controllerNamespace string, configurationType types.ConfigurationType) (string, error) {
+	if configuration.Spec.Backend != nil {
+		if configuration.Spec.Backend.SecretSuffix == "" {
+			configuration.Spec.Backend.SecretSuffix = configuration.Name
+		}
+		configuration.Spec.Backend.InClusterConfig = true
+	} else {
+		configuration.Spec.Backend = &v1beta1.Backend{
+			SecretSuffix:    configuration.Name,
+			InClusterConfig: true,
+		}
+	}
+	backendTF, err := util.RenderTemplate(configuration.Spec.Backend, controllerNamespace)
+	if err != nil {
+		return "", errors.Wrap(err, "failed to prepare Terraform backend configuration")
+	}
+
 	switch configurationType {
 	case types.ConfigurationJSON:
 		return configuration.Spec.JSON, nil
 	case types.ConfigurationHCL:
-		if configuration.Spec.Backend != nil {
-			if configuration.Spec.Backend.SecretSuffix == "" {
-				configuration.Spec.Backend.SecretSuffix = configuration.Name
-			}
-			configuration.Spec.Backend.InClusterConfig = true
-		} else {
-			configuration.Spec.Backend = &v1beta1.Backend{
-				SecretSuffix:    configuration.Name,
-				InClusterConfig: true,
-			}
-		}
-		backendTF, err := util.RenderTemplate(configuration.Spec.Backend, controllerNamespace)
-		if err != nil {
-			return "", errors.Wrap(err, "failed to prepare Terraform backend configuration")
-		}
-
 		completedConfiguration := configuration.Spec.HCL + "\n" + backendTF
 		return completedConfiguration, nil
-
+	case types.ConfigurationRemote:
+		return backendTF, nil
+	default:
+		return "", errors.New("Unsupported Configuration Type")
 	}
-
-	return "", errors.New("unknown issue")
 }
 
 // CheckWhetherConfigurationChanges will check whether configuration is changed
@@ -87,7 +87,8 @@ func CheckWhetherConfigurationChanges(configurationType types.ConfigurationType,
 		}
 
 		return configurationChanged, nil
-
+	case types.ConfigurationRemote:
+		return cm.Name == "", nil
 	}
 
 	return configurationChanged, errors.New("unknown issue")
@@ -149,15 +150,16 @@ func CheckConfigurationSyntax(configuration *v1beta1.Configuration, configuratio
 	case types.ConfigurationJSON:
 		template = configuration.Spec.JSON
 	case types.ConfigurationRemote:
-		dir, err := os.MkdirTemp("", fmt.Sprintf("tf-remote-%s-", configuration.Name))
-		if err != nil {
-			klog.ErrorS(err, "Failed to create folder", "Dir", dir)
-			return err
-		}
-		defer os.RemoveAll(dir) //nolint:errcheck
-		if err := git.Clone(dir, configuration.Spec.Remote); err != nil {
-			return err
-		}
+		// dir, err := os.MkdirTemp("", fmt.Sprintf("tf-remote-%s-", configuration.Name))
+		// if err != nil {
+		//	klog.ErrorS(err, "Failed to create folder", "Dir", dir)
+		//	return err
+		// }
+		// defer os.RemoveAll(dir) //nolint:errcheck
+		// if err := git.Clone(dir, configuration.Spec.Remote); err != nil {
+		// 	return err
+		// }
+		return nil
 
 	}
 	return checkTerraformSyntax(configuration.Name, template)

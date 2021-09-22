@@ -42,7 +42,6 @@ import (
 )
 
 const (
-	terraformInitContainerImg = "busybox:latest"
 	// TerraformImage is the Terraform image which can run `terraform init/plan/apply`
 	terraformImage     = "oamdev/docker-terraform:1.0.6"
 	terraformWorkspace = "default"
@@ -53,8 +52,11 @@ const (
 	WorkingVolumeMountPath = "/data"
 	// InputTFConfigurationVolumeName is the volume name for input Terraform Configuration
 	InputTFConfigurationVolumeName = "tf-input-configuration"
+	// BackendVolumeName is the volume name for Terraform backend
+	BackendVolumeName = "tf-backend"
 	// InputTFConfigurationVolumeMountPath is the volume mount path for input Terraform Configuration
-	InputTFConfigurationVolumeMountPath = "/opt/tfconfiguration"
+	InputTFConfigurationVolumeMountPath = "/opt/tf-configuration"
+	BackendVolumeMountPath              = "/opt/tf-backend"
 )
 
 const (
@@ -367,7 +369,7 @@ func (meta *TFConfigurationMeta) assembleAndTriggerJob(ctx context.Context, k8sC
 	}
 	meta.Envs = envs
 
-	job := meta.assembleTerraformJob(executionType)
+	job := meta.assembleTerraformJob(configuration, executionType)
 	return k8sClient.Create(ctx, job)
 }
 
@@ -402,10 +404,15 @@ func (r *ConfigurationReconciler) updateTerraformJobIfNeeded(ctx context.Context
 	return nil
 }
 
-func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExecutionType) *batchv1.Job {
-	var parallelism int32 = 1
-	var completions int32 = 1
+func (meta *TFConfigurationMeta) assembleTerraformJob(configuration *v1beta1.Configuration, executionType TerraformExecutionType) *batchv1.Job {
+	var (
+		initContainer  v1.Container
+		initContainers []v1.Container
+		parallelism    int32 = 1
+		completions    int32 = 1
+	)
 
+	executorVolumes := meta.assembleExecutorVolumes()
 	initContainerVolumeMounts := []v1.VolumeMount{
 		{
 			Name:      meta.Name,
@@ -415,10 +422,40 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 			Name:      InputTFConfigurationVolumeName,
 			MountPath: InputTFConfigurationVolumeMountPath,
 		},
+		{
+			Name:      BackendVolumeName,
+			MountPath: BackendVolumeMountPath,
+		},
 	}
-	initContainerCMD := fmt.Sprintf("cp %s/* %s", InputTFConfigurationVolumeMountPath, WorkingVolumeMountPath)
 
-	executorVolumes := meta.assembleExecutorVolumes()
+	initContainer = v1.Container{
+		Name:            "prepare-input-terraform-configurations",
+		Image:           "busybox:latest",
+		ImagePullPolicy: v1.PullIfNotPresent,
+		Command: []string{
+			"sh",
+			"-c",
+			fmt.Sprintf("cp %s/* %s", InputTFConfigurationVolumeMountPath, WorkingVolumeMountPath),
+		},
+		VolumeMounts: initContainerVolumeMounts,
+	}
+	initContainers = append(initContainers, initContainer)
+
+	if configuration.Spec.Remote != "" {
+		initContainers = append(initContainers,
+			v1.Container{
+				Name:            "git-configuration",
+				Image:           "alpine/git:latest",
+				ImagePullPolicy: v1.PullIfNotPresent,
+				Command: []string{
+					"sh",
+					"-c",
+					fmt.Sprintf("git clone %s %s && cp -r %s/* %s", configuration.Spec.Remote, BackendVolumeMountPath,
+						BackendVolumeMountPath, WorkingVolumeMountPath),
+				},
+				VolumeMounts: initContainerVolumeMounts,
+			})
+	}
 
 	return &batchv1.Job{
 		TypeMeta: metav1.TypeMeta{
@@ -436,17 +473,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 				Spec: v1.PodSpec{
 					// InitContainer will copy Terraform configuration files to working directory and create Terraform
 					// state file directory in advance
-					InitContainers: []v1.Container{{
-						Name:            "prepare-input-terraform-configurations",
-						Image:           terraformInitContainerImg,
-						ImagePullPolicy: v1.PullIfNotPresent,
-						Command: []string{
-							"sh",
-							"-c",
-							initContainerCMD,
-						},
-						VolumeMounts: initContainerVolumeMounts,
-					}},
+					InitContainers: initContainers,
 					// Container terraform-executor will first copy predefined terraform.d to working directory, and
 					// then run terraform init/apply.
 					Containers: []v1.Container{{
@@ -484,7 +511,8 @@ func (meta *TFConfigurationMeta) assembleExecutorVolumes() []v1.Volume {
 	workingVolume := v1.Volume{Name: meta.Name}
 	workingVolume.EmptyDir = &v1.EmptyDirVolumeSource{}
 	inputTFConfigurationVolume := meta.createConfigurationVolume()
-	return []v1.Volume{workingVolume, inputTFConfigurationVolume}
+	tfBackendVolume := meta.createTFBackendVolume()
+	return []v1.Volume{workingVolume, inputTFConfigurationVolume, tfBackendVolume}
 }
 
 func (meta *TFConfigurationMeta) createConfigurationVolume() v1.Volume {
@@ -493,6 +521,13 @@ func (meta *TFConfigurationMeta) createConfigurationVolume() v1.Volume {
 	inputTFConfigurationVolume := v1.Volume{Name: InputTFConfigurationVolumeName}
 	inputTFConfigurationVolume.ConfigMap = &inputCMVolumeSource
 	return inputTFConfigurationVolume
+
+}
+
+func (meta *TFConfigurationMeta) createTFBackendVolume() v1.Volume {
+	gitVolume := v1.Volume{Name: BackendVolumeName}
+	gitVolume.EmptyDir = &v1.EmptyDirVolumeSource{}
+	return gitVolume
 }
 
 // TFState is Terraform State
@@ -676,6 +711,8 @@ func (meta *TFConfigurationMeta) prepareTFInputConfigurationData() map[string]st
 		dataName = types.TerraformJSONConfigurationName
 	case types.ConfigurationHCL:
 		dataName = types.TerraformHCLConfigurationName
+	case types.ConfigurationRemote:
+		dataName = "terraform-backend.tf"
 	}
 	data := map[string]string{dataName: meta.CompleteConfiguration, "kubeconfig": ""}
 	return data
