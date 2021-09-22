@@ -56,7 +56,8 @@ const (
 	BackendVolumeName = "tf-backend"
 	// InputTFConfigurationVolumeMountPath is the volume mount path for input Terraform Configuration
 	InputTFConfigurationVolumeMountPath = "/opt/tf-configuration"
-	BackendVolumeMountPath              = "/opt/tf-backend"
+	// BackendVolumeMountPath is the volume mount path for Terraform backend
+	BackendVolumeMountPath = "/opt/tf-backend"
 )
 
 const (
@@ -113,6 +114,7 @@ type TFConfigurationMeta struct {
 	Namespace             string
 	ConfigurationType     types.ConfigurationType
 	CompleteConfiguration string
+	RemoteGit             string
 	ConfigurationChanged  bool
 	ConfigurationCMName   string
 	BackendCMName         string
@@ -146,6 +148,7 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		}
 		return ctrl.Result{}, err
 	}
+	meta.RemoteGit = configuration.Spec.Remote
 
 	if configuration.ObjectMeta.DeletionTimestamp.IsZero() {
 		if !controllerutil.ContainsFinalizer(&configuration, configurationFinalizer) {
@@ -369,7 +372,7 @@ func (meta *TFConfigurationMeta) assembleAndTriggerJob(ctx context.Context, k8sC
 	}
 	meta.Envs = envs
 
-	job := meta.assembleTerraformJob(configuration, executionType)
+	job := meta.assembleTerraformJob(executionType)
 	return k8sClient.Create(ctx, job)
 }
 
@@ -404,7 +407,7 @@ func (r *ConfigurationReconciler) updateTerraformJobIfNeeded(ctx context.Context
 	return nil
 }
 
-func (meta *TFConfigurationMeta) assembleTerraformJob(configuration *v1beta1.Configuration, executionType TerraformExecutionType) *batchv1.Job {
+func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExecutionType) *batchv1.Job {
 	var (
 		initContainer  v1.Container
 		initContainers []v1.Container
@@ -441,7 +444,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(configuration *v1beta1.Con
 	}
 	initContainers = append(initContainers, initContainer)
 
-	if configuration.Spec.Remote != "" {
+	if meta.RemoteGit != "" {
 		initContainers = append(initContainers,
 			v1.Container{
 				Name:            "git-configuration",
@@ -450,7 +453,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(configuration *v1beta1.Con
 				Command: []string{
 					"sh",
 					"-c",
-					fmt.Sprintf("git clone %s %s && cp -r %s/* %s", configuration.Spec.Remote, BackendVolumeMountPath,
+					fmt.Sprintf("git clone %s %s && cp -r %s/* %s", meta.RemoteGit, BackendVolumeMountPath,
 						BackendVolumeMountPath, WorkingVolumeMountPath),
 				},
 				VolumeMounts: initContainerVolumeMounts,
