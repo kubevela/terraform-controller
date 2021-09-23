@@ -160,7 +160,7 @@ func CheckConfigurationSyntax(configuration *v1beta1.Configuration, configuratio
 		template = configuration.Spec.JSON
 	case types.ConfigurationRemote:
 		// TODO(zzxwill) check syntax issue
-		return nil
+		return false, nil
 
 	}
 	return checkTerraformSyntax(configuration.Name, template)
