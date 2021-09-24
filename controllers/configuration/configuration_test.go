@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
 )
 
@@ -81,6 +82,7 @@ func TestCheckTFConfiguration(t *testing.T) {
 		name          string
 		configuration string
 		subStr        string
+		state         bool
 	}{
 		"Invalid": {
 			name: "bad",
@@ -106,6 +108,7 @@ variable "acl" {
 }
 `,
 			subStr: "Error:",
+			state:  false,
 		},
 		"valid": {
 			name: "good",
@@ -130,6 +133,38 @@ variable "acl" {
   type = string
 }`,
 			subStr: "",
+			state:  false,
+		},
+		"valid-with-state": {
+			name: "good",
+			configuration: `resource "alicloud_oss_bucket" "bucket-acl" {
+  bucket = var.bucket
+  acl = var.acl
+}
+
+output "BUCKET_NAME" {
+  value = "${alicloud_oss_bucket.bucket-acl.bucket}.${alicloud_oss_bucket.bucket-acl.extranet_endpoint}"
+}
+
+variable "bucket" {
+  description = "OSS bucket name"
+  default = "vela-website"
+  type = string
+}
+
+variable "acl" {
+  description = "OSS bucket ACL, supported 'private', 'public-read', 'public-read-write'"
+  default = "private"
+  type = string
+}
+
+terraform {
+  backend "local" {
+    path = "./test.tfstate"
+  }
+}`,
+			subStr: "",
+			state:  true,
 		},
 	}
 	// As the entry point is the root folder `terraform-controller`, the unit-test locates here `./controllers/configuration`,
@@ -137,12 +172,14 @@ variable "acl" {
 	os.Chdir("../../")
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			err := checkTerraformSyntax(tc.name, tc.configuration)
+			r := require.New(t)
+			state, err := checkTerraformSyntax(tc.name, tc.configuration)
 			if err != nil {
 				if !strings.Contains(err.Error(), tc.subStr) {
 					t.Errorf("\ncheckTFConfiguration(...) %s\n", cmp.Diff(err.Error(), tc.subStr))
 				}
 			}
+			r.Equal(state, tc.state)
 		})
 	}
 }
