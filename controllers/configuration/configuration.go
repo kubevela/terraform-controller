@@ -108,14 +108,13 @@ func CompareTwoContainerEnvs(s1 []v1.EnvVar, s2 []v1.EnvVar) bool {
 
 // checkTerraformSyntax checks the syntax error and state for a HCL/JSON configuration
 func checkTerraformSyntax(name, configuration string) (bool, error) {
-	klog.InfoS("About to check the syntax issue", "configuration", configuration)
+	klog.InfoS("About to check syntax issues", "Configuration", name)
 	state := false
 	dir, osErr := os.MkdirTemp("", fmt.Sprintf("tf-validate-%s-", name))
 	if osErr != nil {
 		klog.ErrorS(osErr, "Failed to create folder", "Dir", dir)
 		return state, osErr
 	}
-	klog.InfoS("Validate dir", "Dir", dir)
 	defer os.RemoveAll(dir) //nolint:errcheck
 	tfFile := fmt.Sprintf("%s/main.tf", dir)
 	if err := os.WriteFile(tfFile, []byte(configuration), 0777); err != nil { //nolint

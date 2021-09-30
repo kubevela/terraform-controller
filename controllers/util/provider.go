@@ -15,10 +15,10 @@ import (
 )
 
 const (
-	// ProviderName is the name of Provider object
-	ProviderName = "default"
-	// ProviderNamespace is the namespace of Provider object
-	ProviderNamespace = "default"
+	// ProviderDefaultName is the name of Provider object
+	ProviderDefaultName = "default"
+	// ProviderDefaultNamespace is the namespace of Provider object
+	ProviderDefaultNamespace = "default"
 )
 
 // CloudProvider is a type for mark a Cloud Provider
@@ -104,8 +104,8 @@ type ECCredentials struct {
 }
 
 // GetProviderCredentials gets provider credentials by cloud provider name
-func GetProviderCredentials(ctx context.Context, k8sClient client.Client, namespace, providerName string) (map[string]string, error) {
-	provider, err := GetProviderFromConfiguration(ctx, k8sClient, namespace, providerName)
+func GetProviderCredentials(ctx context.Context, k8sClient client.Client, providerNamespace, providerName string) (map[string]string, error) {
+	provider, err := GetProviderFromConfiguration(ctx, k8sClient, providerNamespace, providerName)
 	if err != nil {
 		return nil, err
 	}
@@ -228,18 +228,10 @@ func ValidateProviderCredentials(ctx context.Context, k8sClient client.Client, p
 // GetProviderFromConfiguration gets provider object from Configuration
 func GetProviderFromConfiguration(ctx context.Context, k8sClient client.Client, namespace, providerName string) (*v1beta1.Provider, error) {
 	var provider = &v1beta1.Provider{}
-	if providerName != "" {
-		if err := k8sClient.Get(ctx, client.ObjectKey{Name: providerName, Namespace: namespace}, provider); err != nil {
-			errMsg := "failed to get Provider object"
-			klog.ErrorS(err, errMsg, "Name", providerName)
-			return nil, errors.Wrap(err, errMsg)
-		}
-	} else {
-		if err := k8sClient.Get(ctx, client.ObjectKey{Name: ProviderName, Namespace: ProviderNamespace}, provider); err != nil {
-			errMsg := "failed to get Provider object"
-			klog.ErrorS(err, errMsg, "Name", ProviderName)
-			return nil, errors.Wrap(err, errMsg)
-		}
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: providerName, Namespace: namespace}, provider); err != nil {
+		errMsg := "failed to get Provider object"
+		klog.ErrorS(err, errMsg, "Name", providerName)
+		return nil, errors.Wrap(err, errMsg)
 	}
 	return provider, nil
 }
