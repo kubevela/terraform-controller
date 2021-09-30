@@ -39,5 +39,6 @@ spec:
 
   providerRef:
     name: alibaba-sample
+    namespace: default
 
 
