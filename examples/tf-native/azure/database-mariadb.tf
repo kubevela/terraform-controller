@@ -35,12 +35,18 @@ resource "azurerm_mariadb_database" "example" {
 
 variable "name" {
   default = "mariadb_database"
+  type = string
+  description = "Database instance name"
 }
 
 variable "username" {
   default = "acctestun"
+  type = string
+  description = "Database instance username"
 }
 
 variable "password" {
-  default = "H@Sh1CoR3!"
+  default = "H@Sh1CoR3!faked"
+  type = string
+  description = "Database instance password"
 }

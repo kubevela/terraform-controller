@@ -1,7 +1,7 @@
 apiVersion: terraform.core.oam.dev/v1beta1
 kind: Configuration
 metadata:
-  name: azure-redis-cache
+  name: azure-database-mariadb
 spec:
   hcl: |
     # Configure the Microsoft Azure Provider
@@ -41,15 +41,22 @@ spec:
 
     variable "name" {
       default = "mariadb_database"
+      type = string
+      description = "Database instance name"
     }
 
     variable "username" {
       default = "acctestun"
+      type = string
+      description = "Database instance username"
     }
 
     variable "password" {
-      default = "H@Sh1CoR3!"
+      default = "H@Sh1CoR3!faked"
+      type = string
+      description = "Database instance password"
     }
+
 
   variable:
     name: "mariadb_database"
