@@ -71,6 +71,10 @@ spec:
                 name:
                   description: Name of the referenced object.
                   type: string
+                namespace:
+                  default: default
+                  description: Namespace of the secret.
+                  type: string
               required:
               - name
               type: object

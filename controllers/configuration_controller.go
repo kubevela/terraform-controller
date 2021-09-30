@@ -35,6 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/oam-dev/terraform-controller/api/types"
+	crossplane "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
 	cfgvalidator "github.com/oam-dev/terraform-controller/controllers/configuration"
 	"github.com/oam-dev/terraform-controller/controllers/util"
@@ -96,6 +97,8 @@ const (
 	MessageCloudResourceDestroying = "Cloud resources is being destroyed..."
 	// ErrProviderNotReady means provider object is not ready
 	ErrProviderNotReady = "Provider is not ready"
+	// MessageProviderReady means provider object is ready
+	MessageProviderReady = "Provider is ready"
 )
 
 // ConfigurationReconciler reconciles a Configuration object.
@@ -121,6 +124,7 @@ type TFConfigurationMeta struct {
 	ApplyJobName          string
 	DestroyJobName        string
 	Envs                  []v1.EnvVar
+	ProviderReference     *crossplane.Reference
 }
 
 // +kubebuilder:rbac:groups=terraform.core.oam.dev,resources=configurations,verbs=get;list;watch;create;update;patch;delete
@@ -150,6 +154,15 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	}
 	meta.RemoteGit = configuration.Spec.Remote
 
+	if configuration.Spec.ProviderReference != nil {
+		meta.ProviderReference = configuration.Spec.ProviderReference
+	} else {
+		meta.ProviderReference = &crossplane.Reference{
+			Name:      util.ProviderDefaultName,
+			Namespace: util.ProviderDefaultNamespace,
+		}
+	}
+
 	if configuration.ObjectMeta.DeletionTimestamp.IsZero() {
 		if !controllerutil.ContainsFinalizer(&configuration, configurationFinalizer) {
 			controllerutil.AddFinalizer(&configuration, configurationFinalizer)
@@ -166,7 +179,7 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	if !configuration.ObjectMeta.DeletionTimestamp.IsZero() {
 		// terraform destroy
 		klog.InfoS("Performing Configuration Destroy", "Namespace", req.Namespace, "Name", req.Name, "JobName", meta.DestroyJobName)
-		if err := r.terraformDestroy(ctx, req.Namespace, configuration, meta); err != nil {
+		if err := r.terraformDestroy(ctx, configuration, meta); err != nil {
 			if err.Error() == MessageDestroyJobNotCompleted {
 				return ctrl.Result{RequeueAfter: 3 * time.Second}, nil
 			}
@@ -182,7 +195,7 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	}
 
 	// Terraform apply (create or update)
-	if configuration.Status.Apply.State == types.ConfigurationSyntaxError || configuration.Status.Apply.State == types.ProviderNotReady {
+	if configuration.Status.Apply.State == types.ConfigurationSyntaxError {
 		return ctrl.Result{RequeueAfter: 3 * time.Second}, nil
 	}
 	klog.InfoS("performing Terraform Apply (cloud resource create/update)", "Namespace", req.Namespace, "Name", req.Name)
@@ -207,29 +220,34 @@ func (r *ConfigurationReconciler) terraformApply(ctx context.Context, namespace 
 	)
 
 	// start provisioning and check the status of the provision
-	if configuration.Status.Apply.State != types.Available {
-		// For not serious, we don't want to throw an error
-		updateStatus(ctx, k8sClient, configuration, types.ConfigurationProvisioningAndChecking, MessageCloudResourceProvisioningAndChecking) //nolint:errcheck
+	if configuration.Status.Apply.State != types.Available && configuration.Status.Apply.State != types.ProviderNotReady {
+		configuration.Status.Apply = v1beta1.ConfigurationApplyStatus{
+			State:   types.ConfigurationProvisioningAndChecking,
+			Message: MessageCloudResourceProvisioningAndChecking,
+		}
 	}
 
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.ApplyJobName, Namespace: controllerNamespace}, &tfExecutionJob); err != nil {
 		if kerrors.IsNotFound(err) {
-			return meta.assembleAndTriggerJob(ctx, k8sClient, &configuration, namespace, r.ProviderName, TerraformApply)
+			return meta.assembleAndTriggerJob(ctx, k8sClient, &configuration, TerraformApply)
 		}
 	}
 
-	if err := r.updateTerraformJobIfNeeded(ctx, namespace, configuration, tfExecutionJob, meta.ConfigurationChanged); err != nil {
+	if err := meta.updateTerraformJobIfNeeded(ctx, k8sClient, configuration, tfExecutionJob, meta.ConfigurationChanged); err != nil {
 		klog.ErrorS(err, ErrUpdateTerraformApplyJob, "Name", meta.ApplyJobName)
 		return errors.Wrap(err, ErrUpdateTerraformApplyJob)
 	}
 
 	if tfExecutionJob.Status.Succeeded == int32(1) && configuration.Status.Apply.State != types.Available {
-		return updateStatus(ctx, k8sClient, configuration, types.Available, MessageCloudResourceDeployed)
+		configuration.Status.Apply = v1beta1.ConfigurationApplyStatus{
+			State:   types.Available,
+			Message: MessageCloudResourceDeployed,
+		}
 	}
-	return nil
+	return updateStatus(ctx, k8sClient, configuration, configuration.Status.Apply.State, configuration.Status.Apply.Message)
 }
 
-func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, namespace string, configuration v1beta1.Configuration, meta *TFConfigurationMeta) error {
+func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, configuration v1beta1.Configuration, meta *TFConfigurationMeta) error {
 	var (
 		destroyJob batchv1.Job
 		k8sClient  = r.Client
@@ -243,7 +261,7 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, namespac
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.DestroyJobName, Namespace: meta.Namespace}, &destroyJob); err != nil {
 		if kerrors.IsNotFound(err) {
 			if err := r.Client.Get(ctx, client.ObjectKey{Name: configuration.Name, Namespace: configuration.Namespace}, &v1beta1.Configuration{}); err == nil {
-				if err = meta.assembleAndTriggerJob(ctx, k8sClient, &configuration, namespace, r.ProviderName, TerraformDestroy); err != nil {
+				if err = meta.assembleAndTriggerJob(ctx, k8sClient, &configuration, TerraformDestroy); err != nil {
 					return err
 				}
 			}
@@ -255,7 +273,7 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, namespac
 		return err
 	}
 
-	if err := r.updateTerraformJobIfNeeded(ctx, namespace, configuration, destroyJob, meta.ConfigurationChanged); err != nil {
+	if err := meta.updateTerraformJobIfNeeded(ctx, k8sClient, configuration, destroyJob, meta.ConfigurationChanged); err != nil {
 		klog.ErrorS(err, ErrUpdateTerraformApplyJob, "Name", meta.ApplyJobName)
 		return errors.Wrap(err, ErrUpdateTerraformApplyJob)
 	}
@@ -294,9 +312,7 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, namespac
 }
 
 func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v1beta1.Configuration, meta *TFConfigurationMeta) error {
-	var (
-		k8sClient = r.Client
-	)
+	var k8sClient = r.Client
 
 	// Validation: 1) validate Configuration itself
 	configurationType, err := cfgvalidator.ValidConfigurationObject(configuration)
@@ -365,9 +381,9 @@ func updateStatus(ctx context.Context, k8sClient client.Client, configuration v1
 	return k8sClient.Status().Update(ctx, &configuration)
 }
 
-func (meta *TFConfigurationMeta) assembleAndTriggerJob(ctx context.Context, k8sClient client.Client, configuration *v1beta1.Configuration,
-	providerNamespace, providerName string, executionType TerraformExecutionType) error {
-	envs, err := prepareTFVariables(ctx, k8sClient, configuration, providerName, providerNamespace)
+func (meta *TFConfigurationMeta) assembleAndTriggerJob(ctx context.Context, k8sClient client.Client,
+	configuration *v1beta1.Configuration, executionType TerraformExecutionType) error {
+	envs, err := meta.prepareTFVariables(ctx, k8sClient, configuration)
 	if err != nil {
 		return err
 	}
@@ -379,10 +395,10 @@ func (meta *TFConfigurationMeta) assembleAndTriggerJob(ctx context.Context, k8sC
 
 // updateTerraformJob will set deletion finalizer to the Terraform job if its envs are changed, which will result in
 // deleting the job. Finally a new Terraform job will be generated
-func (r *ConfigurationReconciler) updateTerraformJobIfNeeded(ctx context.Context, namespace string,
-	configuration v1beta1.Configuration, job batchv1.Job, configurationChanged bool) error {
+func (meta *TFConfigurationMeta) updateTerraformJobIfNeeded(ctx context.Context, k8sClient client.Client, configuration v1beta1.Configuration,
+	job batchv1.Job, configurationChanged bool) error {
 
-	envs, err := prepareTFVariables(ctx, r.Client, &configuration, r.ProviderName, namespace)
+	envs, err := meta.prepareTFVariables(ctx, k8sClient, &configuration)
 	if err != nil {
 		return err
 	}
@@ -401,8 +417,8 @@ func (r *ConfigurationReconciler) updateTerraformJobIfNeeded(ctx context.Context
 	// if either one changes, delete the job
 	if envChanged || configurationChanged {
 		var j batchv1.Job
-		if err := r.Client.Get(ctx, client.ObjectKey{Name: job.Name, Namespace: job.Namespace}, &j); err == nil {
-			return r.Client.Delete(ctx, &job, client.PropagationPolicy(metav1.DeletePropagationBackground))
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: job.Name, Namespace: job.Namespace}, &j); err == nil {
+			return k8sClient.Delete(ctx, &job, client.PropagationPolicy(metav1.DeletePropagationBackground))
 		}
 	}
 	return nil
@@ -609,11 +625,14 @@ func getTFOutputs(ctx context.Context, k8sClient client.Client, configuration v1
 	return outputs, nil
 }
 
-func prepareTFVariables(ctx context.Context, k8sClient client.Client, configuration *v1beta1.Configuration, providerName, providerNamespace string) ([]v1.EnvVar, error) {
+func (meta *TFConfigurationMeta) prepareTFVariables(ctx context.Context, k8sClient client.Client, configuration *v1beta1.Configuration) ([]v1.EnvVar, error) {
 	var envs []v1.EnvVar
 
 	if configuration == nil {
 		return nil, errors.New("configuration is nil")
+	}
+	if meta.ProviderReference == nil {
+		return nil, errors.New("The referenced provider could not be retrieved")
 	}
 
 	tfVariable, err := getTerraformJSONVariable(configuration.Spec.Variable)
@@ -624,12 +643,17 @@ func prepareTFVariables(ctx context.Context, k8sClient client.Client, configurat
 		envs = append(envs, v1.EnvVar{Name: k, Value: v})
 	}
 
-	credential, err := util.GetProviderCredentials(ctx, k8sClient, providerNamespace, providerName)
+	credential, err := util.GetProviderCredentials(ctx, k8sClient, meta.ProviderReference.Namespace, meta.ProviderReference.Name)
 	if err != nil {
 		if updateStatusErr := updateStatus(ctx, k8sClient, *configuration, types.ProviderNotReady, ErrProviderNotReady); updateStatusErr != nil {
 			return nil, errors.Wrap(updateStatusErr, errSettingStatus)
 		}
 		return nil, errors.Wrap(err, ErrProviderNotReady)
+	}
+	if configuration.Status.Apply.State == types.ProviderNotReady {
+		if updateStatusErr := updateStatus(ctx, k8sClient, *configuration, types.ProviderReady, MessageProviderReady); updateStatusErr != nil {
+			return nil, errors.Wrap(updateStatusErr, errSettingStatus)
+		}
 	}
 	for k, v := range credential {
 		envs = append(envs,
