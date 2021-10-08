@@ -27,3 +27,7 @@ See our [Getting Started](./getting-started.md) guide please.
 # Design
 
 Please refer to [Design](./DESIGN.md).
+
+# Contributing
+
+This is the [contributing guide](./CONTRIBUTING.md). Looking forward to your contribution.
