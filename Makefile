@@ -128,3 +128,6 @@ GOIMPORTS=$(GOBIN)/goimports
 else
 GOIMPORTS=$(shell which goimports)
 endif
+
+e2e-setup:
+	helm install --create-namespace --namespace terraform terraform-controller ./chart
