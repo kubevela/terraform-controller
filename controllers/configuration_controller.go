@@ -44,7 +44,7 @@ import (
 
 const (
 	// TerraformImage is the Terraform image which can run `terraform init/plan/apply`
-	terraformImage     = "oamdev/docker-terraform:1.0.6"
+	terraformImage     = "oamdev/docker-terraform:1.0.7"
 	terraformWorkspace = "default"
 )
 
