@@ -1,7 +1,7 @@
 apiVersion: terraform.core.oam.dev/v1beta1
 kind: Provider
 metadata:
-  name: default
+  name: azure
 spec:
   provider: azure
   credentials:
