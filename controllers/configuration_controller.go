@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"time"
 
@@ -33,13 +34,14 @@ import (
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/oam-dev/terraform-controller/api/types"
 	crossplane "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
 	cfgvalidator "github.com/oam-dev/terraform-controller/controllers/configuration"
+	"github.com/oam-dev/terraform-controller/controllers/terraform"
 	"github.com/oam-dev/terraform-controller/controllers/util"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 const (
@@ -99,6 +101,8 @@ const (
 	ErrProviderNotReady = "Provider is not ready"
 	// MessageProviderReady means provider object is ready
 	MessageProviderReady = "Provider is ready"
+	// ConfigurationReloading means Configuration changed and needs reloading
+	ConfigurationReloading = "Configuration has changed and is reloading"
 )
 
 // ConfigurationReconciler reconciles a Configuration object.
@@ -163,6 +167,7 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		}
 	}
 
+	// add finalizer
 	if configuration.ObjectMeta.DeletionTimestamp.IsZero() {
 		if !controllerutil.ContainsFinalizer(&configuration, configurationFinalizer) {
 			controllerutil.AddFinalizer(&configuration, configurationFinalizer)
@@ -172,13 +177,22 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		}
 	}
 
+	// pre-check Configuration
 	if err := r.preCheck(ctx, &configuration, meta); err != nil {
 		return ctrl.Result{}, err
 	}
 
 	if !configuration.ObjectMeta.DeletionTimestamp.IsZero() {
 		// terraform destroy
-		klog.InfoS("Performing Configuration Destroy", "Namespace", req.Namespace, "Name", req.Name, "JobName", meta.DestroyJobName)
+		klog.InfoS("performing Configuration Destroy", "Namespace", req.Namespace, "Name", req.Name, "JobName", meta.DestroyJobName)
+
+		if err := terraform.GetTerraformStatus(ctx, meta.Namespace, meta.DestroyJobName); err != nil {
+			klog.ErrorS(err, "Terraform destroy failed")
+			if updateErr := updateStatus(ctx, r.Client, configuration, types.ConfigurationDestroyFailed, err.Error()); updateErr != nil {
+				return ctrl.Result{}, err
+			}
+		}
+
 		if err := r.terraformDestroy(ctx, configuration, meta); err != nil {
 			if err.Error() == MessageDestroyJobNotCompleted {
 				return ctrl.Result{RequeueAfter: 3 * time.Second}, nil
@@ -195,12 +209,15 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	}
 
 	// Terraform apply (create or update)
-	if configuration.Status.Apply.State == types.ConfigurationSyntaxError {
-		return ctrl.Result{RequeueAfter: 3 * time.Second}, nil
-	}
 	klog.InfoS("performing Terraform Apply (cloud resource create/update)", "Namespace", req.Namespace, "Name", req.Name)
 	if configuration.Spec.ProviderReference != nil {
 		r.ProviderName = configuration.Spec.ProviderReference.Name
+	}
+	if err := terraform.GetTerraformStatus(ctx, meta.Namespace, meta.ApplyJobName); err != nil {
+		klog.ErrorS(err, "Terraform apply failed")
+		if updateErr := updateStatus(ctx, r.Client, configuration, types.ConfigurationApplyFailed, err.Error()); updateErr != nil {
+			return ctrl.Result{}, err
+		}
 	}
 	if err := r.terraformApply(ctx, req.Namespace, configuration, meta); err != nil {
 		if err.Error() == MessageApplyJobNotCompleted {
@@ -220,10 +237,10 @@ func (r *ConfigurationReconciler) terraformApply(ctx context.Context, namespace 
 	)
 
 	// start provisioning and check the status of the provision
-	if configuration.Status.Apply.State != types.Available && configuration.Status.Apply.State != types.ProviderNotReady {
-		configuration.Status.Apply = v1beta1.ConfigurationApplyStatus{
-			State:   types.ConfigurationProvisioningAndChecking,
-			Message: MessageCloudResourceProvisioningAndChecking,
+	if configuration.Status.Apply.State != types.Available && configuration.Status.Apply.State != types.ProviderNotReady &&
+		configuration.Status.Apply.State != types.ConfigurationApplyFailed {
+		if err := updateStatus(ctx, k8sClient, configuration, types.ConfigurationProvisioningAndChecking, MessageCloudResourceProvisioningAndChecking); err != nil {
+			return err
 		}
 	}
 
@@ -239,12 +256,11 @@ func (r *ConfigurationReconciler) terraformApply(ctx context.Context, namespace 
 	}
 
 	if tfExecutionJob.Status.Succeeded == int32(1) && configuration.Status.Apply.State != types.Available {
-		configuration.Status.Apply = v1beta1.ConfigurationApplyStatus{
-			State:   types.Available,
-			Message: MessageCloudResourceDeployed,
+		if err := updateStatus(ctx, k8sClient, configuration, types.Available, MessageCloudResourceDeployed); err != nil {
+			return err
 		}
 	}
-	return updateStatus(ctx, k8sClient, configuration, configuration.Status.Apply.State, configuration.Status.Apply.Message)
+	return nil
 }
 
 func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, configuration v1beta1.Configuration, meta *TFConfigurationMeta) error {
@@ -321,17 +337,10 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	}
 	meta.ConfigurationType = configurationType
 
-	// Validation: 2) validate Configuration syntax
-	preState, err := cfgvalidator.CheckConfigurationSyntax(configuration, configurationType)
-	if err != nil {
-		return updateStatus(ctx, k8sClient, *configuration, types.ConfigurationSyntaxError, err.Error())
-	}
-	if configuration.Status.Apply.State == types.ConfigurationSyntaxError {
-		updateStatus(ctx, k8sClient, *configuration, types.ConfigurationSyntaxGood, "") //nolint:errcheck
-	}
+	// TODO(zzxwill) Need to find an alternative to check whether there is an state backend in the Configuration
 
 	// Render configuration with backend
-	completeConfiguration, err := cfgvalidator.RenderConfiguration(configuration, controllerNamespace, configurationType, preState)
+	completeConfiguration, err := cfgvalidator.RenderConfiguration(configuration, controllerNamespace, configurationType)
 	if err != nil {
 		return err
 	}
@@ -351,8 +360,12 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	if err != nil {
 		return err
 	}
+
 	meta.ConfigurationChanged = configurationChanged
 	if configurationChanged {
+		if err := updateStatus(ctx, k8sClient, *configuration, types.ConfigurationReloading, ConfigurationReloading); err != nil {
+			return err
+		}
 		// store configuration to ConfigMap
 		return meta.storeTFConfiguration(ctx, k8sClient)
 	}
@@ -430,6 +443,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 		initContainers []v1.Container
 		parallelism    int32 = 1
 		completions    int32 = 1
+		backoffLimit   int32 = math.MaxInt32
 	)
 
 	executorVolumes := meta.assembleExecutorVolumes()
@@ -487,8 +501,9 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 			Namespace: controllerNamespace,
 		},
 		Spec: batchv1.JobSpec{
-			Parallelism: &parallelism,
-			Completions: &completions,
+			Parallelism:  &parallelism,
+			Completions:  &completions,
+			BackoffLimit: &backoffLimit,
 			Template: v1.PodTemplateSpec{
 				Spec: v1.PodSpec{
 					// InitContainer will copy Terraform configuration files to working directory and create Terraform
