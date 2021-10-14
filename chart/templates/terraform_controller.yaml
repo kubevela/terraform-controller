@@ -19,8 +19,8 @@ spec:
     spec:
       containers:
         - name: terraform-controller
-          image: "{{ .Values.image.name }}"
-          imagePullPolicy: {{ .Values.image.imagePullPolicy }}
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
           env:
             - name: CONTROLLER_NAMESPACE
               valueFrom:
