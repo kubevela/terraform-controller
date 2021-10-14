@@ -1,0 +1,16 @@
+apiVersion: skaffold/v2beta17
+kind: Config
+build:
+  artifacts:
+    - image: oamdev/terraform-controller
+deploy:
+  helm:
+    releases:
+      - name: terraform-controller
+        chartPath: chart
+        namespace: terraform
+        skipBuildDependencies: true
+        artifactOverrides:
+          image: oamdev/terraform-controller
+        imageStrategy:
+          helm: {}
