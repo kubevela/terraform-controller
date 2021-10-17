@@ -29,3 +29,15 @@ rules:
     verbs:
       - "list"
       - "watch"
+
+  - apiGroups:
+      - ""
+    resources:
+      - pods/log
+      - pods
+    verbs:
+      - get
+      - list
+      - create
+      - update
+      - delete

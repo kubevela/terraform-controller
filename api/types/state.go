@@ -29,6 +29,9 @@ const (
 	Available                            ConfigurationState = "Available"
 	ConfigurationProvisioningAndChecking ConfigurationState = "ProvisioningAndChecking"
 	ConfigurationDestroying              ConfigurationState = "Destroying"
+	ConfigurationApplyFailed             ConfigurationState = "ApplyFailed"
+	ConfigurationDestroyFailed           ConfigurationState = "DestroyFailed"
+	ConfigurationReloading               ConfigurationState = "ConfigurationReloading"
 )
 
 // ProviderState is the type for Provider state
