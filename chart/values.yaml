@@ -1,8 +1,8 @@
 replicaCount: 1
 
-version: 0.2.3
+version: 0.2.4
 
 image:
   repository: oamdev/terraform-controller
-  tag: 0.2.3
+  tag: 0.2.4
   pullPolicy: Always
