@@ -19,6 +19,7 @@ func TestConfiguration(t *testing.T) {
 		configurations := []string{
 			"examples/alibaba/eip/configuration_eip.yaml",
 			"examples/alibaba/eip/configuration_eip_remote.yaml",
+			"examples/alibaba/eip/configuration_eip_remote_subdirectory.yaml",
 		}
 		for _, c := range configurations {
 			cmd := fmt.Sprintf("kubectl apply -f %s", filepath.Join(pwd, "..", "..", c))
