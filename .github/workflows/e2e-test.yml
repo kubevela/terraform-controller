@@ -63,5 +63,13 @@ jobs:
 
       - name: Prepare for e2e tests
         run: |
-          make e2e-setup
+          make install
 
+          echo "accessKeyID: ${{ secrets.ALICLOUD_ACCESS_KEY }}\naccessKeySecret: ${{ secrets.ALICLOUD_SECRET_KEY }}\nsecurityToken: ${{ secrets.ALICLOUD_SECURITY_TOKEN }}" > alibaba-credentials.conf
+          kubectl create namespace vela-system
+          kubectl create secret generic alibaba-account-creds -n vela-system --from-file=credentials=alibaba-credentials.conf
+          rm -f alibaba-credentials.conf
+          kubectl get secret -n vela-system alibaba-account-creds
+
+          make alibaba-provider
+          make configuration
