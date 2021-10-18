@@ -189,7 +189,7 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		if err := terraform.GetTerraformStatus(ctx, meta.Namespace, meta.DestroyJobName); err != nil {
 			klog.ErrorS(err, "Terraform destroy failed")
 			if updateErr := updateStatus(ctx, r.Client, configuration, types.ConfigurationDestroyFailed, err.Error()); updateErr != nil {
-				return ctrl.Result{}, err
+				return ctrl.Result{}, updateErr
 			}
 		}
 
@@ -216,9 +216,16 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	if err := terraform.GetTerraformStatus(ctx, meta.Namespace, meta.ApplyJobName); err != nil {
 		klog.ErrorS(err, "Terraform apply failed")
 		if updateErr := updateStatus(ctx, r.Client, configuration, types.ConfigurationApplyFailed, err.Error()); updateErr != nil {
-			return ctrl.Result{}, err
+			return ctrl.Result{}, updateErr
 		}
 	}
+
+	if configuration.Status.Apply.State != types.ConfigurationProvisioningAndChecking && configuration.Status.Apply.State != types.Available {
+		if updateErr := updateStatus(ctx, r.Client, configuration, types.ConfigurationProvisioningAndChecking, MessageCloudResourceProvisioningAndChecking); updateErr != nil {
+			return ctrl.Result{}, updateErr
+		}
+	}
+
 	if err := r.terraformApply(ctx, req.Namespace, configuration, meta); err != nil {
 		if err.Error() == MessageApplyJobNotCompleted {
 			return ctrl.Result{RequeueAfter: 3 * time.Second}, nil
