@@ -61,7 +61,7 @@ jobs:
           kubectl version
           kubectl cluster-info
 
-      - name: Prepare for e2e tests
+      - name: E2E tests
         run: |
           make install
 
