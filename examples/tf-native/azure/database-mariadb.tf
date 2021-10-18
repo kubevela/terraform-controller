@@ -84,7 +84,7 @@ output "DB_PASSWORD" {
   value = var.password
 }
 output "DB_PORT" {
-  value = 3306
+  value = "3306"
 }
 output "DB_HOST" {
   value = azurerm_mariadb_server.example.fqdn
