@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -122,6 +123,7 @@ type TFConfigurationMeta struct {
 	ConfigurationType     types.ConfigurationType
 	CompleteConfiguration string
 	RemoteGit             string
+	RemoteGitPath         string
 	ConfigurationChanged  bool
 	ConfigurationCMName   string
 	BackendCMName         string
@@ -157,6 +159,11 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		return ctrl.Result{}, err
 	}
 	meta.RemoteGit = configuration.Spec.Remote
+	if configuration.Spec.Path == "" {
+		meta.RemoteGitPath = "."
+	} else {
+		meta.RemoteGitPath = configuration.Spec.Path
+	}
 
 	if configuration.Spec.ProviderReference != nil {
 		meta.ProviderReference = configuration.Spec.ProviderReference
@@ -475,6 +482,8 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 	}
 	initContainers = append(initContainers, initContainer)
 
+	hclPath := filepath.Join(BackendVolumeMountPath, meta.RemoteGitPath)
+
 	if meta.RemoteGit != "" {
 		initContainers = append(initContainers,
 			v1.Container{
@@ -485,7 +494,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 					"sh",
 					"-c",
 					fmt.Sprintf("git clone %s %s && cp -r %s/* %s", meta.RemoteGit, BackendVolumeMountPath,
-						BackendVolumeMountPath, WorkingVolumeMountPath),
+						hclPath, WorkingVolumeMountPath),
 				},
 				VolumeMounts: initContainerVolumeMounts,
 			})
