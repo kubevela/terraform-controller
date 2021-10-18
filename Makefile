@@ -16,7 +16,7 @@ all: manager
 
 # Run tests
 test: generate fmt vet manifests
-	go test ./... -coverprofile cover.out
+	go test ./controllers/... -coverprofile cover.out
 
 # Build manager binary
 manager: generate fmt vet
@@ -135,7 +135,7 @@ install:
 	helm upgrade --install --create-namespace --namespace terraform terraform-controller ./chart
 	helm test -n terraform terraform-controller --timeout 5m
 
-alibaba:
+alibaba-credentials:
 ifeq (, $(ALICLOUD_ACCESS_KEY))
 	@echo "Environment variable ALICLOUD_ACCESS_KEY is not set"
 	exit 1
@@ -146,16 +146,29 @@ ifeq (, $(ALICLOUD_SECRET_KEY))
 	exit 1
 endif
 
-	sh hack/prepare-alibaba-credentials.sh
+	echo "accessKeyID: ${ALICLOUD_ACCESS_KEY}\naccessKeySecret: ${ALICLOUD_SECRET_KEY}\nsecurityToken: ${ALICLOUD_SECURITY_TOKEN}" > alibaba-credentials.conf
+	kubectl create namespace vela-system
+	kubectl create secret generic alibaba-account-creds -n vela-system --from-file=credentials=alibaba-credentials.conf
+	rm -f alibaba-credentials.conf
 	kubectl get secret -n vela-system alibaba-account-creds
+
+alibaba-credentials-github:
+ifeq (, $(ALICLOUD_ACCESS_KEY))
+	@echo "Environment variable ALICLOUD_ACCESS_KEY is not set"
+	exit 1
+endif
+
+ifeq (, $(ALICLOUD_SECRET_KEY))
+	@echo "Environment variable ALICLOUD_SECRET_KEY is not set"
+	exit 1
+endif
+
+alibaba-provider:
 	kubectl apply -f examples/alibaba/provider.yaml
-
-
-e2e-setup: install alibaba
 
 configuration:
 	go test -v ./e2e/...
 
+e2e-setup: install alibaba-credentials alibaba-provider
+
 e2e: e2e-setup configuration
-
-

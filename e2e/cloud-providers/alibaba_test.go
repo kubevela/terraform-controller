@@ -28,9 +28,9 @@ func TestConfiguration(t *testing.T) {
 
 		Eventually(func() bool {
 			var fields []string
-			output, err := Exec("bash", "-c", "kubectl get configuration")
+			output, err := exec.Command("bash", "-c", "kubectl get configuration").Output()
 			Expect(err).To(BeNil())
-			for i, line := range strings.Split(output, "\n") {
+			for i, line := range strings.Split(string(output), "\n") {
 				if i == 0 {
 					continue
 				}
