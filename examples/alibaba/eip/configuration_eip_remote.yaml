@@ -6,9 +6,9 @@ spec:
   remote: https://github.com/zzxwill/terraform-alibaba-eip.git
 
   variable:
-    name: poc
+    name: poc-remote
     bandwidth: 1
 
   writeConnectionSecretToRef:
-    name: eip-conn
+    name: eip-remote-conn
     namespace: default
