@@ -129,5 +129,33 @@ else
 GOIMPORTS=$(shell which goimports)
 endif
 
-e2e-setup:
-	helm install --create-namespace --namespace terraform terraform-controller ./chart
+
+install:
+	helm lint ./chart
+	helm upgrade --install --create-namespace --namespace terraform terraform-controller ./chart
+	helm test -n terraform terraform-controller --timeout 5m
+
+alibaba:
+ifeq (, $(ALICLOUD_ACCESS_KEY))
+	@echo "Environment variable ALICLOUD_ACCESS_KEY is not set"
+	exit 1
+endif
+
+ifeq (, $(ALICLOUD_SECRET_KEY))
+	@echo "Environment variable ALICLOUD_SECRET_KEY is not set"
+	exit 1
+endif
+
+	sh hack/prepare-alibaba-credentials.sh
+	kubectl get secret -n vela-system alibaba-account-creds
+	kubectl apply -f examples/alibaba/provider.yaml
+
+
+e2e-setup: install alibaba
+
+configuration:
+	go test -v ./e2e/...
+
+e2e: e2e-setup configuration
+
+

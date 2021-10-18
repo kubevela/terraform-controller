@@ -64,5 +64,4 @@ jobs:
       - name: Prepare for e2e tests
         run: |
           make e2e-setup
-          helm lint ./chart
-          helm test -n terraform terraform-controller --timeout 5m
+
