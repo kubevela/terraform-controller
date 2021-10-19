@@ -1,6 +1,6 @@
 
 # Image URL to use all building/pushing image targets
-IMG ?= oamdev/terraform-controller:0.2.5
+IMG ?= oamdev/terraform-controller:0.2.6
 
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true"
@@ -152,23 +152,67 @@ endif
 	rm -f alibaba-credentials.conf
 	kubectl get secret -n vela-system alibaba-account-creds
 
-alibaba-credentials-github:
-ifeq (, $(ALICLOUD_ACCESS_KEY))
-	@echo "Environment variable ALICLOUD_ACCESS_KEY is not set"
-	exit 1
-endif
-
-ifeq (, $(ALICLOUD_SECRET_KEY))
-	@echo "Environment variable ALICLOUD_SECRET_KEY is not set"
-	exit 1
-endif
-
 alibaba-provider:
 	kubectl apply -f examples/alibaba/provider.yaml
+
+alibaba: alibaba-credentials alibaba-provider
+
+
+aws-credentials:
+ifeq (, $(AWS_ACCESS_KEY_ID))
+	@echo "Environment variable AWS_ACCESS_KEY_ID is not set"
+	exit 1
+endif
+
+ifeq (, $(AWS_SECRET_ACCESS_KEY))
+	@echo "Environment variable AWS_SECRET_ACCESS_KEY is not set"
+	exit 1
+endif
+
+	# refer to https://registry.terraform.io/providers/hashicorp/aws/latest/docs
+	echo "awsAccessKeyID: ${AWS_ACCESS_KEY_ID}\nawsSecretAccessKey: ${AWS_SECRET_ACCESS_KEY}\nawsSessionToken: ${AWS_SESSION_TOKEN}" > aws-credentials.conf
+	kubectl create secret generic aws-account-creds -n vela-system --from-file=credentials=aws-credentials.conf
+	rm -f aws-credentials.conf
+
+aws-provider:
+	kubectl apply -f examples/aws/provider.yaml
+
+aws: aws-credentials aws-provider
+
+
+azure-credentials:
+ifeq (, $(ARM_CLIENT_ID))
+	@echo "Environment variable ARM_CLIENT_ID is not set"
+	exit 1
+endif
+
+ifeq (, $(ARM_CLIENT_SECRET))
+	@echo "Environment variable ARM_CLIENT_SECRET is not set"
+	exit 1
+endif
+
+ifeq (, $(ARM_SUBSCRIPTION_ID))
+	@echo "Environment variable ARM_SUBSCRIPTION_ID is not set"
+	exit 1
+endif
+
+ifeq (, $(ARM_TENANT_ID))
+	@echo "Environment variable ARM_TENANT_ID is not set"
+	exit 1
+endif
+
+	echo "armClientID: ${ARM_CLIENT_ID}\narmClientSecret: ${ARM_CLIENT_SECRET}\narmSubscriptionID: ${ARM_SUBSCRIPTION_ID}\narmTenantID: ${ARM_TENANT_ID}" > azure-credentials.conf
+	kubectl create secret generic azure-account-creds -n vela-system --from-file=credentials=azure-credentials.conf
+	rm -f azure-credentials.conf
+
+azure-provider:
+	kubectl apply -f examples/azure/provider.yaml
+
+azure: azure-credentials azure-provider
 
 configuration:
 	go test -v ./e2e/...
 
-e2e-setup: install alibaba-credentials alibaba-provider
+e2e-setup: install alibaba
 
 e2e: e2e-setup configuration
