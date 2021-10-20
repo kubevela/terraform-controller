@@ -24,7 +24,7 @@ TEST SUITE: None
 
 ## For Alibaba Cloud
 
-### Apply Provider configuration
+### Apply Provider credentials
 
 ```shell
 $ export ALICLOUD_ACCESS_KEY=xxx; export ALICLOUD_SECRET_KEY=yyy
@@ -36,56 +36,12 @@ $ export ALICLOUD_SECURITY_TOKEN=zzz
 ```
 
 ```
-$ sh hack/prepare-alibaba-credentials.sh
-
-$ kubectl get secret -n vela-system
-NAME                                              TYPE                                  DATA   AGE
-alibaba-account-creds                             Opaque                                1      11s
-
-$ kubectl apply -f examples/alibaba/provider.yaml
-provider.terraform.core.oam.dev/default created
+$ make alibaba
 ```
 
 ### Apply Terraform Configuration
 
-Apply Terraform configuration [configuration_hcl_oss.yaml](./examples/alibaba/configuration_hcl_oss.yaml) (JSON configuration [configuration_oss.yaml](./examples/alibaba/configuration_json_oss.yaml) is also supported) to provision an Alibaba OSS bucket.
-
-```yaml
-apiVersion: terraform.core.oam.dev/v1beta1
-kind: Configuration
-metadata:
-  name: alibaba-oss
-spec:
-  hcl: |
-    resource "alicloud_oss_bucket" "bucket-acl" {
-      bucket = var.bucket
-      acl = var.acl
-    }
-
-    output "BUCKET_NAME" {
-      value = "${alicloud_oss_bucket.bucket-acl.bucket}.${alicloud_oss_bucket.bucket-acl.extranet_endpoint}"
-    }
-
-    variable "bucket" {
-      description = "OSS bucket name"
-      default = "vela-website"
-      type = string
-    }
-
-    variable "acl" {
-      description = "OSS bucket ACL, supported 'private', 'public-read', 'public-read-write'"
-      default = "private"
-      type = string
-    }
-
-  variable:
-    bucket: "vela-website"
-    acl: "private"
-
-  writeConnectionSecretToRef:
-    name: oss-conn
-    namespace: default
-```
+Apply Terraform configuration [configuration_hcl_oss.yaml](./examples/alibaba/oss/configuration_hcl_bucket.yaml) (JSON configuration [configuration_oss.yaml](./examples/alibaba/oss/configuration_json_bucket.yaml) is also supported) to provision an Alibaba OSS bucket.
 
 ```shell
 $ kubectl get configuration.terraform.core.oam.dev
@@ -115,60 +71,6 @@ status:
       type: string
       value: vela-website.oss-cn-beijing.aliyuncs.com
   state: provisioned
-```
-
-### Looking into Configuration (optional)
-
-- Watch the job to complete
-
-```shell
-$ kubectl get job
-NAME               COMPLETIONS   DURATION   AGE
-alibaba-oss-apply   1/1           12s        94s
-
-$ kubectl get pod
-NAME                     READY   STATUS      RESTARTS   AGE
-alibaba-oss-apply-5c8b6   0/2     Completed   0          111s
-
-$ kubectl logs alibaba-oss-rllx4 terraform-executor
-
-Initializing the backend...
-
-Initializing provider plugins...
-- Finding latest version of hashicorp/alicloud...
-- Installing hashicorp/alicloud v1.119.1...
-- Installed hashicorp/alicloud v1.119.1 (signed by HashiCorp)
-
-Terraform has created a lock file .terraform.lock.hcl to record the provider
-selections it made above. Include this file in your version control repository
-so that Terraform can guarantee to make the same selections by default when
-you run "terraform init" in the future.
-
-
-Warning: Additional provider information from registry
-
-The remote registry returned warnings for
-registry.terraform.io/hashicorp/alicloud:
-- For users on Terraform 0.13 or greater, this provider has moved to
-aliyun/alicloud. Please update your source in required_providers.
-
-Terraform has been successfully initialized!
-
-You may now begin working with Terraform. Try running "terraform plan" to see
-any changes that are required for your infrastructure. All Terraform commands
-should now work.
-
-If you ever set or change modules or backend configuration for Terraform,
-rerun this command to reinitialize your working directory. If you forget, other
-commands will detect it and remind you to do so if necessary.
-alicloud_oss_bucket.bucket-acl: Creating...
-alicloud_oss_bucket.bucket-acl: Creation complete after 3s [id=vela-website]
-
-Apply complete! Resources: 1 added, 0 changed, 0 destroyed.
-
-Outputs:
-
-BUCKET_NAME = "vela-website.oss-cn-beijing.aliyuncs.com"
 ```
 
 OSS bucket is provisioned.
@@ -225,7 +127,7 @@ Bucket Number is: 0
 
 ## For AWS
 
-### Apply Provider configuration
+### Apply Provider credentials
 
 ```shell
 $ export AWS_ACCESS_KEY_ID=xxx;export AWS_SECRET_ACCESS_KEY=yyy
@@ -236,53 +138,13 @@ If you'd like to use AWS session token for temporary credentials, please export 
 $ export AWS_SESSION_TOKEN=zzz
 ```
 
-$ sh hack/prepare-aws-credentials.sh
-
-$ kubectl get secret -n vela-system
-NAME                                              TYPE                                  DATA   AGE
-aws-account-creds                                 Opaque                                1      52s
-
-$ kubectl apply -f examples/aws/provider.yaml
-provider.terraform.core.oam.dev/default created
+```
+$ make aws
 ```
 
 ### Apply Terraform Configuration
 
 Apply Terraform configuration [configuration_hcl_s3.yaml](./examples/aws/configuration_hcl_s3.yaml) to provision a s3 bucket.
-
-```yaml
-apiVersion: terraform.core.oam.dev/v1beta1
-kind: Configuration
-metadata:
-  name: aws-s3
-spec:
-  hcl: |
-    resource "aws_s3_bucket" "bucket-acl" {
-      bucket = var.bucket
-      acl    = var.acl
-    }
-
-    output "BUCKET_NAME" {
-      value = aws_s3_bucket.bucket-acl.bucket_domain_name
-    }
-
-    variable "bucket" {
-      default = "vela-website"
-    }
-
-    variable "acl" {
-      default = "private"
-    }
-
-  variable:
-    bucket: "vela-website"
-    acl: "private"
-
-  writeConnectionSecretToRef:
-    name: s3-conn
-    namespace: default
-
-```
 
 ```shell
 $ kubectl get configuration.terraform.core.oam.dev
@@ -311,9 +173,29 @@ $ aws s3 ls
 2021-04-12 19:03:32 vela-website
 ```
 
+## For Azure
+
+### Apply Provider credentials
+
+```shell
+$ export ARM_SUBSCRIPTION_ID="aaa"
+export ARM_TENANT_ID="bbb"
+export ARM_CLIENT_ID="ccc"
+export ARM_CLIENT_SECRET="ddd"
+```
+
+```
+$ make aws
+```
+
+### Apply Terraform Configuration
+
+Apply Terraform configuration [configuration_database_mariadb.yaml](./examples/azure/configuration_database_mariadb.yaml) to provision a Mariadb instance.
+
+
 # For GCP
 
-### Apply Provider configuration
+### Apply Provider credentials
 
 For authentication with GCP, the GOOGLE_CREDENTIALS variable containing the Google authentication JSON must be exported.
 At this time, the file path is not supported. 
@@ -390,7 +272,7 @@ bucket-conn   Opaque   1      7m37s
 
 # For VMware vSphere
 
-### Apply Provider configuration
+### Apply Provider credentials
 
 ```shell script
 $ export VSPHERE_USER=xxx
@@ -496,7 +378,7 @@ vm-outputs   Opaque   1      18m
 
 # For Elastic Cloud
 
-### Apply Provider configuration
+### Apply Provider credentials
 
 To interact with the EC Terraform provider an API key is expected. Please see Terraform EC provider documentation for [generating API keys](https://registry.terraform.io/providers/elastic/ec/latest/docs).
 ```shell
