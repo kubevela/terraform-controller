@@ -3,27 +3,16 @@ kind: Configuration
 metadata:
   name: aws-s3
 spec:
-  hcl: |
-    resource "aws_s3_bucket" "bucket-acl" {
-      bucket = var.bucket
-      acl    = var.acl
-    }
-
-    output "BUCKET_NAME" {
-      value = aws_s3_bucket.bucket-acl.bucket_domain_name
-    }
-
-    variable "bucket" {
-      default = "vela-website"
-    }
-
-    variable "acl" {
-      default = "private"
-    }
+  remote: https://github.com/kubevela-contrib/terraform-modules.git
+  path: aws/s3
 
   variable:
-    bucket: "vela-website"
+    bucket: "vela-website-aws-202101019"
     acl: "private"
+
+  providerRef:
+    name: aws
+    namespace: default
 
   writeConnectionSecretToRef:
     name: s3-conn
