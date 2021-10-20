@@ -49,7 +49,7 @@ variable "password" {
 }
 
 variable "allocate_public_connection" {
-  description = "Whether to allocate public connection for a RDS instance. If true, the connection_prefix can not be empty."
+  description = "Whether to allocate public connection for a RDS instance."
   type        = bool
   default     = true
 }
