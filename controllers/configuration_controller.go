@@ -23,6 +23,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"reflect"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -269,7 +270,7 @@ func (r *ConfigurationReconciler) terraformApply(ctx context.Context, namespace 
 		return errors.Wrap(err, ErrUpdateTerraformApplyJob)
 	}
 
-	if tfExecutionJob.Status.Succeeded == int32(1) && configuration.Status.Apply.State != types.Available {
+	if tfExecutionJob.Status.Succeeded == int32(1) {
 		if err := updateStatus(ctx, k8sClient, configuration, types.Available, MessageCloudResourceDeployed); err != nil {
 			return err
 		}
@@ -401,6 +402,9 @@ func updateStatus(ctx context.Context, k8sClient client.Client, configuration v1
 			outputs, err := getTFOutputs(ctx, k8sClient, configuration)
 			if err != nil {
 				return err
+			}
+			if configuration.Status.Apply.Outputs != nil && reflect.DeepEqual(configuration.Status.Apply.Outputs, outputs) {
+				return nil
 			}
 			configuration.Status.Apply.Outputs = outputs
 		}
