@@ -9,12 +9,12 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
+	config2 "sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 func initClientSet() (*kubernetes.Clientset, error) {
-	config, err := rest.InClusterConfig()
+	config, err := config2.GetConfig()
 	if err != nil {
 		return nil, err
 	}
