@@ -9,7 +9,6 @@ import (
 
 	"github.com/oam-dev/terraform-controller/api/types"
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
-	"github.com/oam-dev/terraform-controller/controllers/util"
 )
 
 // ValidConfigurationObject will validate a Configuration
@@ -45,7 +44,7 @@ func RenderConfiguration(configuration *v1beta1.Configuration, controllerNamespa
 			InClusterConfig: true,
 		}
 	}
-	backendTF, err := util.RenderTemplate(configuration.Spec.Backend, controllerNamespace)
+	backendTF, err := RenderTemplate(configuration.Spec.Backend, controllerNamespace)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to prepare Terraform backend configuration")
 	}
