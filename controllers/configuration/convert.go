@@ -14,11 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package util
+package configuration
 
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"strconv"
 	"text/template"
 
 	"github.com/Masterminds/sprig/v3"
@@ -79,4 +81,34 @@ func RenderTemplate(backend *v1beta1.Backend, namespace string) (string, error) 
 		return "", err
 	}
 	return wr.String(), nil
+}
+
+func Interface2String(v interface{}) (string, error) {
+	var value string
+	switch v.(type) {
+	case string:
+		value = v.(string)
+	case int:
+		value = strconv.Itoa(v.(int))
+	case bool:
+		value = strconv.FormatBool(v.(bool))
+	case []interface{}:
+		var tmp string
+		for _, i := range v.([]interface{}) {
+			switch i.(type) {
+			case string:
+				tmp += fmt.Sprintf("\"%v\", ", i)
+			case int, bool:
+				tmp += fmt.Sprintf("%v, ", i)
+			}
+		}
+		value = fmt.Sprintf("'[%s]'", tmp)
+	case map[string]interface{}:
+
+
+
+	default:
+		return "", fmt.Errorf("could not convert %v to string", v)
+	}
+	return value, nil
 }

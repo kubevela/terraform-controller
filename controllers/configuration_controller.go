@@ -40,7 +40,7 @@ import (
 	"github.com/oam-dev/terraform-controller/api/types"
 	crossplane "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
-	cfgvalidator "github.com/oam-dev/terraform-controller/controllers/configuration"
+	tfcfg "github.com/oam-dev/terraform-controller/controllers/configuration"
 	"github.com/oam-dev/terraform-controller/controllers/terraform"
 	"github.com/oam-dev/terraform-controller/controllers/util"
 )
@@ -339,7 +339,7 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	var k8sClient = r.Client
 
 	// Validation: 1) validate Configuration itself
-	configurationType, err := cfgvalidator.ValidConfigurationObject(configuration)
+	configurationType, err := tfcfg.ValidConfigurationObject(configuration)
 	if err != nil {
 		if updateErr := updateStatus(ctx, k8sClient, *configuration, types.ConfigurationStaticCheckFailed, err.Error()); err != nil {
 			return updateErr
@@ -351,7 +351,7 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	// TODO(zzxwill) Need to find an alternative to check whether there is an state backend in the Configuration
 
 	// Render configuration with backend
-	completeConfiguration, err := cfgvalidator.RenderConfiguration(configuration, controllerNamespace, configurationType)
+	completeConfiguration, err := tfcfg.RenderConfiguration(configuration, controllerNamespace, configurationType)
 	if err != nil {
 		return err
 	}
@@ -367,7 +367,7 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	}
 
 	// Check whether configuration(hcl/json) is changed
-	configurationChanged, err := cfgvalidator.CheckWhetherConfigurationChanges(configurationType, &inputConfigurationCM, completeConfiguration)
+	configurationChanged, err := tfcfg.CheckWhetherConfigurationChanges(configurationType, &inputConfigurationCM, completeConfiguration)
 	if err != nil {
 		return err
 	}
@@ -429,7 +429,7 @@ func (meta *TFConfigurationMeta) updateTerraformJobIfNeeded(ctx context.Context,
 
 	// check whether env changes
 	var envChanged bool
-	if len(job.Spec.Template.Spec.Containers) == 1 && !cfgvalidator.CompareTwoContainerEnvs(job.Spec.Template.Spec.Containers[0].Env, envs) {
+	if len(job.Spec.Template.Spec.Containers) == 1 && !tfcfg.CompareTwoContainerEnvs(job.Spec.Template.Spec.Containers[0].Env, envs) {
 		envChanged = true
 		klog.InfoS("Job's env changed", "Previous", envs, "Current", job.Spec.Template.Spec.Containers[0].Env)
 		if err := updateStatus(ctx, k8sClient, configuration, types.ConfigurationReloading, ConfigurationReloadingAsVariableChanged); err != nil {
@@ -668,7 +668,11 @@ func (meta *TFConfigurationMeta) prepareTFVariables(ctx context.Context, k8sClie
 		return nil, errors.Wrap(err, fmt.Sprintf("failed to get Terraform JSON variables from Configuration Variables %v", configuration.Spec.Variable))
 	}
 	for k, v := range tfVariable {
-		envs = append(envs, v1.EnvVar{Name: k, Value: v})
+		envValue, err := tfcfg.Interface2String(v)
+		if err != nil {
+			return nil, err
+		}
+		envs = append(envs, v1.EnvVar{Name: k, Value: envValue})
 	}
 
 	credential, err := util.GetProviderCredentials(ctx, k8sClient, meta.ProviderReference.Namespace, meta.ProviderReference.Name)
@@ -697,15 +701,15 @@ func (r *ConfigurationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func getTerraformJSONVariable(tfVariables *runtime.RawExtension) (map[string]string, error) {
-	variables, err := util.RawExtension2Map(tfVariables)
+func getTerraformJSONVariable(tfVariables *runtime.RawExtension) (map[string]interface{}, error) {
+	variables, err := tfcfg.RawExtension2Map(tfVariables)
 	if err != nil {
 		return nil, err
 	}
-	var environments = make(map[string]string)
+	var environments = make(map[string]interface{})
 
 	for k, v := range variables {
-		environments[fmt.Sprintf("TF_VAR_%s", k)] = fmt.Sprint(v)
+		environments[fmt.Sprintf("TF_VAR_%s", k)] = v
 	}
 	return environments, nil
 }
