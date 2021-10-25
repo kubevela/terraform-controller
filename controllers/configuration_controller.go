@@ -69,6 +69,8 @@ const (
 	TerraformStateNameInSecret = "tfstate"
 	// TFInputConfigMapName is the CM name for Terraform Input Configuration
 	TFInputConfigMapName = "%s-tf-input"
+	// TFVariableSecret is the Secret name for variables, including credentials from Provider
+	TFVariableSecret     = "%s-variable"
 )
 
 // TerraformExecutionType is the type for Terraform execution
@@ -133,6 +135,7 @@ type TFConfigurationMeta struct {
 	DestroyJobName        string
 	Envs                  []v1.EnvVar
 	ProviderReference     *crossplane.Reference
+	VariableSecret string
 }
 
 // +kubebuilder:rbac:groups=terraform.core.oam.dev,resources=configurations,verbs=get;list;watch;create;update;patch;delete
@@ -147,6 +150,7 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 			Namespace:           controllerNamespace,
 			Name:                req.Name,
 			ConfigurationCMName: fmt.Sprintf(TFInputConfigMapName, req.Name),
+			VariableSecret: fmt.Sprintf(TFVariableSecret, req.Name),
 			ApplyJobName:        req.Name + "-" + string(TerraformApply),
 			DestroyJobName:      req.Name + "-" + string(TerraformDestroy),
 		}
@@ -667,12 +671,32 @@ func (meta *TFConfigurationMeta) prepareTFVariables(ctx context.Context, k8sClie
 	if err != nil {
 		return nil, errors.Wrap(err, fmt.Sprintf("failed to get Terraform JSON variables from Configuration Variables %v", configuration.Spec.Variable))
 	}
+
+	var data = make(map[string][]byte)
+
+
+	var secret = v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      meta.VariableSecret,
+			Namespace: meta.Namespace,
+		},
+		TypeMeta: metav1.TypeMeta{Kind: "Secret"},
+		Data:     data,
+	}
+
 	for k, v := range tfVariable {
 		envValue, err := tfcfg.Interface2String(v)
 		if err != nil {
 			return nil, err
 		}
-		envs = append(envs, v1.EnvVar{Name: k, Value: envValue})
+		data[k] = []byte(envValue)
+		valueFrom := &v1.EnvVarSource{SecretKeyRef: &v1.SecretKeySelector{Key: k}}
+		valueFrom.SecretKeyRef.Name = meta.VariableSecret
+		envs = append(envs, v1.EnvVar{Name: k, ValueFrom: valueFrom})
+	}
+
+	if err := k8sClient.Create(ctx, &secret); err != nil {
+		return nil, err
 	}
 
 	credential, err := util.GetProviderCredentials(ctx, k8sClient, meta.ProviderReference.Namespace, meta.ProviderReference.Name)
