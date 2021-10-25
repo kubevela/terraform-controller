@@ -30,6 +30,10 @@ func getPodLog(ctx context.Context, client *kubernetes.Clientset, namespace, job
 	}
 	pod := pods.Items[0]
 
+	if pod.Status.Phase == v1.PodPending {
+		return "", nil
+	}
+
 	req := client.CoreV1().Pods(namespace).GetLogs(pod.Name, &v1.PodLogOptions{})
 	logs, err := req.Stream(ctx)
 	if err != nil {

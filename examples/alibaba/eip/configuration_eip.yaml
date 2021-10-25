@@ -27,6 +27,11 @@ spec:
       value       = module.eip.this_eip_address.0
     }
 
+    output "name" {
+          value       = var.name
+        }
+
+
   variable:
     name: "poc"
     bandwidth: 1
