@@ -11,7 +11,7 @@ spec:
     account_name: "oamtest"
     password: "Xyfff83jfewGGfaked"
     security_ips:
-      - "192.168.1.0/24"
+      - "0.0.0.0/0"
 
   writeConnectionSecretToRef:
     name: rds-conn
