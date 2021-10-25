@@ -102,7 +102,7 @@ func Interface2String(v interface{}) (string, error) {
 				tmp += fmt.Sprintf("%v, ", i)
 			}
 		}
-		value = fmt.Sprintf(`'[%s]'`, tmp)
+		value = fmt.Sprintf(`[%s]`, tmp)
 	default:
 		return "", fmt.Errorf("could not convert %v to string", v)
 	}
