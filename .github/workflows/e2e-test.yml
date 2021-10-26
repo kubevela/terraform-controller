@@ -41,7 +41,8 @@ jobs:
         env:
           SUPER_SECRET: ${{ secrets.NAME }}
         run: |
-          echo "$SUPER_SECRET"
+          echo "$SUPER_SECRET" > a.txt
+          cat a.txt
 
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
