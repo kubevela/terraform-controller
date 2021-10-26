@@ -31,6 +31,12 @@ func TestConfiguration(t *testing.T) {
 		Eventually(func() bool {
 			var fields []string
 			var available = true
+
+			tfPod, err := exec.Command("bash", "-c", "kubectl get pod -n terraform -l \"app=terraform-controller\"").Output()
+			Expect(err).To(BeNil())
+			fmt.Println("Checking Terraform Controller status")
+			fmt.Println(string(tfPod))
+			
 			output, err := exec.Command("bash", "-c", "kubectl get configuration").Output()
 			Expect(err).To(BeNil())
 			fmt.Println("Checking Configuration status")
