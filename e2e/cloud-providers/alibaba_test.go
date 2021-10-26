@@ -36,6 +36,11 @@ func TestConfiguration(t *testing.T) {
 			Expect(err).To(BeNil())
 			fmt.Println("Checking Terraform Controller status")
 			fmt.Println(string(tfPod))
+
+			tfPodDetails, err := exec.Command("bash", "-c", "kubectl describe pod -n terraform").Output()
+			Expect(err).To(BeNil())
+			fmt.Println("Describing Terraform Controller Pod")
+			fmt.Println(string(tfPodDetails))
 			
 			output, err := exec.Command("bash", "-c", "kubectl get configuration").Output()
 			Expect(err).To(BeNil())
