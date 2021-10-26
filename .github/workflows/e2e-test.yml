@@ -12,6 +12,7 @@ on:
 env:
   GO_VERSION: '1.16'
   GOLANGCI_VERSION: 'v1.38'
+  ALICLOUD_ACCESS_KEY: ${{ secrets.ALICLOUD_ACCESS_KEY }}
 
 
 jobs:
@@ -57,7 +58,7 @@ jobs:
         run: |
           make install-chart
 
-          echo "----------------", ${{ secrets.ALICLOUD_ACCESS_KEY }}
+          echo "----------------", ${ALICLOUD_ACCESS_KEY}
 
           echo "accessKeyID: ${{ secrets.ALICLOUD_ACCESS_KEY }}\naccessKeySecret: ${{ secrets.ALICLOUD_SECRET_KEY }}\nsecurityToken: ${{ secrets.ALICLOUD_SECURITY_TOKEN }}" > alibaba-credentials.conf
           kubectl create namespace vela-system
