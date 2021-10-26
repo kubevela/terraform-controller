@@ -16,6 +16,14 @@ env:
 
 
 jobs:
+  poc:
+    runs-on: ubuntu-latest
+    steps:
+      - name: PoC
+        run: |
+          echo "::group::My title"
+          echo "Inside group"
+          echo "::endgroup::"
 
   detect-noop:
     runs-on: ubuntu-20.04
