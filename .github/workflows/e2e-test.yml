@@ -12,12 +12,12 @@ on:
 env:
   GO_VERSION: '1.16'
   GOLANGCI_VERSION: 'v1.38'
-  KIND_VERSION: 'v0.7.0'
+  KUBECONFIG: /home/github/.kube/config
 
 jobs:
 
   detect-noop:
-    runs-on: ubuntu-20.04
+    runs-on: self-hosted
     outputs:
       noop: ${{ steps.noop.outputs.should_skip }}
     steps:
@@ -31,7 +31,7 @@ jobs:
           concurrent_skipping: false
 
   e2e-tests:
-    runs-on: ubuntu-20.04
+    runs-on: self-hosted
     needs: detect-noop
     if: needs.detect-noop.outputs.noop != 'true'
 
@@ -48,28 +48,19 @@ jobs:
         run: |
           go get -v -t -d ./...
 
-      - name: Setup Kind
-        uses: engineerd/setup-kind@v0.5.0
-        with:
-          version: ${{ env.KIND_VERSION }}
-          skipClusterCreation: true
-
-      - name: Setup Kind Cluster
+      - name: Install chart
         run: |
-          kind delete cluster
-          kind create cluster --image kindest/node:v1.20.7
-          kubectl version
           kubectl cluster-info
+          echo "current-context:" $(kubectl config current-context)
+
+          helm lint ./chart --debug
+          helm upgrade --install --create-namespace --namespace terraform terraform-controller ./chart
+          helm test -n terraform terraform-controller --timeout 5m
+          kubectl get pod -n terraform -l "app=terraform-controller"
 
       - name: E2E tests
         run: |
-          make install-chart
-
-          echo "accessKeyID: ${{ secrets.ALICLOUD_ACCESS_KEY }}\naccessKeySecret: ${{ secrets.ALICLOUD_SECRET_KEY }}\nsecurityToken: ${{ secrets.ALICLOUD_SECURITY_TOKEN }}" > alibaba-credentials.conf
-          kubectl create namespace vela-system
-          kubectl create secret generic alibaba-account-creds -n vela-system --from-file=credentials=alibaba-credentials.conf
-          rm -f alibaba-credentials.conf
           kubectl get secret -n vela-system alibaba-account-creds
+          kubectl get secret alibaba-account-creds -n vela-system -o yaml
 
-          make alibaba-provider
           make configuration
