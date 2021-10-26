@@ -33,6 +33,8 @@ func TestConfiguration(t *testing.T) {
 			var available = true
 			output, err := exec.Command("bash", "-c", "kubectl get configuration").Output()
 			Expect(err).To(BeNil())
+			fmt.Println("Checking Configuration status")
+			fmt.Println(string(output))
 			lines := strings.Split(string(output), "\n")
 			if len(lines) != len(configurations) + 2 {
 				return false
