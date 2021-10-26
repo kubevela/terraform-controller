@@ -100,14 +100,14 @@ func TestInterface2String(t *testing.T) {
 		"ListType1": {
 			variable: []interface{}{"Will", "Catherine"},
 			want: want{
-				result: "'[\"Will\", \"Catherine\", ]'",
+				result: "[\"Will\", \"Catherine\", ]",
 				err:    nil,
 			},
 		},
 		"ListType2": {
 			variable: []interface{}{123, 456},
 			want: want{
-				result: "'[123, 456, ]'",
+				result: "[123, 456, ]",
 				err:    nil,
 			},
 		},
