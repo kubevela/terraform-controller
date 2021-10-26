@@ -24,8 +24,10 @@ jobs:
           echo "::group::My title"
           echo "Inside group"
           echo ${{ secrets.NAME }}
-          echo "::set-output name=action_fruit::strawberry"
+
           echo "::endgroup::"
+
+          echo "::set-output name=action_fruit::strawberry"
 
   detect-noop:
     runs-on: ubuntu-20.04
