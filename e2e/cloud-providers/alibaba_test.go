@@ -51,7 +51,7 @@ func TestConfiguration(t *testing.T) {
 				}
 			}
 			return available
-		}, 180*time.Second, 1*time.Second).Should(BeTrue())
+		}, 600*time.Second, 1*time.Second).Should(BeTrue())
 
 		for _, c := range configurations {
 			cmd := fmt.Sprintf("kubectl delete -f %s", filepath.Join(pwd, "..", "..", c))
