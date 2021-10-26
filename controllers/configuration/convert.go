@@ -83,18 +83,19 @@ func RenderTemplate(backend *v1beta1.Backend, namespace string) (string, error) 
 	return wr.String(), nil
 }
 
+// Interface2String converts an interface{} type to string
 func Interface2String(v interface{}) (string, error) {
 	var value string
-	switch v.(type) {
+	switch v := v.(type) {
 	case string:
-		value = v.(string)
+		value = v
 	case int:
-		value = strconv.Itoa(v.(int))
+		value = strconv.Itoa(v)
 	case bool:
-		value = strconv.FormatBool(v.(bool))
+		value = strconv.FormatBool(v)
 	case []interface{}:
 		var tmp string
-		for _, i := range v.([]interface{}) {
+		for _, i := range v {
 			switch i.(type) {
 			case string:
 				tmp += fmt.Sprintf("\"%v\", ", i)
