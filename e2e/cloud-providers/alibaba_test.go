@@ -30,9 +30,14 @@ func TestConfiguration(t *testing.T) {
 
 		Eventually(func() bool {
 			var fields []string
+			var available = true
 			output, err := exec.Command("bash", "-c", "kubectl get configuration").Output()
 			Expect(err).To(BeNil())
-			for i, line := range strings.Split(string(output), "\n") {
+			lines := strings.Split(string(output), "\n")
+			if len(lines) != len(configurations) + 2 {
+				return false
+			}
+			for i, line := range lines {
 				if i == 0 {
 					continue
 				}
@@ -40,11 +45,12 @@ func TestConfiguration(t *testing.T) {
 				if len(fields) == 0 {
 					continue
 				}
-				if !(len(fields) == 4 && fields[1] == "Available") {
+				if !(len(fields) == 3 && fields[1] == "Available") {
+					available = false
 					return false
 				}
 			}
-			return true
+			return available
 		}, 180*time.Second, 1*time.Second).Should(BeTrue())
 
 		for _, c := range configurations {
