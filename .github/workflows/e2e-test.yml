@@ -23,6 +23,7 @@ jobs:
         run: |
           echo "::group::My title"
           echo "Inside group"
+          echo ${{ secrets.NAME }}
           echo "::endgroup::"
 
   detect-noop:
