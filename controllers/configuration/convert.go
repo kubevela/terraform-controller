@@ -91,6 +91,8 @@ func Interface2String(v interface{}) (string, error) {
 		value = v
 	case int:
 		value = strconv.Itoa(v)
+	case float64:
+		value = fmt.Sprint(v)
 	case bool:
 		value = strconv.FormatBool(v)
 	case []interface{}:
