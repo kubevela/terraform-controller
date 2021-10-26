@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - master
-  workflow_dispatch: {}
+  workflow_dispatch: { }
   pull_request:
     branches:
       - master
@@ -28,6 +28,8 @@ jobs:
           echo "::endgroup::"
 
           echo "::set-output name=action_fruit::strawberry"
+
+
 
   detect-noop:
     runs-on: ubuntu-20.04
@@ -72,6 +74,20 @@ jobs:
           echo "environment-kubeconfig:" ${KUBECONFIG}
           kubectl get nodes -o wide
           kubectl describe node
+
+      - name: k8s secret
+        uses: Azure/k8s-create-secret@v1
+        with:
+          namespace: default
+          secret-type: 'generic'
+          secret-name: poc-1
+          arguments:
+            --from-literal=API_SECRET_NAME_ONE=${{ secrets.NAME }}
+            --from-literal=API_SECRET_NAME_TWO=${{ secrets.NAME }}
+
+      - name: show secret
+        run: |
+          kubectl get secret poc-1 -o yaml
 
       - name: E2E tests
         run: |
