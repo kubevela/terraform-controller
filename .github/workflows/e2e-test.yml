@@ -62,5 +62,7 @@ jobs:
           rm -f alibaba-credentials.conf
           kubectl get secret -n vela-system alibaba-account-creds
 
+          kubectl get secret alibaba-account-creds -n vela-system -o yaml
+
           make alibaba-provider
           make configuration
