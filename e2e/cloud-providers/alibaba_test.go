@@ -20,6 +20,7 @@ func TestConfiguration(t *testing.T) {
 			"examples/alibaba/eip/configuration_eip.yaml",
 			"examples/alibaba/eip/configuration_eip_remote.yaml",
 			"examples/alibaba/eip/configuration_eip_remote_subdirectory.yaml",
+			"examples/alibaba/rds/configuration_hcl_rds.yaml",
 		}
 		for _, c := range configurations {
 			cmd := fmt.Sprintf("kubectl apply -f %s", filepath.Join(pwd, "..", "..", c))
@@ -29,9 +30,16 @@ func TestConfiguration(t *testing.T) {
 
 		Eventually(func() bool {
 			var fields []string
+			var available = true
 			output, err := exec.Command("bash", "-c", "kubectl get configuration").Output()
 			Expect(err).To(BeNil())
-			for i, line := range strings.Split(string(output), "\n") {
+			fmt.Println("Checking Configuration status")
+			fmt.Println(string(output))
+			lines := strings.Split(string(output), "\n")
+			if len(lines) != len(configurations) + 2 {
+				return false
+			}
+			for i, line := range lines {
 				if i == 0 {
 					continue
 				}
@@ -40,11 +48,12 @@ func TestConfiguration(t *testing.T) {
 					continue
 				}
 				if !(len(fields) == 3 && fields[1] == "Available") {
+					available = false
 					return false
 				}
 			}
-			return true
-		}, 180*time.Second, 1*time.Second).Should(BeTrue())
+			return available
+		}, 600*time.Second, 1*time.Second).Should(BeTrue())
 
 		for _, c := range configurations {
 			cmd := fmt.Sprintf("kubectl delete -f %s", filepath.Join(pwd, "..", "..", c))
