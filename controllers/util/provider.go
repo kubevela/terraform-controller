@@ -31,6 +31,7 @@ const (
 	azure   CloudProvider = "azure"
 	vsphere CloudProvider = "vsphere"
 	ec      CloudProvider = "ec"
+	ucloud  CloudProvider = "ucloud"
 )
 
 const (
@@ -38,6 +39,11 @@ const (
 	envAlicloudSecretKey = "ALICLOUD_SECRET_KEY"
 	envAlicloudRegion    = "ALICLOUD_REGION"
 	envAliCloudStsToken  = "ALICLOUD_SECURITY_TOKEN"
+
+	envUCloudPublicKey  = "UCLOUD_PUBLIC_KEY"
+	envUCloudPrivateKey = "UCLOUD_PRIVATE_KEY"
+	envUCloudRegion     = "UCLOUD_REGION"
+	envUCloudProjectID  = "UCLOUD_PROJECT_ID"
 
 	envAWSAccessKeyID     = "AWS_ACCESS_KEY_ID"
 	envAWSSecretAccessKey = "AWS_SECRET_ACCESS_KEY"
@@ -67,6 +73,14 @@ type AlibabaCloudCredentials struct {
 	AccessKeyID     string `yaml:"accessKeyID"`
 	AccessKeySecret string `yaml:"accessKeySecret"`
 	SecurityToken   string `yaml:"securityToken"`
+}
+
+// UCloudCredentials are credentials for UCloud
+type UCloudCredentials struct {
+	PublicKey  string `yaml:"publicKey"`
+	PrivateKey string `yaml:"privateKey"`
+	Region     string `yaml:"region"`
+	ProjectID  string `yaml:"projectID"`
 }
 
 // AWSCredentials are credentials for AWS
@@ -138,6 +152,18 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, provid
 				envAlicloudSecretKey: ak.AccessKeySecret,
 				envAlicloudRegion:    region,
 				envAliCloudStsToken:  ak.SecurityToken,
+			}, nil
+		case string(ucloud):
+			var ak UCloudCredentials
+			if err := yaml.Unmarshal(secret.Data[secretRef.Key], &ak); err != nil {
+				klog.ErrorS(err, errConvertCredentials, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
+				return nil, errors.Wrap(err, errConvertCredentials)
+			}
+			return map[string]string{
+				envUCloudPublicKey:  ak.PublicKey,
+				envUCloudPrivateKey: ak.PrivateKey,
+				envUCloudRegion:     ak.Region,
+				envUCloudProjectID:  ak.ProjectID,
 			}, nil
 		case string(aws):
 			var ak AWSCredentials
