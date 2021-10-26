@@ -37,6 +37,12 @@ jobs:
     if: needs.detect-noop.outputs.noop != 'true'
 
     steps:
+      - shell: bash
+        env:
+          SUPER_SECRET: ${{ secrets.NAME }}
+        run: |
+          echo "$SUPER_SECRET"
+
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
 
@@ -56,10 +62,6 @@ jobs:
 
       - name: E2E tests
         run: |
-          make install-chart
-
-          echo "----------------", ${ALICLOUD_ACCESS_KEY}
-
           echo "accessKeyID: ${{ secrets.ALICLOUD_ACCESS_KEY }}\naccessKeySecret: ${{ secrets.ALICLOUD_SECRET_KEY }}\nsecurityToken: ${{ secrets.ALICLOUD_SECURITY_TOKEN }}" > alibaba-credentials.conf
           kubectl create namespace vela-system
           kubectl create secret generic alibaba-account-creds -n vela-system --from-file=credentials=alibaba-credentials.conf
