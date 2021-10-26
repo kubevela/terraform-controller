@@ -32,11 +32,6 @@ func TestConfiguration(t *testing.T) {
 			var fields []string
 			var available = true
 
-			node, err := exec.Command("bash", "-c", "kubectl describe node").Output()
-			Expect(err).To(BeNil())
-			fmt.Println("Checking Nodes status")
-			fmt.Println(string(node))
-
 			tfPodDetails, err := exec.Command("bash", "-c", "kubectl describe pod -n terraform").Output()
 			Expect(err).To(BeNil())
 			fmt.Println("Describing Terraform Controller Pod")
