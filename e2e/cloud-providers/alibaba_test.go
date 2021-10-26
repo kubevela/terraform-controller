@@ -40,7 +40,7 @@ func TestConfiguration(t *testing.T) {
 				if len(fields) == 0 {
 					continue
 				}
-				if !(len(fields) == 3 && fields[1] == "Available") {
+				if !(len(fields) == 4 && fields[1] == "Available") {
 					return false
 				}
 			}
