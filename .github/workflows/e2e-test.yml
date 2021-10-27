@@ -63,7 +63,7 @@ jobs:
 
       - name: E2E tests
         run: |
-          make install
+          make install-chart
 
           echo "accessKeyID: ${{ secrets.ALICLOUD_ACCESS_KEY }}\naccessKeySecret: ${{ secrets.ALICLOUD_SECRET_KEY }}\nsecurityToken: ${{ secrets.ALICLOUD_SECURITY_TOKEN }}" > alibaba-credentials.conf
           kubectl create namespace vela-system
