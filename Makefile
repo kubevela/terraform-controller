@@ -130,7 +130,7 @@ GOIMPORTS=$(shell which goimports)
 endif
 
 
-install:
+install-chart:
 	helm lint ./chart
 	helm upgrade --install --create-namespace --namespace terraform terraform-controller ./chart
 	helm test -n terraform terraform-controller --timeout 5m
@@ -213,6 +213,6 @@ azure: azure-credentials azure-provider
 configuration:
 	go test -v ./e2e/...
 
-e2e-setup: install alibaba
+e2e-setup: install-chart alibaba
 
 e2e: e2e-setup configuration
