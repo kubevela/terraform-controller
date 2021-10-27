@@ -477,7 +477,6 @@ func (meta *TFConfigurationMeta) updateTerraformJobIfNeeded(ctx context.Context,
 
 func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExecutionType) *batchv1.Job {
 	var (
-		initContainer  v1.Container
 		initContainers []v1.Container
 		parallelism    int32 = 1
 		completions    int32 = 1
@@ -500,7 +499,8 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 		},
 	}
 
-	initContainer = v1.Container{
+	// If HCL is inline, this container contains HCL and backend, or, it only contains backend
+	basicInitContainer := v1.Container{
 		Name:            "prepare-input-terraform-configurations",
 		Image:           "busybox:latest",
 		ImagePullPolicy: v1.PullIfNotPresent,
@@ -511,24 +511,24 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 		},
 		VolumeMounts: initContainerVolumeMounts,
 	}
-	initContainers = append(initContainers, initContainer)
-
-	hclPath := filepath.Join(BackendVolumeMountPath, meta.RemoteGitPath)
 
 	if meta.RemoteGit != "" {
-		initContainers = append(initContainers,
-			v1.Container{
-				Name:            "git-configuration",
-				Image:           "alpine/git:latest",
-				ImagePullPolicy: v1.PullIfNotPresent,
-				Command: []string{
-					"sh",
-					"-c",
-					fmt.Sprintf("git clone %s %s && cp -r %s/* %s", meta.RemoteGit, BackendVolumeMountPath,
-						hclPath, WorkingVolumeMountPath),
-				},
-				VolumeMounts: initContainerVolumeMounts,
-			})
+		hclPath := filepath.Join(BackendVolumeMountPath, meta.RemoteGitPath)
+		gitCloneInitContainer := v1.Container{
+			Name:            "git-configuration",
+			Image:           "alpine/git:latest",
+			ImagePullPolicy: v1.PullIfNotPresent,
+			Command: []string{
+				"sh",
+				"-c",
+				fmt.Sprintf("git clone %s %s && cp -r %s/* %s", meta.RemoteGit, BackendVolumeMountPath,
+					hclPath, WorkingVolumeMountPath),
+			},
+			VolumeMounts: initContainerVolumeMounts,
+		}
+		initContainers = append(initContainers, gitCloneInitContainer, basicInitContainer)
+	} else {
+		initContainers = append(initContainers, basicInitContainer)
 	}
 
 	return &batchv1.Job{
