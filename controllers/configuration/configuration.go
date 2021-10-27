@@ -5,7 +5,6 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/oam-dev/terraform-controller/api/types"
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
-	"github.com/oam-dev/terraform-controller/controllers/util"
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
 )
@@ -43,7 +42,7 @@ func RenderConfiguration(configuration *v1beta1.Configuration, controllerNamespa
 			InClusterConfig: true,
 		}
 	}
-	backendTF, err := util.RenderTemplate(configuration.Spec.Backend, controllerNamespace)
+	backendTF, err := RenderTemplate(configuration.Spec.Backend, controllerNamespace)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to prepare Terraform backend configuration")
 	}
