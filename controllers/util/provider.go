@@ -40,10 +40,10 @@ const (
 	envAlicloudRegion    = "ALICLOUD_REGION"
 	envAliCloudStsToken  = "ALICLOUD_SECURITY_TOKEN"
 
-	envUCloudPublicKey  = "UCLOUD_PUBLIC_KEY"
 	envUCloudPrivateKey = "UCLOUD_PRIVATE_KEY"
-	envUCloudRegion     = "UCLOUD_REGION"
 	envUCloudProjectID  = "UCLOUD_PROJECT_ID"
+	envUCloudPublicKey  = "UCLOUD_PUBLIC_KEY"
+	envUCloudRegion     = "UCLOUD_REGION"
 
 	envAWSAccessKeyID     = "AWS_ACCESS_KEY_ID"
 	envAWSSecretAccessKey = "AWS_SECRET_ACCESS_KEY"

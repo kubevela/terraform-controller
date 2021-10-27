@@ -14,6 +14,7 @@ Terraform Controller is a Kubernetes Controller for Terraform.
 - [Elastic Cloud](https://www.elastic.co/)
 - [GCP](https://cloud.google.com/)
 - [VMware vSphere](https://www.vmware.com/hk/products/vsphere.html)
+- [UCloud](https://www.ucloud.cn/)
 
 ## Supported Terraform Configuration
 
