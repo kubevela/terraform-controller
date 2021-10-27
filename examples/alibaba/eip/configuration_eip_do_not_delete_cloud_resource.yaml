@@ -1,0 +1,17 @@
+apiVersion: terraform.core.oam.dev/v1beta1
+kind: Configuration
+metadata:
+  name: alibaba-eip-remote-with-subdirectory
+spec:
+  remote: https://github.com/kubevela-contrib/terraform-modules.git
+  path: alibaba/eip
+
+  variable:
+    name: poc-remote-with-subdirectory
+    bandwidth: 1
+
+  deleteResource: false
+
+  writeConnectionSecretToRef:
+    name: poc-remote-with-subdirectory-conn
+    namespace: default

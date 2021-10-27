@@ -54,6 +54,10 @@ type ConfigurationSpec struct {
 
 	// ProviderReference specifies the reference to Provider
 	ProviderReference *types.Reference `json:"providerRef,omitempty"`
+
+	// DeleteResource will determine whether provisioned cloud resources will be deleted when CR is deleted
+	// +kubebuilder:default:=true
+	DeleteResource bool `json:"deleteResource,omitempty"`
 }
 
 // ConfigurationStatus defines the observed state of Configuration

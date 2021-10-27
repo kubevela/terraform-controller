@@ -137,6 +137,7 @@ type TFConfigurationMeta struct {
 	ProviderReference     *crossplane.Reference
 	VariableSecretName    string
 	VariableSecretData    map[string][]byte
+	DeleteResource        bool
 }
 
 // +kubebuilder:rbac:groups=terraform.core.oam.dev,resources=configurations,verbs=get;list;watch;create;update;patch;delete
@@ -154,6 +155,8 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 			VariableSecretName:  fmt.Sprintf(TFVariableSecret, req.Name),
 			ApplyJobName:        req.Name + "-" + string(TerraformApply),
 			DestroyJobName:      req.Name + "-" + string(TerraformDestroy),
+			RemoteGit:           configuration.Spec.Remote,
+			DeleteResource:      configuration.Spec.DeleteResource,
 		}
 	)
 	klog.InfoS("reconciling Terraform Configuration...", "NamespacedName", req.NamespacedName)
@@ -165,7 +168,6 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		}
 		return ctrl.Result{}, err
 	}
-	meta.RemoteGit = configuration.Spec.Remote
 	if configuration.Spec.Path == "" {
 		meta.RemoteGitPath = "."
 	} else {
@@ -285,6 +287,21 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, configur
 		warning := fmt.Sprintf("Destroy could not complete and needs to wait for Provision to complet first: %s", MessageCloudResourceProvisioningAndChecking)
 		klog.Warning(warning)
 		return errors.New(warning)
+	}
+
+	if !meta.DeleteResource {
+		// 1. delete Terraform input Configuration ConfigMap
+		if err := deleteConfigMap(ctx, k8sClient, meta.ConfigurationCMName); err != nil {
+			return err
+		}
+
+		// 2. delete apply job
+		var applyJob batchv1.Job
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.ApplyJobName, Namespace: controllerNamespace}, &applyJob); err == nil {
+			if err := k8sClient.Delete(ctx, &applyJob, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
+				return err
+			}
+		}
 	}
 
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.DestroyJobName, Namespace: meta.Namespace}, &destroyJob); err != nil {
