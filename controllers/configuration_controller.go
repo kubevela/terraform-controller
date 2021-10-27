@@ -40,7 +40,7 @@ import (
 	"github.com/oam-dev/terraform-controller/api/types"
 	crossplane "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
-	cfgvalidator "github.com/oam-dev/terraform-controller/controllers/configuration"
+	tfcfg "github.com/oam-dev/terraform-controller/controllers/configuration"
 	"github.com/oam-dev/terraform-controller/controllers/terraform"
 	"github.com/oam-dev/terraform-controller/controllers/util"
 )
@@ -243,7 +243,7 @@ func (r *ConfigurationReconciler) terraformApply(ctx context.Context, namespace 
 		tfExecutionJob batchv1.Job
 	)
 
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.ApplyJobName, Namespace: controllerNamespace}, &tfExecutionJob); err != nil {
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.ApplyJobName, Namespace: meta.Namespace}, &tfExecutionJob); err != nil {
 		if kerrors.IsNotFound(err) {
 			return meta.assembleAndTriggerJob(ctx, k8sClient, &configuration, TerraformApply)
 		}
@@ -320,7 +320,7 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, configur
 
 		// 3. delete apply job
 		var applyJob batchv1.Job
-		if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.ApplyJobName, Namespace: controllerNamespace}, &applyJob); err == nil {
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.ApplyJobName, Namespace: meta.Namespace}, &applyJob); err == nil {
 			if err := k8sClient.Delete(ctx, &applyJob, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
 				return err
 			}
@@ -339,7 +339,7 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	var k8sClient = r.Client
 
 	// Validation: 1) validate Configuration itself
-	configurationType, err := cfgvalidator.ValidConfigurationObject(configuration)
+	configurationType, err := tfcfg.ValidConfigurationObject(configuration)
 	if err != nil {
 		if updateErr := updateStatus(ctx, k8sClient, *configuration, types.ConfigurationStaticCheckFailed, err.Error()); err != nil {
 			return updateErr
@@ -351,23 +351,18 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	// TODO(zzxwill) Need to find an alternative to check whether there is an state backend in the Configuration
 
 	// Render configuration with backend
-	completeConfiguration, err := cfgvalidator.RenderConfiguration(configuration, controllerNamespace, configurationType)
+	completeConfiguration, err := tfcfg.RenderConfiguration(configuration, meta.Namespace, configurationType)
 	if err != nil {
 		return err
 	}
 	meta.CompleteConfiguration = completeConfiguration
 
-	var inputConfigurationCM v1.ConfigMap
-	if err := r.Client.Get(ctx, client.ObjectKey{Name: meta.ConfigurationCMName, Namespace: controllerNamespace}, &inputConfigurationCM); err != nil {
-		if kerrors.IsNotFound(err) {
-			klog.InfoS("The input Configuration ConfigMaps doesn't exist", "Namespace", controllerNamespace, "Name", meta.ConfigurationCMName)
-		} else {
-			return err
-		}
+	if err := meta.storeTFConfiguration(ctx, k8sClient); err != nil {
+		return err
 	}
 
 	// Check whether configuration(hcl/json) is changed
-	configurationChanged, err := cfgvalidator.CheckWhetherConfigurationChanges(configurationType, &inputConfigurationCM, completeConfiguration)
+	configurationChanged, err := meta.CheckWhetherConfigurationChanges(ctx, k8sClient, configurationType)
 	if err != nil {
 		return err
 	}
@@ -429,7 +424,7 @@ func (meta *TFConfigurationMeta) updateTerraformJobIfNeeded(ctx context.Context,
 
 	// check whether env changes
 	var envChanged bool
-	if len(job.Spec.Template.Spec.Containers) == 1 && !cfgvalidator.CompareTwoContainerEnvs(job.Spec.Template.Spec.Containers[0].Env, envs) {
+	if len(job.Spec.Template.Spec.Containers) == 1 && !tfcfg.CompareTwoContainerEnvs(job.Spec.Template.Spec.Containers[0].Env, envs) {
 		envChanged = true
 		klog.InfoS("Job's env changed", "Previous", envs, "Current", job.Spec.Template.Spec.Containers[0].Env)
 		if err := updateStatus(ctx, k8sClient, configuration, types.ConfigurationReloading, ConfigurationReloadingAsVariableChanged); err != nil {
@@ -511,7 +506,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      meta.Name + "-" + string(executionType),
-			Namespace: controllerNamespace,
+			Namespace: meta.Namespace,
 		},
 		Spec: batchv1.JobSpec{
 			Parallelism:  &parallelism,
@@ -737,13 +732,13 @@ func deleteConnectionSecret(ctx context.Context, k8sClient client.Client, name, 
 
 func (meta *TFConfigurationMeta) createOrUpdateConfigMap(ctx context.Context, k8sClient client.Client, data map[string]string) error {
 	var gotCM v1.ConfigMap
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.ConfigurationCMName, Namespace: controllerNamespace}, &gotCM); err != nil {
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.ConfigurationCMName, Namespace: meta.Namespace}, &gotCM); err != nil {
 		if kerrors.IsNotFound(err) {
 			cm := v1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      meta.ConfigurationCMName,
-					Namespace: controllerNamespace,
+					Namespace: meta.Namespace,
 				},
 				Data: data,
 			}
@@ -775,4 +770,30 @@ func (meta *TFConfigurationMeta) prepareTFInputConfigurationData() map[string]st
 func (meta *TFConfigurationMeta) storeTFConfiguration(ctx context.Context, k8sClient client.Client) error {
 	data := meta.prepareTFInputConfigurationData()
 	return meta.createOrUpdateConfigMap(ctx, k8sClient, data)
+}
+
+// CheckWhetherConfigurationChanges will check whether configuration is changed
+func (meta *TFConfigurationMeta) CheckWhetherConfigurationChanges(ctx context.Context, k8sClient client.Client, configurationType types.ConfigurationType) (bool, error) {
+	var cm v1.ConfigMap
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.ConfigurationCMName, Namespace: meta.Namespace}, &cm); err != nil {
+		return false, err
+	}
+
+	var configurationChanged bool
+	switch configurationType {
+	case types.ConfigurationJSON:
+		return configurationChanged, nil
+	case types.ConfigurationHCL:
+		configurationChanged = cm.Data[types.TerraformHCLConfigurationName] != meta.CompleteConfiguration
+		if configurationChanged {
+			klog.InfoS("Configuration HCL changed", "ConfigMap", cm.Data[types.TerraformHCLConfigurationName],
+				"RenderedCompletedConfiguration", meta.CompleteConfiguration)
+		}
+
+		return configurationChanged, nil
+	case types.ConfigurationRemote:
+		return cm.Name == "", nil
+	}
+
+	return configurationChanged, errors.New("unknown issue")
 }
