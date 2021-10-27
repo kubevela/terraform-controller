@@ -40,7 +40,7 @@ import (
 	"github.com/oam-dev/terraform-controller/api/types"
 	crossplane "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
-	tfcfg "github.com/oam-dev/terraform-controller/controllers/configuration"
+	cfgvalidator "github.com/oam-dev/terraform-controller/controllers/configuration"
 	"github.com/oam-dev/terraform-controller/controllers/terraform"
 	"github.com/oam-dev/terraform-controller/controllers/util"
 )
@@ -69,8 +69,6 @@ const (
 	TerraformStateNameInSecret = "tfstate"
 	// TFInputConfigMapName is the CM name for Terraform Input Configuration
 	TFInputConfigMapName = "%s-tf-input"
-	// TFVariableSecret is the Secret name for variables, including credentials from Provider
-	TFVariableSecret = "variable-%s"
 )
 
 // TerraformExecutionType is the type for Terraform execution
@@ -135,8 +133,6 @@ type TFConfigurationMeta struct {
 	DestroyJobName        string
 	Envs                  []v1.EnvVar
 	ProviderReference     *crossplane.Reference
-	VariableSecretName    string
-	VariableSecretData    map[string][]byte
 }
 
 // +kubebuilder:rbac:groups=terraform.core.oam.dev,resources=configurations,verbs=get;list;watch;create;update;patch;delete
@@ -151,7 +147,6 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 			Namespace:           controllerNamespace,
 			Name:                req.Name,
 			ConfigurationCMName: fmt.Sprintf(TFInputConfigMapName, req.Name),
-			VariableSecretName:  fmt.Sprintf(TFVariableSecret, req.Name),
 			ApplyJobName:        req.Name + "-" + string(TerraformApply),
 			DestroyJobName:      req.Name + "-" + string(TerraformDestroy),
 		}
@@ -344,7 +339,7 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	var k8sClient = r.Client
 
 	// Validation: 1) validate Configuration itself
-	configurationType, err := tfcfg.ValidConfigurationObject(configuration)
+	configurationType, err := cfgvalidator.ValidConfigurationObject(configuration)
 	if err != nil {
 		if updateErr := updateStatus(ctx, k8sClient, *configuration, types.ConfigurationStaticCheckFailed, err.Error()); err != nil {
 			return updateErr
@@ -356,7 +351,7 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	// TODO(zzxwill) Need to find an alternative to check whether there is an state backend in the Configuration
 
 	// Render configuration with backend
-	completeConfiguration, err := tfcfg.RenderConfiguration(configuration, controllerNamespace, configurationType)
+	completeConfiguration, err := cfgvalidator.RenderConfiguration(configuration, controllerNamespace, configurationType)
 	if err != nil {
 		return err
 	}
@@ -372,7 +367,7 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	}
 
 	// Check whether configuration(hcl/json) is changed
-	configurationChanged, err := tfcfg.CheckWhetherConfigurationChanges(configurationType, &inputConfigurationCM, completeConfiguration)
+	configurationChanged, err := cfgvalidator.CheckWhetherConfigurationChanges(configurationType, &inputConfigurationCM, completeConfiguration)
 	if err != nil {
 		return err
 	}
@@ -413,26 +408,11 @@ func updateStatus(ctx context.Context, k8sClient client.Client, configuration v1
 
 func (meta *TFConfigurationMeta) assembleAndTriggerJob(ctx context.Context, k8sClient client.Client,
 	configuration *v1beta1.Configuration, executionType TerraformExecutionType) error {
-	if err := meta.prepareTFVariables(ctx, k8sClient, configuration); err != nil {
+	envs, err := meta.prepareTFVariables(ctx, k8sClient, configuration)
+	if err != nil {
 		return err
 	}
-
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.VariableSecretName, Namespace: meta.Namespace}, &v1.Secret{}); err != nil {
-		if kerrors.IsNotFound(err) {
-			var secret = v1.Secret{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      meta.VariableSecretName,
-					Namespace: meta.Namespace,
-				},
-				TypeMeta: metav1.TypeMeta{Kind: "Secret"},
-				Data:     meta.VariableSecretData,
-			}
-
-			if err := k8sClient.Create(ctx, &secret); err != nil {
-				return err
-			}
-		}
-	}
+	meta.Envs = envs
 
 	job := meta.assembleTerraformJob(executionType)
 	return k8sClient.Create(ctx, job)
@@ -442,24 +422,18 @@ func (meta *TFConfigurationMeta) assembleAndTriggerJob(ctx context.Context, k8sC
 // deleting the job. Finally a new Terraform job will be generated
 func (meta *TFConfigurationMeta) updateTerraformJobIfNeeded(ctx context.Context, k8sClient client.Client, configuration v1beta1.Configuration,
 	job batchv1.Job) error {
-	if err := meta.prepareTFVariables(ctx, k8sClient, &configuration); err != nil {
+	envs, err := meta.prepareTFVariables(ctx, k8sClient, &configuration)
+	if err != nil {
 		return err
 	}
 
 	// check whether env changes
-	var variableInSecret v1.Secret
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.VariableSecretName, Namespace: meta.Namespace}, &variableInSecret); err != nil {
-		return err
-	}
-
 	var envChanged bool
-	for k, v := range variableInSecret.Data {
-		if val, ok := meta.VariableSecretData[k]; !ok || string(v) != string(val) {
-			envChanged = true
-			klog.Info("Job's env changed")
-			if err := updateStatus(ctx, k8sClient, configuration, types.ConfigurationReloading, ConfigurationReloadingAsVariableChanged); err != nil {
-				return err
-			}
+	if len(job.Spec.Template.Spec.Containers) == 1 && !cfgvalidator.CompareTwoContainerEnvs(job.Spec.Template.Spec.Containers[0].Env, envs) {
+		envChanged = true
+		klog.InfoS("Job's env changed", "Previous", envs, "Current", job.Spec.Template.Spec.Containers[0].Env)
+		if err := updateStatus(ctx, k8sClient, configuration, types.ConfigurationReloading, ConfigurationReloadingAsVariableChanged); err != nil {
+			return err
 		}
 	}
 
@@ -468,15 +442,7 @@ func (meta *TFConfigurationMeta) updateTerraformJobIfNeeded(ctx context.Context,
 		klog.InfoS("about to delete job", "Name", job.Name, "Namespace", job.Namespace)
 		var j batchv1.Job
 		if err := k8sClient.Get(ctx, client.ObjectKey{Name: job.Name, Namespace: job.Namespace}, &j); err == nil {
-			if deleteErr := k8sClient.Delete(ctx, &job, client.PropagationPolicy(metav1.DeletePropagationBackground)); deleteErr != nil {
-				return deleteErr
-			}
-		}
-		var s v1.Secret
-		if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.VariableSecretName, Namespace: meta.Namespace}, &s); err == nil {
-			if deleteErr := k8sClient.Delete(ctx, &s); deleteErr != nil {
-				return deleteErr
-			}
+			return k8sClient.Delete(ctx, &job, client.PropagationPolicy(metav1.DeletePropagationBackground))
 		}
 	}
 	return nil
@@ -687,53 +653,41 @@ func getTFOutputs(ctx context.Context, k8sClient client.Client, configuration v1
 	return outputs, nil
 }
 
-func (meta *TFConfigurationMeta) prepareTFVariables(ctx context.Context, k8sClient client.Client, configuration *v1beta1.Configuration) error {
-	var (
-		envs []v1.EnvVar
-		data = map[string][]byte{}
-	)
+func (meta *TFConfigurationMeta) prepareTFVariables(ctx context.Context, k8sClient client.Client, configuration *v1beta1.Configuration) ([]v1.EnvVar, error) {
+	var envs []v1.EnvVar
 
 	if configuration == nil {
-		return errors.New("configuration is nil")
+		return nil, errors.New("configuration is nil")
 	}
 	if meta.ProviderReference == nil {
-		return errors.New("The referenced provider could not be retrieved")
+		return nil, errors.New("The referenced provider could not be retrieved")
 	}
 
 	tfVariable, err := getTerraformJSONVariable(configuration.Spec.Variable)
 	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("failed to get Terraform JSON variables from Configuration Variables %v", configuration.Spec.Variable))
+		return nil, errors.Wrap(err, fmt.Sprintf("failed to get Terraform JSON variables from Configuration Variables %v", configuration.Spec.Variable))
 	}
 	for k, v := range tfVariable {
-		envValue, err := tfcfg.Interface2String(v)
-		if err != nil {
-			return err
-		}
-		data[k] = []byte(envValue)
-		valueFrom := &v1.EnvVarSource{SecretKeyRef: &v1.SecretKeySelector{Key: k}}
-		valueFrom.SecretKeyRef.Name = meta.VariableSecretName
-		envs = append(envs, v1.EnvVar{Name: k, ValueFrom: valueFrom})
+		envs = append(envs, v1.EnvVar{Name: k, Value: v})
 	}
 
 	credential, err := util.GetProviderCredentials(ctx, k8sClient, meta.ProviderReference.Namespace, meta.ProviderReference.Name)
 	if err != nil {
 		if configuration.Status.Apply.State != types.ProviderNotReady {
 			if updateStatusErr := updateStatus(ctx, k8sClient, *configuration, types.ProviderNotReady, ErrProviderNotReady); updateStatusErr != nil {
-				return errors.Wrap(updateStatusErr, errSettingStatus)
+				return nil, errors.Wrap(updateStatusErr, errSettingStatus)
 			}
-			return errors.Wrap(err, ErrProviderNotReady)
 		}
+		return nil, errors.Wrap(err, ErrProviderNotReady)
 	}
 	for k, v := range credential {
-		data[k] = []byte(v)
-		valueFrom := &v1.EnvVarSource{SecretKeyRef: &v1.SecretKeySelector{Key: k}}
-		valueFrom.SecretKeyRef.Name = meta.VariableSecretName
-		envs = append(envs, v1.EnvVar{Name: k, ValueFrom: valueFrom})
+		envs = append(envs,
+			v1.EnvVar{
+				Name:  k,
+				Value: v,
+			})
 	}
-	meta.Envs = envs
-	meta.VariableSecretData = data
-
-	return nil
+	return envs, nil
 }
 
 // SetupWithManager setups with a manager
@@ -743,15 +697,15 @@ func (r *ConfigurationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func getTerraformJSONVariable(tfVariables *runtime.RawExtension) (map[string]interface{}, error) {
-	variables, err := tfcfg.RawExtension2Map(tfVariables)
+func getTerraformJSONVariable(tfVariables *runtime.RawExtension) (map[string]string, error) {
+	variables, err := util.RawExtension2Map(tfVariables)
 	if err != nil {
 		return nil, err
 	}
-	var environments = make(map[string]interface{})
+	var environments = make(map[string]string)
 
 	for k, v := range variables {
-		environments[fmt.Sprintf("TF_VAR_%s", k)] = v
+		environments[fmt.Sprintf("TF_VAR_%s", k)] = fmt.Sprint(v)
 	}
 	return environments, nil
 }

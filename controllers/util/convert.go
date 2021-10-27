@@ -14,13 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package configuration
+package util
 
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
-	"strconv"
 	"text/template"
 
 	"github.com/Masterminds/sprig/v3"
@@ -81,33 +79,4 @@ func RenderTemplate(backend *v1beta1.Backend, namespace string) (string, error) 
 		return "", err
 	}
 	return wr.String(), nil
-}
-
-// Interface2String converts an interface{} type to string
-func Interface2String(v interface{}) (string, error) {
-	var value string
-	switch v := v.(type) {
-	case string:
-		value = v
-	case int:
-		value = strconv.Itoa(v)
-	case float64:
-		value = fmt.Sprint(v)
-	case bool:
-		value = strconv.FormatBool(v)
-	case []interface{}:
-		var tmp string
-		for _, i := range v {
-			switch i.(type) {
-			case string:
-				tmp += fmt.Sprintf("\"%v\", ", i)
-			case int, bool:
-				tmp += fmt.Sprintf("%v, ", i)
-			}
-		}
-		value = fmt.Sprintf(`[%s]`, tmp)
-	default:
-		return "", fmt.Errorf("could not convert %v to string", v)
-	}
-	return value, nil
 }
