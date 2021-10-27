@@ -210,6 +210,37 @@ azure-provider:
 
 azure: azure-credentials azure-provider
 
+
+ucloud-credentials:
+ifeq (, $(UCLOUD_PRIVATE_KEY))
+	@echo "Environment variable UCLOUD_PRIVATE_KEY is not set"
+	exit 1
+endif
+
+ifeq (, $(UCLOUD_PUBLIC_KEY))
+	@echo "Environment variable UCLOUD_PUBLIC_KEY is not set"
+	exit 1
+endif
+
+ifeq (, $(UCLOUD_PROJECT_ID))
+	@echo "Environment variable UCLOUD_PROJECT_ID is not set"
+	exit 1
+endif
+
+ifeq (, $(UCLOUD_REGION))
+	@echo "Environment variable UCLOUD_REGION is not set"
+	exit 1
+endif
+	echo "publicKey: ${UCLOUD_PUBLIC_KEY}\nprivateKey: ${UCLOUD_PRIVATE_KEY}\nregion: ${UCLOUD_REGION}\nprojectID: ${UCLOUD_PROJECT_ID}" > ucloud-credentials.conf
+	kubectl create secret generic ucloud-account-creds -n vela-system --from-file=credentials=ucloud-credentials.conf
+	rm -f ucloud-credentials.conf
+
+ucloud-provider:
+	kubectl apply -f examples/ucloud/provider.yaml
+
+ucloud: ucloud-credentials ucloud-provider
+
+
 configuration:
 	go test -v ./e2e/...
 
