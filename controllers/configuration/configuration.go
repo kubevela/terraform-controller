@@ -3,13 +3,11 @@ package configuration
 import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/pkg/errors"
-	v1 "k8s.io/api/core/v1"
-	"k8s.io/klog/v2"
-
 	"github.com/oam-dev/terraform-controller/api/types"
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
 	"github.com/oam-dev/terraform-controller/controllers/util"
+	"github.com/pkg/errors"
+	v1 "k8s.io/api/core/v1"
 )
 
 // ValidConfigurationObject will validate a Configuration
@@ -62,32 +60,6 @@ func RenderConfiguration(configuration *v1beta1.Configuration, controllerNamespa
 	default:
 		return "", errors.New("Unsupported Configuration Type")
 	}
-}
-
-// CheckWhetherConfigurationChanges will check whether configuration is changed
-func CheckWhetherConfigurationChanges(configurationType types.ConfigurationType, cm *v1.ConfigMap, completedConfiguration string) (bool, error) {
-	var configurationChanged bool
-	switch configurationType {
-	case types.ConfigurationJSON:
-		return configurationChanged, nil
-	case types.ConfigurationHCL:
-		if cm != nil {
-			configurationChanged = cm.Data[types.TerraformHCLConfigurationName] != completedConfiguration
-			if configurationChanged {
-				klog.InfoS("Configuration HCL changed", "ConfigMap", cm.Data[types.TerraformHCLConfigurationName],
-					"RenderedCompletedConfiguration", completedConfiguration)
-			}
-		} else {
-			// If the ConfigMap doesn't exist, we can surely say the configuration hcl/json changed
-			configurationChanged = true
-		}
-
-		return configurationChanged, nil
-	case types.ConfigurationRemote:
-		return cm.Name == "", nil
-	}
-
-	return configurationChanged, errors.New("unknown issue")
 }
 
 // CompareTwoContainerEnvs compares two slices of v1.EnvVar
