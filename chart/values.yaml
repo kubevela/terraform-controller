@@ -1,10 +1,10 @@
 replicaCount: 1
 
-version: 0.2.6
+version: 0.2.7
 
 image:
   repository: oamdev/terraform-controller
-  tag: 0.2.6
+  tag: 0.2.7
   pullPolicy: Always
 
 terraformImage: oamdev/docker-terraform:1.0.7
