@@ -46,12 +46,7 @@ import (
 )
 
 const (
-	// TerraformImage is the Terraform image which can run `terraform init/plan/apply`
-	terraformImage     = "oamdev/docker-terraform:1.0.7"
 	terraformWorkspace = "default"
-)
-
-const (
 	// WorkingVolumeMountPath is the mount path for working volume
 	WorkingVolumeMountPath = "/data"
 	// InputTFConfigurationVolumeName is the volume name for input Terraform Configuration
@@ -118,7 +113,11 @@ type ConfigurationReconciler struct {
 	ProviderName string
 }
 
-var controllerNamespace = os.Getenv("CONTROLLER_NAMESPACE")
+var (
+	controllerNamespace = os.Getenv("CONTROLLER_NAMESPACE")
+	// TerraformImage is the Terraform image which can run `terraform init/plan/apply`
+	terraformImage = os.Getenv("TERRAFORM_IMAGE")
+)
 
 // TFConfigurationMeta is all the metadata of a Configuration
 type TFConfigurationMeta struct {
