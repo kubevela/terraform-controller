@@ -6,3 +6,5 @@ image:
   repository: oamdev/terraform-controller
   tag: 0.2.6
   pullPolicy: Always
+
+terraformImage: oamdev/docker-terraform:1.0.7
