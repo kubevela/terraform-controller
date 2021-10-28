@@ -1,0 +1,18 @@
+apiVersion: terraform.core.oam.dev/v1beta1
+kind: Configuration
+metadata:
+  name: ucloud-redis
+spec:
+  remote: https://github.com/kubevela-contrib/terraform-modules.git
+  path: ucloud/redis
+
+  variable:
+    charge_type: dynamic
+    name: sample-uredis
+    password: MyFakePasswd654
+
+  providerRef:
+    name: ucloud
+
+  writeConnectionSecretToRef:
+    name: redis-conn
