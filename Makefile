@@ -1,6 +1,6 @@
 
 # Image URL to use all building/pushing image targets
-IMG ?= oamdev/terraform-controller:0.2.6
+IMG ?= oamdev/terraform-controller:0.2.7
 
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true"
