@@ -116,7 +116,7 @@ type ConfigurationReconciler struct {
 var (
 	controllerNamespace = os.Getenv("CONTROLLER_NAMESPACE")
 	// TerraformImage is the Terraform image which can run `terraform init/plan/apply`
-	terraformImage     = os.Getenv("TERRAFORM_IMAGE")
+	terraformImage = os.Getenv("TERRAFORM_IMAGE")
 )
 
 // TFConfigurationMeta is all the metadata of a Configuration
