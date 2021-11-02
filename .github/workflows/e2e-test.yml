@@ -55,12 +55,8 @@ jobs:
 
       - name: Setup Kind Cluster
         run: |
-          kind delete cluster
-          kind create cluster --image kindest/node:v1.20.7
-          kubectl version
           kubectl cluster-info
           echo "current-context:" $(kubectl config current-context)
-          echo "environment-kubeconfig:" ${KUBECONFIG}
 
       - name: Create Namespace
         run: |
