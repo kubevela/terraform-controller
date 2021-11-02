@@ -26,10 +26,6 @@ func TestConfiguration(t *testing.T) {
 		for _, c := range configurations {
 			cmd := fmt.Sprintf("kubectl apply -f %s", filepath.Join(pwd, "..", "..", c))
 			err := exec.Command("bash", "-c", cmd).Start()
-			if err != nil {
-                fmt.Println(err)
-				klog.ErrorS(err, "CMD", cmd)
-            }
 			Expect(err).To(BeNil())
 		}
 
@@ -38,6 +34,10 @@ func TestConfiguration(t *testing.T) {
 			var available = true
 
 			tfPodDetails, err := exec.Command("bash", "-c", "kubectl describe provider").Output()
+			if err != nil {
+				fmt.Println(err)
+				klog.ErrorS(err, "tfPodDetails", tfPodDetails)
+			}
 			Expect(err).To(BeNil())
 			fmt.Println("Describing Provider")
 			fmt.Println(string(tfPodDetails))
