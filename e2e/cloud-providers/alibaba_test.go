@@ -33,16 +33,20 @@ func TestConfiguration(t *testing.T) {
 			var fields []string
 			var available = true
 
-			tfPodDetails, err := exec.Command("bash", "-c", "kubectl describe provider").Output()
-			if err != nil {
-				fmt.Println(err)
-				klog.ErrorS(err, "tfPodDetails", tfPodDetails)
-			}
-			Expect(err).To(BeNil())
-			fmt.Println("Describing Provider")
-			fmt.Println(string(tfPodDetails))
+			//tfPodDetails, err := exec.Command("bash", "-c", "kubectl describe provider").Output()
+			//if err != nil {
+			//	fmt.Println(err)
+			//	klog.ErrorS(err, "tfPodDetails", tfPodDetails)
+			//}
+			//Expect(err).To(BeNil())
+			//fmt.Println("Describing Provider")
+			//fmt.Println(string(tfPodDetails))
 
 			output, err := exec.Command("bash", "-c", "kubectl get configuration").Output()
+			if err != nil {
+				fmt.Println(err)
+				klog.ErrorS(err, "TTT", "Configuratin")
+			}
 			Expect(err).To(BeNil())
 			fmt.Println("Checking Configuration status")
 			fmt.Println(string(output))

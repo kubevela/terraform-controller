@@ -53,13 +53,10 @@ jobs:
         with:
           version: "v0.11.1"
 
-      - name: Setup Kind Cluster
+      - name: Create Namespace
         run: |
           kubectl cluster-info
           echo "current-context:" $(kubectl config current-context)
-
-      - name: Create Namespace
-        run: |
           kubectl create namespace vela-system
 
       - name: Create Kubernetes secret to store Alibaba Cloud credentials
