@@ -62,6 +62,11 @@ spec:
                       will be named in the format: tfstate-{workspace}-{secretSuffix}'
                     type: string
                 type: object
+              deleteResource:
+                default: true
+                description: DeleteResource will determine whether provisioned cloud
+                  resources will be deleted when CR is deleted
+                type: boolean
               hcl:
                 description: HCL is the Terraform HCL type configuration
                 type: string
