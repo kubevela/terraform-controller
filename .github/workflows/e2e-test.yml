@@ -53,10 +53,11 @@ jobs:
         with:
           version: "v0.11.1"
 
-      - name: Create Namespace
+      - name: Install chart
         run: |
           kubectl cluster-info
           echo "current-context:" $(kubectl config current-context)
+          make install-chart
           kubectl create namespace vela-system
 
       - name: Create Kubernetes secret to store Alibaba Cloud credentials
@@ -69,9 +70,7 @@ jobs:
 
       - name: E2E tests
         run: |
-          make install-chart
           kubectl get secret -n vela-system alibaba-account-creds
-
           kubectl get secret alibaba-account-creds -n vela-system -o yaml
 
           make alibaba-provider

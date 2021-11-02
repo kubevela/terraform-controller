@@ -26,6 +26,9 @@ func TestConfiguration(t *testing.T) {
 		for _, c := range configurations {
 			cmd := fmt.Sprintf("kubectl apply -f %s", filepath.Join(pwd, "..", "..", c))
 			o, err := exec.Command("bash", "-c", cmd).Output()
+			if err != nil {
+				klog.ErrorS(err, "output", string(o))
+			}
 			Expect(err).To(BeNil())
 			klog.InfoS("TTTT", "o", fmt.Sprintf("%s", o))
 
