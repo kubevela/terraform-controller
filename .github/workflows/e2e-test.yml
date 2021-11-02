@@ -12,24 +12,9 @@ on:
 env:
   GO_VERSION: '1.16'
   GOLANGCI_VERSION: 'v1.38'
-  ALICLOUD_ACCESS_KEY: ${{ secrets.ALICLOUD_ACCESS_KEY }}
-
+  KUBECONFIG: ~/.kube/config
 
 jobs:
-  poc:
-    runs-on: ubuntu-latest
-    steps:
-      - name: PoC
-        run: |
-          echo "::group::My title"
-          echo "Inside group"
-          echo ${{ secrets.NAME }}
-
-          echo "::endgroup::"
-
-          echo "::set-output name=action_fruit::strawberry"
-
-
 
   detect-noop:
     runs-on: ubuntu-20.04
@@ -51,50 +36,47 @@ jobs:
     if: needs.detect-noop.outputs.noop != 'true'
 
     steps:
-      - shell: bash
-        env:
-          SUPER_SECRET: ${{ secrets.NAME }}
-        run: |
-          echo "$SUPER_SECRET" > a.txt
-          cat a.txt
-
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
+
+      - name: Setup Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Get dependencies
+        run: |
+          go get -v -t -d ./...
 
       - name: Setup Kind
         uses: engineerd/setup-kind@v0.5.0
         with:
           version: "v0.11.1"
 
-      - name: Test Kind cluster
+      - name: Setup Kind Cluster
         run: |
+          kind delete cluster
+          kind create cluster --image kindest/node:v1.20.7
+          kubectl version
           kubectl cluster-info
-          kubectl get pods -n kube-system
           echo "current-context:" $(kubectl config current-context)
           echo "environment-kubeconfig:" ${KUBECONFIG}
-          kubectl get nodes -o wide
-          kubectl describe node
 
-      - name: k8s secret
-        uses: Azure/k8s-create-secret@v1
-        with:
-          namespace: default
-          secret-type: 'generic'
-          secret-name: poc-1
-          arguments:
-            --from-literal=API_SECRET_NAME_ONE=${{ secrets.NAME }}
-            --from-literal=API_SECRET_NAME_TWO=${{ secrets.NAME }}
-
-      - name: show secret
+      - name: Create Namespace
         run: |
-          kubectl get secret poc-1 -o yaml
+          kubectl create namespace vela-system
+
+      - name: Create Kubernetes secret to store Alibaba Cloud credentials
+        uses: azure/k8s-create-secret@v1
+        with:
+          namespace: vela-system
+          secret-type: generic
+          arguments: --from-literal=accessKeyID=${{ secrets.ALICLOUD_ACCESS_KEY }} --from-literal=accessKeySecret=${{ secrets.ALICLOUD_SECRET_KEY }}
+          secret-name: alibaba-account-creds
 
       - name: E2E tests
         run: |
-          echo "accessKeyID: ${{ secrets.ALICLOUD_ACCESS_KEY }}\naccessKeySecret: ${{ secrets.ALICLOUD_SECRET_KEY }}\nsecurityToken: ${{ secrets.ALICLOUD_SECURITY_TOKEN }}" > alibaba-credentials.conf
-          kubectl create namespace vela-system
-          kubectl create secret generic alibaba-account-creds -n vela-system --from-file=credentials=alibaba-credentials.conf
-          rm -f alibaba-credentials.conf
+          make install-chart
           kubectl get secret -n vela-system alibaba-account-creds
 
           kubectl get secret alibaba-account-creds -n vela-system -o yaml
