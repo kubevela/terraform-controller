@@ -45,7 +45,7 @@ func TestConfiguration(t *testing.T) {
 			output, err := exec.Command("bash", "-c", "kubectl get configuration").Output()
 			if err != nil {
 				fmt.Println(err)
-				klog.ErrorS(err, "TTT", "Configuratin")
+				klog.ErrorS(err, "output", string(output))
 			}
 			Expect(err).To(BeNil())
 			fmt.Println("Checking Configuration status")
