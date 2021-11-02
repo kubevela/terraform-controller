@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - master
-  workflow_dispatch: {}
+  workflow_dispatch: { }
   pull_request:
     branches:
       - master
@@ -61,15 +61,21 @@ jobs:
           kubectl version
           kubectl cluster-info
 
+      - name: Create Namespace
+        run: |
+          kubectl create namespace vela-system
+
+      - name: Create Kubernetes secret to store Alibaba Cloud credentials
+        uses: azure/k8s-create-secret@v1
+        with:
+          namespace: vela-system
+          secret-type: generic
+          arguments: --from-literal=accessKeyID=${{ secrets.ALICLOUD_ACCESS_KEY }} --from-literal=accessKeySecret=${{ secrets.ALICLOUD_SECRET_KEY }}
+          secret-name: alibaba-account-creds
+
       - name: E2E tests
         run: |
           make install-chart
-
-          echo "accessKeyID: ${{ secrets.ALICLOUD_ACCESS_KEY }}\naccessKeySecret: ${{ secrets.ALICLOUD_SECRET_KEY }}\nsecurityToken: ${{ secrets.ALICLOUD_SECURITY_TOKEN }}" > alibaba-credentials.conf
-          kubectl create namespace vela-system
-          kubectl create secret generic alibaba-account-creds -n vela-system --from-file=credentials=alibaba-credentials.conf
-          rm -f alibaba-credentials.conf
           kubectl get secret -n vela-system alibaba-account-creds
-
           make alibaba-provider
           make configuration
