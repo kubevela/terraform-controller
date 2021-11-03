@@ -134,6 +134,7 @@ install-chart:
 	helm lint ./chart
 	helm upgrade --install --create-namespace --namespace terraform terraform-controller ./chart
 	helm test -n terraform terraform-controller --timeout 5m
+	kubectl get pod -n terraform -l "app=terraform-controller"
 
 alibaba-credentials:
 ifeq (, $(ALICLOUD_ACCESS_KEY))
