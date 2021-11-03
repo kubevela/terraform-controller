@@ -7,4 +7,4 @@ image:
   tag: 0.2.7
   pullPolicy: Always
 
-terraformImage: oamdev/docker-terraform:1.0.7
+terraformImage: oamdev/docker-terraform:1.0.9
