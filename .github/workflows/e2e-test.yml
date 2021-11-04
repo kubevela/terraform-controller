@@ -15,25 +15,8 @@ env:
   KUBECONFIG: /home/github/.kube/config
 
 jobs:
-
-  detect-noop:
-    runs-on: self-hosted
-    outputs:
-      noop: ${{ steps.noop.outputs.should_skip }}
-    steps:
-      - name: Detect No-op Changes
-        id: noop
-        uses: fkirc/skip-duplicate-actions@v3.3.0
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          paths_ignore: '["**.md", "**.mdx", "**.png", "**.jpg"]'
-          do_not_skip: '["workflow_dispatch", "schedule", "push"]'
-          concurrent_skipping: false
-
   e2e-tests:
     runs-on: self-hosted
-    needs: detect-noop
-    if: needs.detect-noop.outputs.noop != 'true'
 
     steps:
       - name: Check out code into the Go module directory
