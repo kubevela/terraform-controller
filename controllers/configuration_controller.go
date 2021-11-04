@@ -137,6 +137,7 @@ type TFConfigurationMeta struct {
 	VariableSecretName    string
 	VariableSecretData    map[string][]byte
 	DeleteResource        bool
+	Credentials           map[string]string
 }
 
 // +kubebuilder:rbac:groups=terraform.core.oam.dev,resources=configurations,verbs=get;list;watch;create;update;patch;delete
@@ -395,6 +396,16 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 		// store configuration to ConfigMap
 		return meta.storeTFConfiguration(ctx, k8sClient)
 	}
+
+	// Check provider
+	if err := meta.checkProvider(ctx, k8sClient); err != nil {
+		if configuration.Status.Apply.State != types.ProviderNotReady {
+			if updateStatusErr := updateStatus(ctx, k8sClient, *configuration, types.ProviderNotReady, ErrProviderNotReady); updateStatusErr != nil {
+				return errors.Wrap(updateStatusErr, errSettingStatus)
+			}
+		}
+		return errors.Wrap(err, ErrProviderNotReady)
+	}
 	return nil
 }
 
@@ -422,7 +433,7 @@ func updateStatus(ctx context.Context, k8sClient client.Client, configuration v1
 
 func (meta *TFConfigurationMeta) assembleAndTriggerJob(ctx context.Context, k8sClient client.Client,
 	configuration *v1beta1.Configuration, executionType TerraformExecutionType) error {
-	if err := meta.prepareTFVariables(ctx, k8sClient, configuration); err != nil {
+	if err := meta.prepareTFVariables(configuration); err != nil {
 		return err
 	}
 
@@ -448,10 +459,10 @@ func (meta *TFConfigurationMeta) assembleAndTriggerJob(ctx context.Context, k8sC
 }
 
 // updateTerraformJob will set deletion finalizer to the Terraform job if its envs are changed, which will result in
-// deleting the job. Finally a new Terraform job will be generated
+// deleting the job. Finally, a new Terraform job will be generated
 func (meta *TFConfigurationMeta) updateTerraformJobIfNeeded(ctx context.Context, k8sClient client.Client, configuration v1beta1.Configuration,
 	job batchv1.Job) error {
-	if err := meta.prepareTFVariables(ctx, k8sClient, &configuration); err != nil {
+	if err := meta.prepareTFVariables(&configuration); err != nil {
 		return err
 	}
 
@@ -696,7 +707,7 @@ func getTFOutputs(ctx context.Context, k8sClient client.Client, configuration v1
 	return outputs, nil
 }
 
-func (meta *TFConfigurationMeta) prepareTFVariables(ctx context.Context, k8sClient client.Client, configuration *v1beta1.Configuration) error {
+func (meta *TFConfigurationMeta) prepareTFVariables(configuration *v1beta1.Configuration) error {
 	var (
 		envs []v1.EnvVar
 		data = map[string][]byte{}
@@ -724,16 +735,7 @@ func (meta *TFConfigurationMeta) prepareTFVariables(ctx context.Context, k8sClie
 		envs = append(envs, v1.EnvVar{Name: k, ValueFrom: valueFrom})
 	}
 
-	credential, err := util.GetProviderCredentials(ctx, k8sClient, meta.ProviderReference.Namespace, meta.ProviderReference.Name)
-	if err != nil {
-		if configuration.Status.Apply.State != types.ProviderNotReady {
-			if updateStatusErr := updateStatus(ctx, k8sClient, *configuration, types.ProviderNotReady, ErrProviderNotReady); updateStatusErr != nil {
-				return errors.Wrap(updateStatusErr, errSettingStatus)
-			}
-			return errors.Wrap(err, ErrProviderNotReady)
-		}
-	}
-	for k, v := range credential {
+	for k, v := range meta.Credentials {
 		data[k] = []byte(v)
 		valueFrom := &v1.EnvVarSource{SecretKeyRef: &v1.SecretKeySelector{Key: k}}
 		valueFrom.SecretKeyRef.Name = meta.VariableSecretName
@@ -859,4 +861,14 @@ func (meta *TFConfigurationMeta) CheckWhetherConfigurationChanges(ctx context.Co
 	}
 
 	return errors.New("unknown issue")
+}
+
+// checkProver will check the Provider and get credentials from secret of the Provider
+func (meta *TFConfigurationMeta) checkProvider(ctx context.Context, k8sClient client.Client) error {
+	credentials, err := util.GetProviderCredentials(ctx, k8sClient, meta.ProviderReference.Namespace, meta.ProviderReference.Name)
+	if err != nil {
+		return err
+	}
+	meta.Credentials = credentials
+	return nil
 }
