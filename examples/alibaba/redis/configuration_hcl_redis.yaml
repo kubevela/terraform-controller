@@ -4,7 +4,7 @@ metadata:
   name: alibaba-redis-hcl
 spec:
   remote: https://github.com/chivalryq/terraform-modules.git
-    path: alibaba/redis
+  path: alibaba/redis
 
   variable:
     instance_name: "oam-redis"
