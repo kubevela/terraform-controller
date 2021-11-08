@@ -1,5 +1,5 @@
 module "redis" {
-  source               = "terraform-alicloud-modules/redis/alicloud"
+  source               = "github.com/chivalryq/terraform-alicloud-redis"
   engine_version       = "5.0"
   instance_name        = var.instance_name
   instance_class       = "redis.master.mid.default"
@@ -25,18 +25,6 @@ module "redis" {
 
   backup_policy_backup_time   = "02:00Z-03:00Z"
   backup_policy_backup_period = ["Monday", "Wednesday", "Friday"]
-
-  #############
-  # cms_alarm
-  #############
-
-  alarm_rule_name            = "CmsAlarmForRedis"
-  alarm_rule_statistics      = "Average"
-  alarm_rule_period          = 300
-  alarm_rule_operator        = "<="
-  alarm_rule_threshold       = 35
-  alarm_rule_triggered_count = 2
-  alarm_rule_contact_groups  = [var.alarm_contact_group]
 
 }
 output "REDIS_NAME" {
@@ -71,10 +59,5 @@ variable "password" {
   description = "RDS instance account password"
   type        = string
   default     = "Xyfff83jfewGGfaked"
-}
-
-variable "alarm_contact_group" {
-  description = "Alicloud CMS contact groups of the alarm rule.This must have been created at alicloud console"
-  default = "redis-test"
 }
 
