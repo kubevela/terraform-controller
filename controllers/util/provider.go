@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/aliyun/alibaba-cloud-sdk-go/services/ram"
 	"github.com/ghodss/yaml"
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
@@ -63,7 +64,9 @@ const (
 	envVSpherePassword           = "VSPHERE_PASSWORD"
 	envVSphereServer             = "VSPHERE_SERVER"
 	envVSphereAllowUnverifiedSSL = "VSPHERE_ALLOW_UNVERIFIED_SSL"
-	errConvertCredentials        = "failed to convert the credentials of Secret from Provider"
+
+	errConvertCredentials = "failed to convert the credentials of Secret from Provider"
+	errCredentialValid    = "Credentials are not valid"
 
 	envECApiKey = "EC_API_KEY"
 )
@@ -147,6 +150,10 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, provid
 				klog.ErrorS(err, errConvertCredentials, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
 				return nil, errors.Wrap(err, errConvertCredentials)
 			}
+			if err := checkAlibabaCloudCredentials(region, ak.AccessKeyID, ak.AccessKeySecret); err != nil {
+				klog.ErrorS(err, errCredentialValid)
+				return nil, errors.Wrap(err, errCredentialValid)
+			}
 			return map[string]string{
 				envAlicloudAcessKey:  ak.AccessKeyID,
 				envAlicloudSecretKey: ak.AccessKeySecret,
@@ -221,6 +228,10 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, provid
 			return map[string]string{
 				envECApiKey: ak.ECApiKey,
 			}, nil
+		default:
+			errMsg := "unsupported provider"
+			klog.ErrorS(err, errMsg, "Provider", provider.Spec.Provider)
+			return nil, errors.Wrap(err, errMsg)
 		}
 	default:
 		errMsg := "the credentials type is not supported."
@@ -228,7 +239,6 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, provid
 		klog.ErrorS(err, "", "CredentialType", provider.Spec.Credentials.Source)
 		return nil, err
 	}
-	return nil, nil
 }
 
 // ValidateProviderCredentials validates provider credentials by cloud provider name
@@ -260,4 +270,22 @@ func GetProviderFromConfiguration(ctx context.Context, k8sClient client.Client, 
 		return nil, errors.Wrap(err, errMsg)
 	}
 	return provider, nil
+}
+
+// checkAlibabaCloudProvider checks if the credentials from the provider are valid
+func checkAlibabaCloudCredentials(region string, accessKeyID, accessKeySecret string) error {
+	client, err := ram.NewClientWithAccessKey(region, accessKeyID, accessKeySecret)
+	if err != nil {
+		return err
+	}
+	request := ram.CreateGetPasswordPolicyRequest()
+	request.Scheme = "https"
+
+	_, err = client.GetPasswordPolicy(request)
+	if err != nil {
+		errMsg := "Alibaba Cloud credentials are not valid"
+		klog.ErrorS(err, errMsg)
+		return errors.Wrap(err, errMsg)
+	}
+	return nil
 }
