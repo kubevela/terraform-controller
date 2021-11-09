@@ -34,9 +34,6 @@ type ConfigurationSpec struct {
 	// Remote is a git repo which contains hcl files. Currently, only public git repos are supported.
 	Remote string `json:"remote,omitempty"`
 
-	// Path is the sub-directory of Remote git repository. It's valid when Remote is set
-	Path string `json:"path,omitempty"`
-
 	// +kubebuilder:pruning:PreserveUnknownFields
 	Variable *runtime.RawExtension `json:"variable,omitempty"`
 
@@ -51,6 +48,14 @@ type ConfigurationSpec struct {
 	// and password required to connect to the managed resource.
 	// +optional
 	WriteConnectionSecretToReference *types.SecretReference `json:"writeConnectionSecretToRef,omitempty"`
+
+	BaseConfigurationSpec `json:",inline"`
+}
+
+// BaseConfigurationSpec defines the common fields of a ConfigurationSpec
+type BaseConfigurationSpec struct {
+	// Path is the sub-directory of remote git repository. It's valid when remote is set
+	Path string `json:"path,omitempty"`
 
 	// ProviderReference specifies the reference to Provider
 	ProviderReference *types.Reference `json:"providerRef,omitempty"`
