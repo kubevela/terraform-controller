@@ -1,7 +1,5 @@
 replicaCount: 1
 
-version: 0.2.8
-
 image:
   repository: oamdev/terraform-controller
   tag: 0.2.8
