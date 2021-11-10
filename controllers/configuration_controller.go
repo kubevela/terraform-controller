@@ -813,8 +813,7 @@ func (meta *TFConfigurationMeta) createOrUpdateConfigMap(ctx context.Context, k8
 	}
 	if !reflect.DeepEqual(gotCM.Data, data) {
 		gotCM.Data = data
-		err := k8sClient.Update(ctx, &gotCM)
-		return errors.Wrap(err, "failed to update TF configuration ConfigMap")
+		return errors.Wrap(k8sClient.Update(ctx, &gotCM), "failed to update TF configuration ConfigMap")
 	}
 	return nil
 }
