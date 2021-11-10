@@ -155,8 +155,6 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 			VariableSecretName:  fmt.Sprintf(TFVariableSecret, req.Name),
 			ApplyJobName:        req.Name + "-" + string(TerraformApply),
 			DestroyJobName:      req.Name + "-" + string(TerraformDestroy),
-			RemoteGit:           configuration.Spec.Remote,
-			DeleteResource:      configuration.Spec.DeleteResource,
 		}
 	)
 	klog.InfoS("reconciling Terraform Configuration...", "NamespacedName", req.NamespacedName)
@@ -168,6 +166,9 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		}
 		return ctrl.Result{}, err
 	}
+
+	meta.RemoteGit = configuration.Spec.Remote
+	meta.DeleteResource = configuration.Spec.DeleteResource
 	if configuration.Spec.Path == "" {
 		meta.RemoteGitPath = "."
 	} else {
