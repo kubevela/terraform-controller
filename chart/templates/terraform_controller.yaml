@@ -13,7 +13,6 @@ spec:
       labels:
         app: terraform-controller
         app.kubernetes.io/name: {{ .Release.Name }}
-        app.kubernetes.io/version: {{ .Values.version }}
         app.kubernetes.io/part-of: kubevela
         app.kubernetes.io/managed-by: helm
     spec:
