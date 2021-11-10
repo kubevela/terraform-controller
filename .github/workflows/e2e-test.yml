@@ -31,11 +31,20 @@ jobs:
         run: |
           go get -v -t -d ./...
 
+      - name: Build and push images
+        run: |
+          sed -i "s/0.2.8/latest/g" Makefile
+          make docker-build
+          make docker-push
+
       - name: Install chart
         run: |
           kubectl cluster-info
           echo "current-context:" $(kubectl config current-context)
 
+          helm delete terraform-controller -n terraform
+
+          sed -i "s/0.2.8/latest/g" chart/values.yaml
           helm lint ./chart --debug
           helm upgrade --install --create-namespace --namespace terraform terraform-controller ./chart
           helm test -n terraform terraform-controller --timeout 5m
