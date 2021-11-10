@@ -23,6 +23,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"reflect"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -63,7 +64,7 @@ const (
 	// TerraformStateNameInSecret is the key name to store Terraform state
 	TerraformStateNameInSecret = "tfstate"
 	// TFInputConfigMapName is the CM name for Terraform Input Configuration
-	TFInputConfigMapName = "%s-tf-input"
+	TFInputConfigMapName = "tf-%s"
 	// TFVariableSecret is the Secret name for variables, including credentials from Provider
 	TFVariableSecret = "variable-%s"
 )
@@ -810,9 +811,12 @@ func (meta *TFConfigurationMeta) createOrUpdateConfigMap(ctx context.Context, k8
 		}
 		return err
 	}
-	gotCM.Data = data
-	err := k8sClient.Update(ctx, &gotCM)
-	return errors.Wrap(err, "failed to update TF configuration ConfigMap")
+	if !reflect.DeepEqual(gotCM.Data, data) {
+        gotCM.Data = data
+        err := k8sClient.Update(ctx, &gotCM)
+        return errors.Wrap(err, "failed to update TF configuration ConfigMap")
+    }
+	return nil
 }
 
 func (meta *TFConfigurationMeta) prepareTFInputConfigurationData() map[string]string {
