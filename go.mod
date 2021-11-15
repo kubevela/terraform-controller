@@ -23,3 +23,7 @@ require (
 	sigs.k8s.io/controller-runtime v0.6.2
 	sigs.k8s.io/yaml v1.2.0
 )
+
+replace (
+	github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af => github.com/cloud-native-application/go-jmespath v0.5.0
+)
