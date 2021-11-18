@@ -30,6 +30,7 @@ import (
 	"github.com/pkg/errors"
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -81,6 +82,9 @@ const (
 
 const (
 	configurationFinalizer = "configuration.finalizers.terraform-controller"
+
+	ClusterRoleName    = "tf-executor-role"
+	ServiceAccountName = "tf-executor-service-account"
 )
 
 const (
@@ -405,6 +409,12 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 		}
 		return errors.Wrap(err, ErrProviderNotReady)
 	}
+
+	// Apply ClusterRole
+	if err := createTerraformExecutorClusterRole(ctx, k8sClient, ClusterRoleName); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -432,6 +442,15 @@ func updateStatus(ctx context.Context, k8sClient client.Client, configuration v1
 
 func (meta *TFConfigurationMeta) assembleAndTriggerJob(ctx context.Context, k8sClient client.Client,
 	configuration *v1beta1.Configuration, executionType TerraformExecutionType) error {
+
+	// apply rbac
+	if err := createTerraformExecutorServiceAccount(ctx, k8sClient, meta.Namespace, ServiceAccountName); err != nil {
+		return err
+	}
+	if err := createTerraformExecutorClusterRoleBinding(ctx, k8sClient, meta.Namespace, ClusterRoleName, ServiceAccountName); err != nil {
+		return err
+	}
+
 	if err := meta.prepareTFVariables(configuration); err != nil {
 		return err
 	}
@@ -599,7 +618,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 						Env: meta.Envs,
 					},
 					},
-					ServiceAccountName: "tf-executor-service-account",
+					ServiceAccountName: ServiceAccountName,
 					Volumes:            executorVolumes,
 					RestartPolicy:      v1.RestartPolicyOnFailure,
 				},
@@ -871,5 +890,38 @@ func (meta *TFConfigurationMeta) checkProvider(ctx context.Context, k8sClient cl
 		return err
 	}
 	meta.Credentials = credentials
+	return nil
+}
+
+func (meta *TFConfigurationMeta) createTerraformExecutorClusterRole(ctx context.Context, k8sClient client.Client) error {
+	var name = "tf-executor-role"
+	var clusterRole = rbacv1.ClusterRole{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "rbac.authorization.k8s.io/v1",
+			Kind:       "ClusterRole",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{""},
+				Resources: []string{"secrets"},
+				Verbs:     []string{"get", "list", "create", "update", "delete"},
+			},
+			{
+				APIGroups: []string{"coordination.k8s.io"},
+				Resources: []string{"leases"},
+				Verbs:     []string{"get", "create", "update", "delete"},
+			},
+		},
+	}
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: name}, &rbacv1.ClusterRole{}); err != nil {
+		if kerrors.IsNotFound(err) {
+			if err := k8sClient.Create(ctx, &clusterRole); err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }
