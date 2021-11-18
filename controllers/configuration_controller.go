@@ -17,6 +17,7 @@ limitations under the License.
 package controllers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -30,7 +31,6 @@ import (
 	"github.com/pkg/errors"
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -83,8 +83,8 @@ const (
 const (
 	configurationFinalizer = "configuration.finalizers.terraform-controller"
 	// ClusterRoleName is the name of the ClusterRole for Terraform Job
-	ClusterRoleName    = "tf-executor-role"
-	// ClusterRoleBindingName is the name of the ClusterRoleBinding for Terraform Job
+	ClusterRoleName = "tf-executor-role"
+	// ServiceAccountName is the name of the ServiceAccount for Terraform Job
 	ServiceAccountName = "tf-executor-service-account"
 )
 
@@ -493,7 +493,7 @@ func (meta *TFConfigurationMeta) updateTerraformJobIfNeeded(ctx context.Context,
 
 	var envChanged bool
 	for k, v := range variableInSecret.Data {
-		if val, ok := meta.VariableSecretData[k]; !ok || string(v) != string(val) {
+		if val, ok := meta.VariableSecretData[k]; !ok || !bytes.Equal(v, val) {
 			envChanged = true
 			klog.Info("Job's env changed")
 			if err := updateStatus(ctx, k8sClient, configuration, types.ConfigurationReloading, ConfigurationReloadingAsVariableChanged); err != nil {
@@ -891,38 +891,5 @@ func (meta *TFConfigurationMeta) checkProvider(ctx context.Context, k8sClient cl
 		return err
 	}
 	meta.Credentials = credentials
-	return nil
-}
-
-func (meta *TFConfigurationMeta) createTerraformExecutorClusterRole(ctx context.Context, k8sClient client.Client) error {
-	var name = "tf-executor-role"
-	var clusterRole = rbacv1.ClusterRole{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "rbac.authorization.k8s.io/v1",
-			Kind:       "ClusterRole",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
-		},
-		Rules: []rbacv1.PolicyRule{
-			{
-				APIGroups: []string{""},
-				Resources: []string{"secrets"},
-				Verbs:     []string{"get", "list", "create", "update", "delete"},
-			},
-			{
-				APIGroups: []string{"coordination.k8s.io"},
-				Resources: []string{"leases"},
-				Verbs:     []string{"get", "create", "update", "delete"},
-			},
-		},
-	}
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: name}, &rbacv1.ClusterRole{}); err != nil {
-		if kerrors.IsNotFound(err) {
-			if err := k8sClient.Create(ctx, &clusterRole); err != nil {
-				return err
-			}
-		}
-	}
 	return nil
 }

@@ -2,8 +2,8 @@ package controllers
 
 import (
 	"context"
-	"github.com/pkg/errors"
 
+	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
