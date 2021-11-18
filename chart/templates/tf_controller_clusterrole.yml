@@ -2,7 +2,6 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: tf-controller-clusterrole
-  namespace: {{ .Release.Namespace }}
 rules:
   - apiGroups:
       - ""
@@ -33,11 +32,11 @@ rules:
   - apiGroups:
       - ""
     resources:
-      - pods/log
-      - pods
+      - "pods/log"
+      - "pods"
     verbs:
-      - get
-      - list
-      - create
-      - update
-      - delete
+      - "get"
+      - "list"
+      - "create"
+      - "update"
+      - "delete"
