@@ -10,23 +10,37 @@ rules:
     verbs:
       - "list"
       - "watch"
+      - "get"
+      - "create"
+      - "update"
+      - "watch"
+      - "delete"
+
   # Required to write terraform outputs
   - apiGroups:
       - ""
     resources:
       - "secrets"
+      - "serviceaccounts"
     verbs:
+      - "get"
       - "list"
       - "create"
       - "update"
+      - "delete"
       - "watch"
       - "delete"
+
   - apiGroups:
       - "batch"
     resources:
       - "jobs"
     verbs:
+      - "get"
       - "list"
+      - "create"
+      - "update"
+      - "delete"
       - "watch"
 
   - apiGroups:
@@ -40,3 +54,33 @@ rules:
       - "create"
       - "update"
       - "delete"
+      - "watch"
+      - "delete"
+
+  - apiGroups:
+      - "terraform.core.oam.dev"
+    resources:
+      - "configurations"
+      - "providers"
+      - "providers/status"
+      - "configurations/status"
+    verbs:
+      - "get"
+      - "list"
+      - "create"
+      - "update"
+      - "delete"
+      - "watch"
+
+  - apiGroups:
+      - "rbac.authorization.k8s.io"
+    resources:
+      - "clusterroles"
+      - "clusterrolebindings"
+    verbs:
+      - "get"
+      - "list"
+      - "create"
+      - "update"
+      - "delete"
+      - "watch"
