@@ -68,6 +68,8 @@ const (
 	TFInputConfigMapName = "tf-%s"
 	// TFVariableSecret is the Secret name for variables, including credentials from Provider
 	TFVariableSecret = "variable-%s"
+	// TFBackendSecret is the Secret name for Kubernetes backend
+	TFBackendSecret = "tfstate-%s-%s"
 )
 
 // TerraformExecutionType is the type for Terraform execution
@@ -132,7 +134,7 @@ type TFConfigurationMeta struct {
 	RemoteGitPath         string
 	ConfigurationChanged  bool
 	ConfigurationCMName   string
-	BackendCMName         string
+	BackendSecretName     string
 	ApplyJobName          string
 	DestroyJobName        string
 	Envs                  []v1.EnvVar
@@ -187,6 +189,17 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		}
 	}
 
+	// Check the existence of Terraform state secret which is used to store TF state file. For detailed information,
+	// please refer to https://www.terraform.io/docs/language/settings/backends/kubernetes.html#configuration-variables
+	var backendSecretSuffix string
+	if configuration.Spec.Backend != nil && configuration.Spec.Backend.SecretSuffix != "" {
+		backendSecretSuffix = configuration.Spec.Backend.SecretSuffix
+	} else {
+		backendSecretSuffix = configuration.Name
+	}
+	// Secrets will be named in the format: tfstate-{workspace}-{secret_suffix}
+	meta.BackendSecretName = fmt.Sprintf(TFBackendSecret, terraformWorkspace, backendSecretSuffix)
+
 	// add finalizer
 	if configuration.ObjectMeta.DeletionTimestamp.IsZero() {
 		if !controllerutil.ContainsFinalizer(&configuration, configurationFinalizer) {
@@ -208,7 +221,7 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 
 		if err := terraform.GetTerraformStatus(ctx, meta.Namespace, meta.DestroyJobName); err != nil {
 			klog.ErrorS(err, "Terraform destroy failed")
-			if updateErr := updateStatus(ctx, r.Client, configuration, types.ConfigurationDestroyFailed, err.Error()); updateErr != nil {
+			if updateErr := meta.updateStatus(ctx, r.Client, configuration, types.ConfigurationDestroyFailed, err.Error()); updateErr != nil {
 				return ctrl.Result{}, updateErr
 			}
 		}
@@ -238,7 +251,7 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	}
 	if err := terraform.GetTerraformStatus(ctx, meta.Namespace, meta.ApplyJobName); err != nil {
 		klog.ErrorS(err, "Terraform apply failed")
-		if updateErr := updateStatus(ctx, r.Client, configuration, types.ConfigurationApplyFailed, err.Error()); updateErr != nil {
+		if updateErr := meta.updateStatus(ctx, r.Client, configuration, types.ConfigurationApplyFailed, err.Error()); updateErr != nil {
 			return ctrl.Result{}, updateErr
 		}
 	}
@@ -266,13 +279,13 @@ func (r *ConfigurationReconciler) terraformApply(ctx context.Context, namespace 
 	}
 
 	if tfExecutionJob.Status.Succeeded == int32(1) {
-		if err := updateStatus(ctx, k8sClient, configuration, types.Available, MessageCloudResourceDeployed); err != nil {
+		if err := meta.updateStatus(ctx, k8sClient, configuration, types.Available, MessageCloudResourceDeployed); err != nil {
 			return err
 		}
 	} else {
 		// start provisioning and check the status of the provision
 		if configuration.Status.Apply.State != types.ConfigurationProvisioningAndChecking {
-			if err := updateStatus(ctx, r.Client, configuration, types.ConfigurationProvisioningAndChecking, MessageCloudResourceProvisioningAndChecking); err != nil {
+			if err := meta.updateStatus(ctx, r.Client, configuration, types.ConfigurationProvisioningAndChecking, MessageCloudResourceProvisioningAndChecking); err != nil {
 				return err
 			}
 		}
@@ -317,7 +330,7 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, namespac
 	}
 
 	// destroying
-	if err := updateStatus(ctx, k8sClient, configuration, types.ConfigurationDestroying, MessageCloudResourceDestroying); err != nil {
+	if err := meta.updateStatus(ctx, k8sClient, configuration, types.ConfigurationDestroying, MessageCloudResourceDestroying); err != nil {
 		return err
 	}
 
@@ -353,8 +366,29 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, namespac
 		// 4. delete destroy job
 		var j batchv1.Job
 		if err := r.Client.Get(ctx, client.ObjectKey{Name: destroyJob.Name, Namespace: destroyJob.Namespace}, &j); err == nil {
-			return r.Client.Delete(ctx, &j, client.PropagationPolicy(metav1.DeletePropagationBackground))
+			if err := r.Client.Delete(ctx, &j, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
+				return err
+			}
 		}
+
+		// 5. delete secret which stores variables
+		klog.InfoS("Deleting the secret which stores variables", "Name", meta.VariableSecretName)
+		var variableSecret v1.Secret
+		if err := r.Client.Get(ctx, client.ObjectKey{Name: meta.VariableSecretName, Namespace: meta.Namespace}, &variableSecret); err == nil {
+			if err := r.Client.Delete(ctx, &variableSecret); err != nil {
+				return err
+			}
+		}
+
+		// 6. delete Kubernetes backend secret
+		klog.InfoS("Deleting the secret which stores Kubernetes backend", "Name", meta.BackendSecretName)
+		var kubernetesBackendSecret v1.Secret
+		if err := r.Client.Get(ctx, client.ObjectKey{Name: meta.BackendSecretName, Namespace: meta.Namespace}, &kubernetesBackendSecret); err == nil {
+			if err := r.Client.Delete(ctx, &kubernetesBackendSecret); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
 	return errors.New(MessageDestroyJobNotCompleted)
 }
@@ -365,7 +399,7 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	// Validation: 1) validate Configuration itself
 	configurationType, err := tfcfg.ValidConfigurationObject(configuration)
 	if err != nil {
-		if updateErr := updateStatus(ctx, k8sClient, *configuration, types.ConfigurationStaticCheckFailed, err.Error()); err != nil {
+		if updateErr := meta.updateStatus(ctx, k8sClient, *configuration, types.ConfigurationStaticCheckFailed, err.Error()); err != nil {
 			return updateErr
 		}
 		return err
@@ -392,7 +426,7 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 
 	if meta.ConfigurationChanged {
 		klog.InfoS("Configuration hanged, reloading...")
-		if err := updateStatus(ctx, k8sClient, *configuration, types.ConfigurationReloading, ConfigurationReloadingAsHCLChanged); err != nil {
+		if err := meta.updateStatus(ctx, k8sClient, *configuration, types.ConfigurationReloading, ConfigurationReloadingAsHCLChanged); err != nil {
 			return err
 		}
 		// store configuration to ConfigMap
@@ -402,7 +436,7 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	// Check provider
 	if err := meta.checkProvider(ctx, k8sClient); err != nil {
 		if configuration.Status.Apply.State != types.ProviderNotReady {
-			if updateStatusErr := updateStatus(ctx, k8sClient, *configuration, types.ProviderNotReady, ErrProviderNotReady); updateStatusErr != nil {
+			if updateStatusErr := meta.updateStatus(ctx, k8sClient, *configuration, types.ProviderNotReady, ErrProviderNotReady); updateStatusErr != nil {
 				return errors.Wrap(updateStatusErr, errSettingStatus)
 			}
 		}
@@ -417,7 +451,7 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	return nil
 }
 
-func updateStatus(ctx context.Context, k8sClient client.Client, configuration v1beta1.Configuration, state types.ConfigurationState, message string) error {
+func (meta *TFConfigurationMeta) updateStatus(ctx context.Context, k8sClient client.Client, configuration v1beta1.Configuration, state types.ConfigurationState, message string) error {
 	if !configuration.ObjectMeta.DeletionTimestamp.IsZero() {
 		configuration.Status.Destroy = v1beta1.ConfigurationDestroyStatus{
 			State:   state,
@@ -429,7 +463,7 @@ func updateStatus(ctx context.Context, k8sClient client.Client, configuration v1
 			Message: message,
 		}
 		if state == types.Available {
-			outputs, err := getTFOutputs(ctx, k8sClient, configuration)
+			outputs, err := meta.getTFOutputs(ctx, k8sClient, configuration)
 			if err != nil {
 				return err
 			}
@@ -494,7 +528,7 @@ func (meta *TFConfigurationMeta) updateTerraformJobIfNeeded(ctx context.Context,
 		if val, ok := meta.VariableSecretData[k]; !ok || !bytes.Equal(v, val) {
 			envChanged = true
 			klog.Info("Job's env changed")
-			if err := updateStatus(ctx, k8sClient, configuration, types.ConfigurationReloading, ConfigurationReloadingAsVariableChanged); err != nil {
+			if err := meta.updateStatus(ctx, k8sClient, configuration, types.ConfigurationReloading, ConfigurationReloadingAsVariableChanged); err != nil {
 				return err
 			}
 		}
@@ -655,19 +689,9 @@ type TFState struct {
 }
 
 //nolint:funlen
-func getTFOutputs(ctx context.Context, k8sClient client.Client, configuration v1beta1.Configuration) (map[string]v1beta1.Property, error) {
+func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient client.Client, configuration v1beta1.Configuration) (map[string]v1beta1.Property, error) {
 	var s = v1.Secret{}
-	// Check the existence of Terraform state secret which is used to store TF state file. For detailed information,
-	// please refer to https://www.terraform.io/docs/language/settings/backends/kubernetes.html#configuration-variables
-	var backendSecretSuffix string
-	if configuration.Spec.Backend != nil && configuration.Spec.Backend.SecretSuffix != "" {
-		backendSecretSuffix = configuration.Spec.Backend.SecretSuffix
-	} else {
-		backendSecretSuffix = configuration.Name
-	}
-	// Secrets will be named in the format: tfstate-{workspace}-{secret_suffix}
-	k8sBackendSecretName := fmt.Sprintf("tfstate-%s-%s", terraformWorkspace, backendSecretSuffix)
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: k8sBackendSecretName, Namespace: configuration.Namespace}, &s); err != nil {
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.BackendSecretName, Namespace: configuration.Namespace}, &s); err != nil {
 		return nil, errors.Wrap(err, "terraform state file backend secret is not generated")
 	}
 	tfStateData, ok := s.Data[TerraformStateNameInSecret]
