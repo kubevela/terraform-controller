@@ -30,7 +30,7 @@ func ValidConfigurationObject(configuration *v1beta1.Configuration) (types.Confi
 }
 
 // RenderConfiguration will compose the Terraform configuration with hcl/json and backend
-func RenderConfiguration(configuration *v1beta1.Configuration, controllerNamespace string, configurationType types.ConfigurationType) (string, error) {
+func RenderConfiguration(configuration *v1beta1.Configuration, terraformBackendNamespace string, configurationType types.ConfigurationType) (string, error) {
 	if configuration.Spec.Backend != nil {
 		if configuration.Spec.Backend.SecretSuffix == "" {
 			configuration.Spec.Backend.SecretSuffix = configuration.Name
@@ -42,7 +42,7 @@ func RenderConfiguration(configuration *v1beta1.Configuration, controllerNamespa
 			InClusterConfig: true,
 		}
 	}
-	backendTF, err := RenderTemplate(configuration.Spec.Backend, controllerNamespace)
+	backendTF, err := RenderTemplate(configuration.Spec.Backend, terraformBackendNamespace)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to prepare Terraform backend configuration")
 	}

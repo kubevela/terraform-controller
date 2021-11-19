@@ -121,7 +121,8 @@ type ConfigurationReconciler struct {
 
 var (
 	// terraformImage is the Terraform image which can run `terraform init/plan/apply`
-	terraformImage = os.Getenv("TERRAFORM_IMAGE")
+	terraformImage            = os.Getenv("TERRAFORM_IMAGE")
+	terraformBackendNamespace = os.Getenv("TERRAFORM_BACKEND_NAMESPACE")
 )
 
 // TFConfigurationMeta is all the metadata of a Configuration
@@ -153,14 +154,6 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	var (
 		configuration v1beta1.Configuration
 		ctx           = context.Background()
-		meta          = &TFConfigurationMeta{
-			Namespace:           req.Namespace,
-			Name:                req.Name,
-			ConfigurationCMName: fmt.Sprintf(TFInputConfigMapName, req.Name),
-			VariableSecretName:  fmt.Sprintf(TFVariableSecret, req.Name),
-			ApplyJobName:        req.Name + "-" + string(TerraformApply),
-			DestroyJobName:      req.Name + "-" + string(TerraformDestroy),
-		}
 	)
 	klog.InfoS("reconciling Terraform Configuration...", "NamespacedName", req.NamespacedName)
 
@@ -172,33 +165,7 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		return ctrl.Result{}, err
 	}
 
-	meta.RemoteGit = configuration.Spec.Remote
-	meta.DeleteResource = configuration.Spec.DeleteResource
-	if configuration.Spec.Path == "" {
-		meta.RemoteGitPath = "."
-	} else {
-		meta.RemoteGitPath = configuration.Spec.Path
-	}
-
-	if configuration.Spec.ProviderReference != nil {
-		meta.ProviderReference = configuration.Spec.ProviderReference
-	} else {
-		meta.ProviderReference = &crossplane.Reference{
-			Name:      util.ProviderDefaultName,
-			Namespace: util.ProviderDefaultNamespace,
-		}
-	}
-
-	// Check the existence of Terraform state secret which is used to store TF state file. For detailed information,
-	// please refer to https://www.terraform.io/docs/language/settings/backends/kubernetes.html#configuration-variables
-	var backendSecretSuffix string
-	if configuration.Spec.Backend != nil && configuration.Spec.Backend.SecretSuffix != "" {
-		backendSecretSuffix = configuration.Spec.Backend.SecretSuffix
-	} else {
-		backendSecretSuffix = configuration.Name
-	}
-	// Secrets will be named in the format: tfstate-{workspace}-{secret_suffix}
-	meta.BackendSecretName = fmt.Sprintf(TFBackendSecret, terraformWorkspace, backendSecretSuffix)
+	meta := initTFConfigurationMeta(req, configuration)
 
 	// add finalizer
 	if configuration.ObjectMeta.DeletionTimestamp.IsZero() {
@@ -266,6 +233,47 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func initTFConfigurationMeta(req ctrl.Request, configuration v1beta1.Configuration) *TFConfigurationMeta {
+	var meta = &TFConfigurationMeta{
+		Namespace:           req.Namespace,
+		Name:                req.Name,
+		ConfigurationCMName: fmt.Sprintf(TFInputConfigMapName, req.Name),
+		VariableSecretName:  fmt.Sprintf(TFVariableSecret, req.Name),
+		ApplyJobName:        req.Name + "-" + string(TerraformApply),
+		DestroyJobName:      req.Name + "-" + string(TerraformDestroy),
+	}
+
+	meta.RemoteGit = configuration.Spec.Remote
+	meta.DeleteResource = configuration.Spec.DeleteResource
+	if configuration.Spec.Path == "" {
+		meta.RemoteGitPath = "."
+	} else {
+		meta.RemoteGitPath = configuration.Spec.Path
+	}
+
+	if configuration.Spec.ProviderReference != nil {
+		meta.ProviderReference = configuration.Spec.ProviderReference
+	} else {
+		meta.ProviderReference = &crossplane.Reference{
+			Name:      util.ProviderDefaultName,
+			Namespace: util.ProviderDefaultNamespace,
+		}
+	}
+
+	// Check the existence of Terraform state secret which is used to store TF state file. For detailed information,
+	// please refer to https://www.terraform.io/docs/language/settings/backends/kubernetes.html#configuration-variables
+	var backendSecretSuffix string
+	if configuration.Spec.Backend != nil && configuration.Spec.Backend.SecretSuffix != "" {
+		backendSecretSuffix = configuration.Spec.Backend.SecretSuffix
+	} else {
+		backendSecretSuffix = configuration.Name
+	}
+	// Secrets will be named in the format: tfstate-{workspace}-{secret_suffix}
+	meta.BackendSecretName = fmt.Sprintf(TFBackendSecret, terraformWorkspace, backendSecretSuffix)
+
+	return meta
 }
 
 func (r *ConfigurationReconciler) terraformApply(ctx context.Context, namespace string, configuration v1beta1.Configuration, meta *TFConfigurationMeta) error {
@@ -418,7 +426,7 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	// TODO(zzxwill) Need to find an alternative to check whether there is an state backend in the Configuration
 
 	// Render configuration with backend
-	completeConfiguration, err := tfcfg.RenderConfiguration(configuration, meta.Namespace, configurationType)
+	completeConfiguration, err := tfcfg.RenderConfiguration(configuration, terraformBackendNamespace, configurationType)
 	if err != nil {
 		return err
 	}
