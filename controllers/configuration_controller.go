@@ -266,10 +266,8 @@ func (r *ConfigurationReconciler) terraformApply(ctx context.Context, namespace 
 	}
 
 	if tfExecutionJob.Status.Succeeded == int32(1) {
-		if configuration.Status.Apply.State != types.Available {
-			if err := updateStatus(ctx, k8sClient, configuration, types.Available, MessageCloudResourceDeployed); err != nil {
-				return err
-			}
+		if err := updateStatus(ctx, k8sClient, configuration, types.Available, MessageCloudResourceDeployed); err != nil {
+			return err
 		}
 	} else {
 		// start provisioning and check the status of the provision
