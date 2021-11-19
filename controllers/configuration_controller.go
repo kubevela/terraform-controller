@@ -83,7 +83,7 @@ const (
 const (
 	configurationFinalizer = "configuration.finalizers.terraform-controller"
 	// ClusterRoleName is the name of the ClusterRole for Terraform Job
-	ClusterRoleName = "tf-executor-role"
+	ClusterRoleName = "tf-executor-clusterrole"
 	// ServiceAccountName is the name of the ServiceAccount for Terraform Job
 	ServiceAccountName = "tf-executor-service-account"
 )

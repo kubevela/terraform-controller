@@ -44,7 +44,7 @@ func createTerraformExecutorClusterRole(ctx context.Context, k8sClient client.Cl
 }
 
 func createTerraformExecutorClusterRoleBinding(ctx context.Context, k8sClient client.Client, namespace, clusterRoleName, serviceAccountName string) error {
-	var crbName = "tf-executor-role-binding"
+	var crbName = "tf-executor-clusterrole-binding"
 	var clusterRoleBinding = rbacv1.ClusterRoleBinding{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "rbac.authorization.k8s.io/v1",
