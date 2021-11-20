@@ -6,12 +6,14 @@ import (
 
 	"github.com/pkg/errors"
 	"k8s.io/klog/v2"
+
+	"github.com/oam-dev/terraform-controller/controllers/client"
 )
 
 // GetTerraformStatus will get Terraform execution status
 func GetTerraformStatus(ctx context.Context, namespace, jobName string) error {
 	klog.InfoS("checking Terraform execution status", "Namespace", namespace, "Job", jobName)
-	clientSet, err := initClientSet()
+	clientSet, err := client.InitClientSet()
 	if err != nil {
 		klog.ErrorS(err, "failed to init clientSet")
 		return err
