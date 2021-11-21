@@ -5,6 +5,12 @@ IMG ?= oamdev/terraform-controller:0.2.8
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true"
 
+TIME_SHORT	= `date +%H:%M:%S`
+TIME		= $(TIME_SHORT)
+GREEN        := $(shell printf "\033[32m")
+CNone        := $(shell printf "\033[0m")
+OK		= echo ${TIME} ${GREEN}[ OK ]${CNone}
+
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
 GOBIN=$(shell go env GOPATH)/bin
@@ -84,7 +90,7 @@ else
 CONTROLLER_GEN=$(shell which controller-gen)
 endif
 
-GOLANGCILINT_VERSION ?= v1.42.0
+GOLANGCILINT_VERSION ?= v1.38.0
 HOSTOS := $(shell uname -s | tr '[:upper:]' '[:lower:]')
 HOSTARCH := $(shell uname -m)
 ifeq ($(HOSTARCH),x86_64)
