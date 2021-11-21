@@ -13,4 +13,3 @@ func InitClientSet() (*kubernetes.Clientset, error) {
 	}
 	return kubernetes.NewForConfig(config)
 }
-
