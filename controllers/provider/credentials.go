@@ -1,4 +1,4 @@
-package util
+package provider
 
 import (
 	"context"
@@ -121,7 +121,8 @@ type ECCredentials struct {
 }
 
 // GetProviderCredentials gets provider credentials by cloud provider name
-func GetProviderCredentials(ctx context.Context, k8sClient client.Client, providerNamespace, providerName string) (map[string]string, error) {
+func GetProviderCredentials(ctx context.Context, k8sClient client.Client, providerNamespace, providerName, configurationRegion string) (map[string]string, error) {
+	var region string
 	provider, err := GetProviderFromConfiguration(ctx, k8sClient, providerNamespace, providerName)
 	if err != nil {
 		return nil, err
@@ -133,7 +134,11 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, provid
 		return nil, err
 	}
 
-	region := provider.Spec.Region
+	if configurationRegion != "" {
+		region = configurationRegion
+	} else {
+		region = provider.Spec.Region
+	}
 	switch provider.Spec.Credentials.Source {
 	case "Secret":
 		var secret v1.Secret

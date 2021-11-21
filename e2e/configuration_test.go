@@ -2,11 +2,6 @@ package e2e
 
 import (
 	"fmt"
-	"golang.org/x/net/context"
-	"gotest.tools/assert"
-	kerrors "k8s.io/apimachinery/pkg/api/errors"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/klog/v2"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,12 +9,18 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
+	"gotest.tools/assert"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/klog/v2"
+
 	"github.com/oam-dev/terraform-controller/controllers/client"
 )
 
 const backendSecretNamespace = "vela-system"
 
-func TestConfiguration(t *testing.T) {
+func TestBasicConfiguration(t *testing.T) {
 	clientSet, err := client.InitClientSet()
 	assert.NilError(t, err)
 	ctx := context.Background()

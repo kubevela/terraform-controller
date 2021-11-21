@@ -43,6 +43,7 @@ import (
 	crossplane "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
 	tfcfg "github.com/oam-dev/terraform-controller/controllers/configuration"
+	"github.com/oam-dev/terraform-controller/controllers/provider"
 	"github.com/oam-dev/terraform-controller/controllers/terraform"
 	"github.com/oam-dev/terraform-controller/controllers/util"
 )
@@ -123,6 +124,7 @@ type TFConfigurationMeta struct {
 	VariableSecretData    map[string][]byte
 	DeleteResource        bool
 	Credentials           map[string]string
+	Region                string
 }
 
 // +kubebuilder:rbac:groups=terraform.core.oam.dev,resources=configurations,verbs=get;list;watch;create;update;patch;delete
@@ -222,6 +224,7 @@ func initTFConfigurationMeta(req ctrl.Request, configuration v1beta1.Configurati
 		VariableSecretName:  fmt.Sprintf(TFVariableSecret, req.Name),
 		ApplyJobName:        req.Name + "-" + string(TerraformApply),
 		DestroyJobName:      req.Name + "-" + string(TerraformDestroy),
+		Region:              configuration.Spec.Region,
 	}
 
 	meta.RemoteGit = configuration.Spec.Remote
@@ -236,8 +239,8 @@ func initTFConfigurationMeta(req ctrl.Request, configuration v1beta1.Configurati
 		meta.ProviderReference = configuration.Spec.ProviderReference
 	} else {
 		meta.ProviderReference = &crossplane.Reference{
-			Name:      util.ProviderDefaultName,
-			Namespace: util.ProviderDefaultNamespace,
+			Name:      provider.ProviderDefaultName,
+			Namespace: provider.ProviderDefaultNamespace,
 		}
 	}
 
@@ -914,7 +917,7 @@ func (meta *TFConfigurationMeta) CheckWhetherConfigurationChanges(ctx context.Co
 
 // checkProver will check the Provider and get credentials from secret of the Provider
 func (meta *TFConfigurationMeta) checkProvider(ctx context.Context, k8sClient client.Client) error {
-	credentials, err := util.GetProviderCredentials(ctx, k8sClient, meta.ProviderReference.Namespace, meta.ProviderReference.Name)
+	credentials, err := provider.GetProviderCredentials(ctx, k8sClient, meta.ProviderReference.Namespace, meta.ProviderReference.Name, meta.Region)
 	if err != nil {
 		return err
 	}
