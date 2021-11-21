@@ -30,7 +30,7 @@ import (
 
 	"github.com/oam-dev/terraform-controller/api/types"
 	terraformv1beta1 "github.com/oam-dev/terraform-controller/api/v1beta1"
-	"github.com/oam-dev/terraform-controller/controllers/util"
+	providercred "github.com/oam-dev/terraform-controller/controllers/provider"
 )
 
 const (
@@ -64,7 +64,7 @@ func (r *ProviderReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	err := util.ValidateProviderCredentials(ctx, r.Client, &provider)
+	err := providercred.ValidateProviderCredentials(ctx, r.Client, &provider)
 	if err != nil {
 		provider.Status.State = types.ProviderIsInitializing
 		provider.Status.Message = fmt.Sprintf("%s: %s", errGetCredentials, err.Error())

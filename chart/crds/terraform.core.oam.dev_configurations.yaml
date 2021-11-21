@@ -87,6 +87,10 @@ spec:
                 required:
                 - name
                 type: object
+              region:
+                description: Region is cloud provider's region. It will override the
+                  region in the region field of ProviderReference
+                type: string
               remote:
                 description: Remote is a git repo which contains hcl files. Currently,
                   only public git repos are supported.
