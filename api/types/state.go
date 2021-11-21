@@ -53,7 +53,6 @@ const (
 	ConfigurationReloadingAsVariableChanged = "Configuration's variable has changed, and starts reloading"
 	// ErrGenerateOutputs means error to generate outputs
 	ErrGenerateOutputs = "Hit an issue to generate outputs"
-
 )
 
 // ProviderState is the type for Provider state
