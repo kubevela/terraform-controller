@@ -13,6 +13,7 @@ require (
 	github.com/onsi/ginkgo v1.16.2
 	github.com/onsi/gomega v1.12.0
 	github.com/pkg/errors v0.9.1
+	golang.org/x/net v0.0.0-20210428140749-89ef3d95e781
 	google.golang.org/appengine v1.6.5 // indirect
 	gotest.tools v2.2.0+incompatible
 	k8s.io/api v0.18.8
