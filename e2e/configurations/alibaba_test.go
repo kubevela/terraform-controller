@@ -1,4 +1,4 @@
-package e2e
+package configurations
 
 import (
 	"fmt"
@@ -17,7 +17,6 @@ func TestConfiguration(t *testing.T) {
 	It("All Configurations should become `Available`", func() {
 		pwd, _ := os.Getwd()
 		configurations := []string{
-			"examples/alibaba/eip/configuration_eip.yaml",
 			"examples/alibaba/eip/configuration_eip_remote.yaml",
 			"examples/alibaba/eip/configuration_eip_remote_subdirectory.yaml",
 			"examples/alibaba/rds/configuration_hcl_rds.yaml",

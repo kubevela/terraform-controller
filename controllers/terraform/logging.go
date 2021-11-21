@@ -10,16 +10,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
-	config2 "sigs.k8s.io/controller-runtime/pkg/client/config"
 )
-
-func initClientSet() (*kubernetes.Clientset, error) {
-	config, err := config2.GetConfig()
-	if err != nil {
-		return nil, err
-	}
-	return kubernetes.NewForConfig(config)
-}
 
 func getPodLog(ctx context.Context, client *kubernetes.Clientset, namespace, jobName string) (string, error) {
 	label := fmt.Sprintf("job-name=%s", jobName)
