@@ -27,4 +27,6 @@ spec:
                   fieldPath: metadata.namespace
             - name: TERRAFORM_IMAGE
               value: {{ .Values.terraformImage}}
+            - name: TERRAFORM_BACKEND_NAMESPACE
+              value: {{ .Values.backend.namespace }}
       serviceAccountName: tf-controller-service-account
