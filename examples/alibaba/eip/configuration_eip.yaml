@@ -27,7 +27,7 @@ spec:
       value       = module.eip.this_eip_address.0
     }
 
-    output "name" {
+    output "Name" {
           value       = var.name
         }
 

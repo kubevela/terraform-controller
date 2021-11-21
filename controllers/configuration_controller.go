@@ -120,7 +120,7 @@ type ConfigurationReconciler struct {
 }
 
 var (
-	// TerraformImage is the Terraform image which can run `terraform init/plan/apply`
+	// terraformImage is the Terraform image which can run `terraform init/plan/apply`
 	terraformImage = os.Getenv("TERRAFORM_IMAGE")
 )
 
@@ -215,13 +215,22 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		return ctrl.Result{}, err
 	}
 
+	var tfExecutionJob = &batchv1.Job{} //nolint:gofmt
+	if err := r.Client.Get(ctx, client.ObjectKey{Name: meta.ApplyJobName, Namespace: meta.Namespace}, tfExecutionJob); err == nil {
+		if tfExecutionJob.Status.Succeeded == int32(1) {
+			if err := meta.updateApplyStatus(ctx, r.Client, types.Available, MessageCloudResourceDeployed); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+	}
+
 	if !configuration.ObjectMeta.DeletionTimestamp.IsZero() {
 		// terraform destroy
 		klog.InfoS("performing Configuration Destroy", "Namespace", req.Namespace, "Name", req.Name, "JobName", meta.DestroyJobName)
 
 		if err := terraform.GetTerraformStatus(ctx, meta.Namespace, meta.DestroyJobName); err != nil {
 			klog.ErrorS(err, "Terraform destroy failed")
-			if updateErr := meta.updateStatus(ctx, r.Client, configuration, types.ConfigurationDestroyFailed, err.Error()); updateErr != nil {
+			if updateErr := meta.updateDestroyStatus(ctx, r.Client, types.ConfigurationDestroyFailed, err.Error()); updateErr != nil {
 				return ctrl.Result{}, updateErr
 			}
 		}
@@ -251,7 +260,7 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	}
 	if err := terraform.GetTerraformStatus(ctx, meta.Namespace, meta.ApplyJobName); err != nil {
 		klog.ErrorS(err, "Terraform apply failed")
-		if updateErr := meta.updateStatus(ctx, r.Client, configuration, types.ConfigurationApplyFailed, err.Error()); updateErr != nil {
+		if updateErr := meta.updateApplyStatus(ctx, r.Client, types.ConfigurationApplyFailed, err.Error()); updateErr != nil {
 			return ctrl.Result{}, updateErr
 		}
 	}
@@ -279,13 +288,13 @@ func (r *ConfigurationReconciler) terraformApply(ctx context.Context, namespace 
 	}
 
 	if tfExecutionJob.Status.Succeeded == int32(1) {
-		if err := meta.updateStatus(ctx, k8sClient, configuration, types.Available, MessageCloudResourceDeployed); err != nil {
+		if err := meta.updateApplyStatus(ctx, k8sClient, types.Available, MessageCloudResourceDeployed); err != nil {
 			return err
 		}
 	} else {
 		// start provisioning and check the status of the provision
 		if configuration.Status.Apply.State != types.ConfigurationProvisioningAndChecking {
-			if err := meta.updateStatus(ctx, r.Client, configuration, types.ConfigurationProvisioningAndChecking, MessageCloudResourceProvisioningAndChecking); err != nil {
+			if err := meta.updateApplyStatus(ctx, r.Client, types.ConfigurationProvisioningAndChecking, MessageCloudResourceProvisioningAndChecking); err != nil {
 				return err
 			}
 		}
@@ -330,7 +339,7 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, namespac
 	}
 
 	// destroying
-	if err := meta.updateStatus(ctx, k8sClient, configuration, types.ConfigurationDestroying, MessageCloudResourceDestroying); err != nil {
+	if err := meta.updateDestroyStatus(ctx, k8sClient, types.ConfigurationDestroying, MessageCloudResourceDestroying); err != nil {
 		return err
 	}
 
@@ -399,7 +408,7 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	// Validation: 1) validate Configuration itself
 	configurationType, err := tfcfg.ValidConfigurationObject(configuration)
 	if err != nil {
-		if updateErr := meta.updateStatus(ctx, k8sClient, *configuration, types.ConfigurationStaticCheckFailed, err.Error()); err != nil {
+		if updateErr := meta.updateApplyStatus(ctx, k8sClient, types.ConfigurationStaticCheckFailed, err.Error()); err != nil {
 			return updateErr
 		}
 		return err
@@ -426,7 +435,7 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 
 	if meta.ConfigurationChanged {
 		klog.InfoS("Configuration hanged, reloading...")
-		if err := meta.updateStatus(ctx, k8sClient, *configuration, types.ConfigurationReloading, ConfigurationReloadingAsHCLChanged); err != nil {
+		if err := meta.updateApplyStatus(ctx, k8sClient, types.ConfigurationReloading, ConfigurationReloadingAsHCLChanged); err != nil {
 			return err
 		}
 		// store configuration to ConfigMap
@@ -436,7 +445,7 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	// Check provider
 	if err := meta.checkProvider(ctx, k8sClient); err != nil {
 		if configuration.Status.Apply.State != types.ProviderNotReady {
-			if updateStatusErr := meta.updateStatus(ctx, k8sClient, *configuration, types.ProviderNotReady, ErrProviderNotReady); updateStatusErr != nil {
+			if updateStatusErr := meta.updateApplyStatus(ctx, k8sClient, types.ProviderNotReady, ErrProviderNotReady); updateStatusErr != nil {
 				return errors.Wrap(updateStatusErr, errSettingStatus)
 			}
 		}
@@ -447,13 +456,9 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	return createTerraformExecutorClusterRole(ctx, k8sClient, ClusterRoleName)
 }
 
-func (meta *TFConfigurationMeta) updateStatus(ctx context.Context, k8sClient client.Client, configuration v1beta1.Configuration, state types.ConfigurationState, message string) error {
-	if !configuration.ObjectMeta.DeletionTimestamp.IsZero() {
-		configuration.Status.Destroy = v1beta1.ConfigurationDestroyStatus{
-			State:   state,
-			Message: message,
-		}
-	} else {
+func (meta *TFConfigurationMeta) updateApplyStatus(ctx context.Context, k8sClient client.Client, state types.ConfigurationState, message string) error {
+	var configuration v1beta1.Configuration
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.Name, Namespace: meta.Namespace}, &configuration); err == nil {
 		configuration.Status.Apply = v1beta1.ConfigurationApplyStatus{
 			State:   state,
 			Message: message,
@@ -465,8 +470,22 @@ func (meta *TFConfigurationMeta) updateStatus(ctx context.Context, k8sClient cli
 			}
 			configuration.Status.Apply.Outputs = outputs
 		}
+
+		return k8sClient.Status().Update(ctx, &configuration)
 	}
-	return k8sClient.Status().Update(ctx, &configuration)
+	return nil
+}
+
+func (meta *TFConfigurationMeta) updateDestroyStatus(ctx context.Context, k8sClient client.Client, state types.ConfigurationState, message string) error {
+	var configuration v1beta1.Configuration
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.Name, Namespace: meta.Namespace}, &configuration); err == nil {
+		configuration.Status.Destroy = v1beta1.ConfigurationDestroyStatus{
+			State:   state,
+			Message: message,
+		}
+		return k8sClient.Status().Update(ctx, &configuration)
+	}
+	return nil
 }
 
 func (meta *TFConfigurationMeta) assembleAndTriggerJob(ctx context.Context, k8sClient client.Client,
@@ -524,7 +543,7 @@ func (meta *TFConfigurationMeta) updateTerraformJobIfNeeded(ctx context.Context,
 		if val, ok := meta.VariableSecretData[k]; !ok || !bytes.Equal(v, val) {
 			envChanged = true
 			klog.Info("Job's env changed")
-			if err := meta.updateStatus(ctx, k8sClient, configuration, types.ConfigurationReloading, ConfigurationReloadingAsVariableChanged); err != nil {
+			if err := meta.updateApplyStatus(ctx, k8sClient, types.ConfigurationReloading, ConfigurationReloadingAsVariableChanged); err != nil {
 				return err
 			}
 		}
