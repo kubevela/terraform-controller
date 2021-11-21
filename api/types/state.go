@@ -30,6 +30,7 @@ const (
 	ConfigurationDestroyFailed           ConfigurationState = "DestroyFailed"
 	ConfigurationReloading               ConfigurationState = "ConfigurationReloading"
 	GeneratingOutputs                    ConfigurationState = "GeneratingTerraformOutputs"
+	InvalidRegion                        ConfigurationState = "InvalidRegion"
 )
 
 const (
