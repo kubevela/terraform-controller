@@ -29,7 +29,7 @@ const (
 	ConfigurationApplyFailed             ConfigurationState = "ApplyFailed"
 	ConfigurationDestroyFailed           ConfigurationState = "DestroyFailed"
 	ConfigurationReloading               ConfigurationState = "ConfigurationReloading"
-	GeneratingOutputs                    ConfigurationState = "GeneratingOutputs"
+	GeneratingOutputs                    ConfigurationState = "GeneratingTerraformOutputs"
 )
 
 const (
