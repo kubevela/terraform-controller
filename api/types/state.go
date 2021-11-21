@@ -29,6 +29,30 @@ const (
 	ConfigurationApplyFailed             ConfigurationState = "ApplyFailed"
 	ConfigurationDestroyFailed           ConfigurationState = "DestroyFailed"
 	ConfigurationReloading               ConfigurationState = "ConfigurationReloading"
+	GeneratingOutputs                    ConfigurationState = "GeneratingTerraformOutputs"
+)
+
+const (
+	// MessageDestroyJobNotCompleted is the message when Configuration deletion isn't completed
+	MessageDestroyJobNotCompleted = "Configuration deletion isn't completed"
+	// MessageApplyJobNotCompleted is the message when cloud resources are not created completed
+	MessageApplyJobNotCompleted = "cloud resources are not created completed"
+	// MessageCloudResourceProvisioningAndChecking is the message when cloud resource is being provisioned
+	MessageCloudResourceProvisioningAndChecking = "Cloud resources are being provisioned and provisioning status is checking..."
+	// ErrUpdateTerraformApplyJob means hitting  an issue to update Terraform apply job
+	ErrUpdateTerraformApplyJob = "Hit an issue to update Terraform apply job"
+	// MessageCloudResourceDeployed means Cloud resources are deployed and ready to use
+	MessageCloudResourceDeployed = "Cloud resources are deployed and ready to use"
+	// MessageCloudResourceDestroying is the message when cloud resource is being destroyed
+	MessageCloudResourceDestroying = "Cloud resources is being destroyed..."
+	// ErrProviderNotReady means provider object is not ready
+	ErrProviderNotReady = "Provider is not ready"
+	// ConfigurationReloadingAsHCLChanged means Configuration changed and needs reloading
+	ConfigurationReloadingAsHCLChanged = "Configuration's HCL has changed, and starts reloading"
+	// ConfigurationReloadingAsVariableChanged means Configuration changed and needs reloading
+	ConfigurationReloadingAsVariableChanged = "Configuration's variable has changed, and starts reloading"
+	// ErrGenerateOutputs means error to generate outputs
+	ErrGenerateOutputs = "Hit an issue to generate outputs"
 )
 
 // ProviderState is the type for Provider state
