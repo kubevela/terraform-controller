@@ -444,11 +444,7 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	}
 
 	// Apply ClusterRole
-	if err := createTerraformExecutorClusterRole(ctx, k8sClient, ClusterRoleName); err != nil {
-		return err
-	}
-
-	return nil
+	return createTerraformExecutorClusterRole(ctx, k8sClient, ClusterRoleName)
 }
 
 func (meta *TFConfigurationMeta) updateStatus(ctx context.Context, k8sClient client.Client, configuration v1beta1.Configuration, state types.ConfigurationState, message string) error {
