@@ -43,6 +43,7 @@ import (
 	crossplane "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
 	tfcfg "github.com/oam-dev/terraform-controller/controllers/configuration"
+	"github.com/oam-dev/terraform-controller/controllers/provider"
 	"github.com/oam-dev/terraform-controller/controllers/terraform"
 	"github.com/oam-dev/terraform-controller/controllers/util"
 )
@@ -123,6 +124,7 @@ type TFConfigurationMeta struct {
 	VariableSecretData    map[string][]byte
 	DeleteResource        bool
 	Credentials           map[string]string
+	Region                string
 }
 
 // +kubebuilder:rbac:groups=terraform.core.oam.dev,resources=configurations,verbs=get;list;watch;create;update;patch;delete
@@ -174,7 +176,8 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		// terraform destroy
 		klog.InfoS("performing Configuration Destroy", "Namespace", req.Namespace, "Name", req.Name, "JobName", meta.DestroyJobName)
 
-		if err := terraform.GetTerraformStatus(ctx, meta.Namespace, meta.DestroyJobName); err != nil {
+		_, err := terraform.GetTerraformStatus(ctx, meta.Namespace, meta.DestroyJobName)
+		if err != nil {
 			klog.ErrorS(err, "Terraform destroy failed")
 			if updateErr := meta.updateDestroyStatus(ctx, r.Client, types.ConfigurationDestroyFailed, err.Error()); updateErr != nil {
 				return ctrl.Result{}, updateErr
@@ -204,9 +207,10 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		}
 		return ctrl.Result{RequeueAfter: 3 * time.Second}, errors.Wrap(err, "failed to create/update cloud resource")
 	}
-	if err := terraform.GetTerraformStatus(ctx, meta.Namespace, meta.ApplyJobName); err != nil {
+	state, err := terraform.GetTerraformStatus(ctx, meta.Namespace, meta.ApplyJobName)
+	if err != nil {
 		klog.ErrorS(err, "Terraform apply failed")
-		if updateErr := meta.updateApplyStatus(ctx, r.Client, types.ConfigurationApplyFailed, err.Error()); updateErr != nil {
+		if updateErr := meta.updateApplyStatus(ctx, r.Client, state, err.Error()); updateErr != nil {
 			return ctrl.Result{}, updateErr
 		}
 	}
@@ -222,6 +226,7 @@ func initTFConfigurationMeta(req ctrl.Request, configuration v1beta1.Configurati
 		VariableSecretName:  fmt.Sprintf(TFVariableSecret, req.Name),
 		ApplyJobName:        req.Name + "-" + string(TerraformApply),
 		DestroyJobName:      req.Name + "-" + string(TerraformDestroy),
+		Region:              configuration.Spec.Region,
 	}
 
 	meta.RemoteGit = configuration.Spec.Remote
@@ -236,8 +241,8 @@ func initTFConfigurationMeta(req ctrl.Request, configuration v1beta1.Configurati
 		meta.ProviderReference = configuration.Spec.ProviderReference
 	} else {
 		meta.ProviderReference = &crossplane.Reference{
-			Name:      util.ProviderDefaultName,
-			Namespace: util.ProviderDefaultNamespace,
+			Name:      provider.ProviderDefaultName,
+			Namespace: provider.ProviderDefaultNamespace,
 		}
 	}
 
@@ -280,7 +285,9 @@ func (r *ConfigurationReconciler) terraformApply(ctx context.Context, namespace 
 		}
 	} else {
 		// start provisioning and check the status of the provision
-		if configuration.Status.Apply.State != types.ConfigurationProvisioningAndChecking {
+		// If the state is types.InvalidRegion, no need to continue checking
+		if configuration.Status.Apply.State != types.ConfigurationProvisioningAndChecking &&
+			configuration.Status.Apply.State != types.InvalidRegion {
 			if err := meta.updateApplyStatus(ctx, r.Client, types.ConfigurationProvisioningAndChecking, types.MessageCloudResourceProvisioningAndChecking); err != nil {
 				return err
 			}
@@ -914,7 +921,7 @@ func (meta *TFConfigurationMeta) CheckWhetherConfigurationChanges(ctx context.Co
 
 // checkProver will check the Provider and get credentials from secret of the Provider
 func (meta *TFConfigurationMeta) checkProvider(ctx context.Context, k8sClient client.Client) error {
-	credentials, err := util.GetProviderCredentials(ctx, k8sClient, meta.ProviderReference.Namespace, meta.ProviderReference.Name)
+	credentials, err := provider.GetProviderCredentials(ctx, k8sClient, meta.ProviderReference.Namespace, meta.ProviderReference.Name, meta.Region)
 	if err != nil {
 		return err
 	}
