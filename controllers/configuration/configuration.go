@@ -1,12 +1,19 @@
 package configuration
 
 import (
+	"context"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/oam-dev/terraform-controller/api/types"
-	"github.com/oam-dev/terraform-controller/api/v1beta1"
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	apitypes "k8s.io/apimachinery/pkg/types"
+	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/oam-dev/terraform-controller/api/types"
+	"github.com/oam-dev/terraform-controller/api/v1beta1"
 )
 
 // ValidConfigurationObject will validate a Configuration
@@ -67,4 +74,35 @@ func CompareTwoContainerEnvs(s1 []v1.EnvVar, s2 []v1.EnvVar) bool {
 		return env1.Name < env2.Name
 	}
 	return cmp.Diff(s1, s2, cmpopts.SortSlices(less)) == ""
+}
+
+// SetRegion will set the region for Configuration
+func SetRegion(ctx context.Context, k8sClient client.Client, namespace, name string, providerObj *v1beta1.Provider) (string, error) {
+	configuration, err := Get(ctx, k8sClient, apitypes.NamespacedName{Namespace: namespace, Name: name})
+	if err != nil {
+		return "", errors.Wrap(err, "failed to get configuration")
+	}
+	if configuration.Spec.Region != "" {
+		return configuration.Spec.Region, nil
+	}
+
+	configuration.Spec.Region = providerObj.Spec.Region
+	return providerObj.Spec.Region, Update(ctx, k8sClient, &configuration)
+}
+
+// Update will update the Configuration
+func Update(ctx context.Context, k8sClient client.Client, configuration *v1beta1.Configuration) error {
+	return k8sClient.Update(ctx, configuration)
+}
+
+// Get will get the Configuration
+func Get(ctx context.Context, k8sClient client.Client, namespacedName apitypes.NamespacedName) (v1beta1.Configuration, error) {
+	configuration := &v1beta1.Configuration{}
+	if err := k8sClient.Get(ctx, namespacedName, configuration); err != nil {
+		if kerrors.IsNotFound(err) {
+			klog.ErrorS(err, "unable to fetch Configuration", "NamespacedName", namespacedName)
+		}
+		return *configuration, err
+	}
+	return *configuration, nil
 }
