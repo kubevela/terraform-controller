@@ -16,10 +16,10 @@ import (
 )
 
 const (
-	// ProviderDefaultName is the name of Provider object
-	ProviderDefaultName = "default"
-	// ProviderDefaultNamespace is the namespace of Provider object
-	ProviderDefaultNamespace = "default"
+	// DefaultName is the name of Provider object
+	DefaultName = "default"
+	// DefaultNamespace is the namespace of Provider object
+	DefaultNamespace = "default"
 )
 
 // CloudProvider is a type for mark a Cloud Provider
@@ -121,24 +121,7 @@ type ECCredentials struct {
 }
 
 // GetProviderCredentials gets provider credentials by cloud provider name
-func GetProviderCredentials(ctx context.Context, k8sClient client.Client, providerNamespace, providerName, configurationRegion string) (map[string]string, error) {
-	var region string
-	provider, err := GetProviderFromConfiguration(ctx, k8sClient, providerNamespace, providerName)
-	if err != nil {
-		return nil, err
-	}
-
-	if provider.Status.State != types.ProviderIsReady {
-		err := fmt.Errorf("provider is not ready: %s/%s", provider.Namespace, provider.Name)
-		klog.ErrorS(err, "failed to get credential")
-		return nil, err
-	}
-
-	if configurationRegion != "" {
-		region = configurationRegion
-	} else {
-		region = provider.Spec.Region
-	}
+func GetProviderCredentials(ctx context.Context, k8sClient client.Client, provider *v1beta1.Provider, region string) (map[string]string, error) {
 	switch provider.Spec.Credentials.Source {
 	case "Secret":
 		var secret v1.Secret
@@ -235,8 +218,8 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, provid
 			}, nil
 		default:
 			errMsg := "unsupported provider"
-			klog.ErrorS(err, errMsg, "Provider", provider.Spec.Provider)
-			return nil, errors.Wrap(err, errMsg)
+			klog.InfoS(errMsg, "Provider", provider.Spec.Provider)
+			return nil, errors.New(errMsg)
 		}
 	default:
 		errMsg := "the credentials type is not supported."
@@ -267,12 +250,17 @@ func ValidateProviderCredentials(ctx context.Context, k8sClient client.Client, p
 }
 
 // GetProviderFromConfiguration gets provider object from Configuration
-func GetProviderFromConfiguration(ctx context.Context, k8sClient client.Client, namespace, providerName string) (*v1beta1.Provider, error) {
+func GetProviderFromConfiguration(ctx context.Context, k8sClient client.Client, namespace, name string) (*v1beta1.Provider, error) {
 	var provider = &v1beta1.Provider{}
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: providerName, Namespace: namespace}, provider); err != nil {
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: name, Namespace: namespace}, provider); err != nil {
 		errMsg := "failed to get Provider object"
-		klog.ErrorS(err, errMsg, "Name", providerName)
+		klog.ErrorS(err, errMsg, "Name", name)
 		return nil, errors.Wrap(err, errMsg)
+	}
+	if provider.Status.State != types.ProviderIsReady {
+		err := fmt.Errorf("provider is not ready: %s/%s", provider.Namespace, provider.Name)
+		klog.ErrorS(err, "failed to get credential")
+		return nil, err
 	}
 	return provider, nil
 }

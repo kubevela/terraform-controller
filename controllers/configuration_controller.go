@@ -124,7 +124,6 @@ type TFConfigurationMeta struct {
 	VariableSecretData    map[string][]byte
 	DeleteResource        bool
 	Credentials           map[string]string
-	Region                string
 }
 
 // +kubebuilder:rbac:groups=terraform.core.oam.dev,resources=configurations,verbs=get;list;watch;create;update;patch;delete
@@ -132,17 +131,12 @@ type TFConfigurationMeta struct {
 
 // Reconcile will reconcile periodically
 func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	var (
-		configuration v1beta1.Configuration
-		ctx           = context.Background()
-	)
+	var ctx = context.Background()
+
 	klog.InfoS("reconciling Terraform Configuration...", "NamespacedName", req.NamespacedName)
 
-	if err := r.Get(ctx, req.NamespacedName, &configuration); err != nil {
-		if kerrors.IsNotFound(err) {
-			klog.ErrorS(err, "unable to fetch Configuration", "NamespacedName", req.NamespacedName)
-			err = nil
-		}
+	configuration, err := tfcfg.Get(ctx, r.Client, req.NamespacedName)
+	if err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -226,7 +220,6 @@ func initTFConfigurationMeta(req ctrl.Request, configuration v1beta1.Configurati
 		VariableSecretName:  fmt.Sprintf(TFVariableSecret, req.Name),
 		ApplyJobName:        req.Name + "-" + string(TerraformApply),
 		DestroyJobName:      req.Name + "-" + string(TerraformDestroy),
-		Region:              configuration.Spec.Region,
 	}
 
 	meta.RemoteGit = configuration.Spec.Remote
@@ -241,8 +234,8 @@ func initTFConfigurationMeta(req ctrl.Request, configuration v1beta1.Configurati
 		meta.ProviderReference = configuration.Spec.ProviderReference
 	} else {
 		meta.ProviderReference = &crossplane.Reference{
-			Name:      provider.ProviderDefaultName,
-			Namespace: provider.ProviderDefaultNamespace,
+			Name:      provider.DefaultName,
+			Namespace: provider.DefaultNamespace,
 		}
 	}
 
@@ -921,7 +914,15 @@ func (meta *TFConfigurationMeta) CheckWhetherConfigurationChanges(ctx context.Co
 
 // checkProver will check the Provider and get credentials from secret of the Provider
 func (meta *TFConfigurationMeta) checkProvider(ctx context.Context, k8sClient client.Client) error {
-	credentials, err := provider.GetProviderCredentials(ctx, k8sClient, meta.ProviderReference.Namespace, meta.ProviderReference.Name, meta.Region)
+	providerObj, err := provider.GetProviderFromConfiguration(ctx, k8sClient, meta.ProviderReference.Namespace, meta.ProviderReference.Name)
+	if err != nil {
+		return errors.Wrap(err, "failed to get the region from the provider")
+	}
+	region, err := tfcfg.SetRegion(ctx, k8sClient, meta.Namespace, meta.Name, providerObj)
+	if err != nil {
+		return err
+	}
+	credentials, err := provider.GetProviderCredentials(ctx, k8sClient, providerObj, region)
 	if err != nil {
 		return err
 	}
