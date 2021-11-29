@@ -737,6 +737,9 @@ func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient cli
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      name,
 					Namespace: ns,
+					Labels: map[string]string{
+						"created-by": "terraform-controller",
+					},
 				},
 				TypeMeta: metav1.TypeMeta{Kind: "Secret"},
 				Data:     data,
