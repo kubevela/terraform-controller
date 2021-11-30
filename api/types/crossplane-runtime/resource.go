@@ -58,7 +58,7 @@ type Reference struct {
 	// Name of the referenced object.
 	Name string `json:"name"`
 
-	// Namespace of the secret.
+	// Namespace of the referenced object.
 	// +kubebuilder:default:=default
 	Namespace string `json:"namespace,omitempty"`
 }

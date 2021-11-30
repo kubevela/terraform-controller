@@ -71,8 +71,7 @@ spec:
                 description: HCL is the Terraform HCL type configuration
                 type: string
               path:
-                description: Path is the sub-directory of remote git repository. It's
-                  valid when remote is set
+                description: Path is the sub-directory of remote git repository.
                 type: string
               providerRef:
                 description: ProviderReference specifies the reference to Provider
@@ -82,7 +81,7 @@ spec:
                     type: string
                   namespace:
                     default: default
-                    description: Namespace of the secret.
+                    description: Namespace of the referenced object.
                     type: string
                 required:
                 - name
