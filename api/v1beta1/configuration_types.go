@@ -42,20 +42,20 @@ type ConfigurationSpec struct {
 	// still will set by the controller, ignoring the settings in HCL/JSON backend
 	Backend *Backend `json:"backend,omitempty"`
 
-	// WriteConnectionSecretToReference specifies the namespace and name of a
-	// Secret to which any connection details for this managed resource should
-	// be written. Connection details frequently include the endpoint, username,
-	// and password required to connect to the managed resource.
-	// +optional
-	WriteConnectionSecretToReference *types.SecretReference `json:"writeConnectionSecretToRef,omitempty"`
+	// Path is the sub-directory of remote git repository.
+	Path string `json:"path,omitempty"`
 
 	BaseConfigurationSpec `json:",inline"`
 }
 
 // BaseConfigurationSpec defines the common fields of a ConfigurationSpec
 type BaseConfigurationSpec struct {
-	// Path is the sub-directory of remote git repository. It's valid when remote is set
-	Path string `json:"path,omitempty"`
+	// WriteConnectionSecretToReference specifies the namespace and name of a
+	// Secret to which any connection details for this managed resource should
+	// be written. Connection details frequently include the endpoint, username,
+	// and password required to connect to the managed resource.
+	// +optional
+	WriteConnectionSecretToReference *types.SecretReference `json:"writeConnectionSecretToRef,omitempty"`
 
 	// ProviderReference specifies the reference to Provider
 	ProviderReference *types.Reference `json:"providerRef,omitempty"`

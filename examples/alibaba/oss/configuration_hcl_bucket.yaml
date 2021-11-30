@@ -30,7 +30,7 @@ spec:
     inClusterConfig: true
 
   variable:
-    bucket: "vela-website"
+    bucket: "vela-website-20211130-1900"
     acl: "private"
 
   writeConnectionSecretToRef:
