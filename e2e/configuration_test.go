@@ -123,3 +123,52 @@ continueCheck:
 	_, err = clientSet.CoreV1().ConfigMaps("default").Get(ctx, "tf-alibaba-eip", v1.GetOptions{})
 	assert.Equal(t, kerrors.IsNotFound(err), true)
 }
+
+func TestTwoConfigurationsWithDifferentNamespace(t *testing.T) {
+	klog.Info("1. Create namespace")
+	err := exec.Command("bash", "-c", "kubectl create ns abc").Start()
+	assert.NilError(t, err)
+
+	klog.Info("2. Applying Configurations")
+	pwd, _ := os.Getwd()
+	configurations := []string{
+		"examples/alibaba/eip/configuration_eip.yaml",
+		"examples/alibaba/eip/configuration_eip_remote_in_another_namespace.yaml",
+	}
+	for _, p := range configurations {
+		configuration := filepath.Join(pwd, "..", p)
+		cmd := fmt.Sprintf("kubectl apply -f %s", configuration)
+		err := exec.Command("bash", "-c", cmd).Start()
+		assert.NilError(t, err)
+	}
+
+	klog.Info("3. Checking Configurations status")
+	for i := 0; i < 60; i++ {
+		var fields []string
+		output, err := exec.Command("bash", "-c", "kubectl get configuration").Output()
+		assert.NilError(t, err)
+
+		lines := strings.Split(string(output), "\n")
+		if len(lines) != len(configurations)+2 {
+			continue
+		}
+		var available = true
+		for i, line := range lines {
+			if i == 0 {
+				continue
+			}
+			fields = strings.Fields(line)
+			if !(len(fields) == 3 && fields[1] == "Available") {
+				available = false
+				continue
+			}
+		}
+		if available {
+			return
+		}
+		if i == 59 {
+			t.Error("Two configurations with different namespaces are not ready")
+		}
+		time.Sleep(time.Second * 5)
+	}
+}
