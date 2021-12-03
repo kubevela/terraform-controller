@@ -138,7 +138,7 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, provid
 				klog.ErrorS(err, errConvertCredentials, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
 				return nil, errors.Wrap(err, errConvertCredentials)
 			}
-			if err := checkAlibabaCloudCredentials(region, ak.AccessKeyID, ak.AccessKeySecret); err != nil {
+			if err := checkAlibabaCloudCredentials(region, ak.AccessKeyID, ak.AccessKeySecret, ak.SecurityToken); err != nil {
 				klog.ErrorS(err, errCredentialValid)
 				return nil, errors.Wrap(err, errCredentialValid)
 			}
@@ -266,8 +266,16 @@ func GetProviderFromConfiguration(ctx context.Context, k8sClient client.Client, 
 }
 
 // checkAlibabaCloudProvider checks if the credentials from the provider are valid
-func checkAlibabaCloudCredentials(region string, accessKeyID, accessKeySecret string) error {
-	client, err := ram.NewClientWithAccessKey(region, accessKeyID, accessKeySecret)
+func checkAlibabaCloudCredentials(region string, accessKeyID, accessKeySecret, stsToken string) error {
+	var (
+		client *ram.Client
+		err    error
+	)
+	if stsToken != "" {
+		client, err = ram.NewClientWithStsToken(region, accessKeyID, accessKeySecret, stsToken)
+	} else {
+		client, err = ram.NewClientWithAccessKey(region, accessKeyID, accessKeySecret)
+	}
 	if err != nil {
 		return err
 	}
