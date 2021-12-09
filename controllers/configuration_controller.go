@@ -440,7 +440,7 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	}
 
 	// Apply ClusterRole
-	return createTerraformExecutorClusterRole(ctx, k8sClient, ClusterRoleName)
+	return createTerraformExecutorClusterRole(ctx, k8sClient, fmt.Sprintf("%s-%s", meta.Namespace, ClusterRoleName))
 }
 
 func (meta *TFConfigurationMeta) updateApplyStatus(ctx context.Context, k8sClient client.Client, state types.ConfigurationState, message string) error {

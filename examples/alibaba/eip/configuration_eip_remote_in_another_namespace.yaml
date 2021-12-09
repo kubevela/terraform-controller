@@ -1,0 +1,15 @@
+apiVersion: terraform.core.oam.dev/v1beta1
+kind: Configuration
+metadata:
+  name: alibaba-remote-eip-in-another-namespace
+  namespace: abc
+spec:
+  remote: https://github.com/zzxwill/terraform-alibaba-eip.git
+
+  variable:
+    name: poc-remote
+    bandwidth: 1
+
+  writeConnectionSecretToRef:
+    name: eip-remote-conn
+    namespace: default
