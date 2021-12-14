@@ -24,6 +24,16 @@ func TestCheckAlibabaCloudCredentials(t *testing.T) {
 			name: "Check AlibabaCloud credentials",
 			args: args{
 				credentials: credentials{
+					AccessKeyID:     "aaaa",
+					AccessKeySecret: "bbbbb",
+					Region:          "cn-hangzhou",
+				},
+			},
+		},
+		{
+			name: "Check AlibabaCloud credentials with sts token",
+			args: args{
+				credentials: credentials{
 					AccessKeyID:     "STS.aaaa",
 					AccessKeySecret: "bbbbb",
 					SecurityToken:   "ccc",
