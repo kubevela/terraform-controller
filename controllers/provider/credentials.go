@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/aliyun/alibaba-cloud-sdk-go/services/ram"
+	"github.com/aliyun/alibaba-cloud-sdk-go/services/sts"
 	"github.com/ghodss/yaml"
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
@@ -268,23 +268,23 @@ func GetProviderFromConfiguration(ctx context.Context, k8sClient client.Client, 
 // checkAlibabaCloudProvider checks if the credentials from the provider are valid
 func checkAlibabaCloudCredentials(region string, accessKeyID, accessKeySecret, stsToken string) error {
 	var (
-		client *ram.Client
+		client *sts.Client
 		err    error
 	)
 	if stsToken != "" {
-		client, err = ram.NewClientWithStsToken(region, accessKeyID, accessKeySecret, stsToken)
+		client, err = sts.NewClientWithStsToken(region, accessKeyID, accessKeySecret, stsToken)
 	} else {
-		client, err = ram.NewClientWithAccessKey(region, accessKeyID, accessKeySecret)
+		client, err = sts.NewClientWithAccessKey(region, accessKeyID, accessKeySecret)
 	}
 	if err != nil {
 		return err
 	}
-	request := ram.CreateGetPasswordPolicyRequest()
+	request := sts.CreateGetCallerIdentityRequest()
 	request.Scheme = "https"
 
-	_, err = client.GetPasswordPolicy(request)
+	_, err = client.GetCallerIdentity(request)
 	if err != nil {
-		errMsg := "Alibaba Cloud credentials are not valid"
+		errMsg := "Alibaba Cloud credentials are invalid"
 		klog.ErrorS(err, errMsg)
 		return errors.Wrap(err, errMsg)
 	}
