@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
@@ -44,7 +45,7 @@ func createTerraformExecutorClusterRole(ctx context.Context, k8sClient client.Cl
 }
 
 func createTerraformExecutorClusterRoleBinding(ctx context.Context, k8sClient client.Client, namespace, clusterRoleName, serviceAccountName string) error {
-	var crbName = "tf-executor-clusterrole-binding"
+	var crbName = fmt.Sprintf("%s-tf-executor-clusterrole-binding", namespace)
 	var clusterRoleBinding = rbacv1.ClusterRoleBinding{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "rbac.authorization.k8s.io/v1",
