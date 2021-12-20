@@ -486,7 +486,7 @@ func (meta *TFConfigurationMeta) assembleAndTriggerJob(ctx context.Context, k8sC
 	if err := createTerraformExecutorServiceAccount(ctx, k8sClient, meta.Namespace, ServiceAccountName); err != nil {
 		return err
 	}
-	if err := createTerraformExecutorClusterRoleBinding(ctx, k8sClient, meta.Namespace, ClusterRoleName, ServiceAccountName); err != nil {
+	if err := createTerraformExecutorClusterRoleBinding(ctx, k8sClient, meta.Namespace, fmt.Sprintf("%s-%s", meta.Namespace, ClusterRoleName), ServiceAccountName); err != nil {
 		return err
 	}
 
