@@ -29,4 +29,8 @@ spec:
               value: {{ .Values.terraformImage}}
             - name: TERRAFORM_BACKEND_NAMESPACE
               value: {{ .Values.backend.namespace }}
+            - name: BUSYBOX_IMAGE
+              value: {{ .Values.busyboxImage}}
+            - name: GIT_IMAGE
+              value: {{ .Values.gitImage}}
       serviceAccountName: tf-controller-service-account
