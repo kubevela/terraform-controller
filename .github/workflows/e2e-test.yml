@@ -56,3 +56,9 @@ jobs:
           kubectl get secret alibaba-account-creds -n vela-system -o yaml
 
           make configuration
+
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v2
+        with:
+          files: ./e2e-coverage1.xml
+          verbose: true
