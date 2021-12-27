@@ -60,5 +60,7 @@ jobs:
       - name: Upload coverage report
         uses: codecov/codecov-action@v2
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           files: ./e2e-coverage1.xml
+          flags: e2e
           verbose: true

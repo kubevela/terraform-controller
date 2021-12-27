@@ -18,22 +18,7 @@ env:
   GO_VERSION: '1.16.5'
 
 jobs:
-  detect-noop:
-    runs-on: ubuntu-20.04
-    outputs:
-      noop: ${{ steps.noop.outputs.should_skip }}
-    steps:
-      - name: Detect No-op Changes
-        id: noop
-        uses: fkirc/skip-duplicate-actions@v3.3.0
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          paths_ignore: '["**.md", "**.png", "**.jpg"]'
-          do_not_skip: '["workflow_dispatch", "schedule", "push"]'
-          concurrent_skipping: false
-
-  golangci:
-    name: lint
+  lint:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
@@ -47,8 +32,6 @@ jobs:
 
   unit-tests:
     runs-on: ubuntu-20.04
-    needs: detect-noop
-    if: needs.detect-noop.outputs.noop != 'true'
 
     steps:
       - name: Set up Go
@@ -69,10 +52,6 @@ jobs:
           key: ${{ runner.os }}-pkg-${{ hashFiles('**/go.sum') }}
           restore-keys: ${{ runner.os }}-pkg-
 
-      - name: Install ginkgo
-        run:  |
-          sudo apt-get install -y golang-ginkgo-dev
-
       - name: Install Kubebuilder
         run: |
           wget https://github.com/kubernetes-sigs/kubebuilder/releases/download/v2.3.2/kubebuilder_2.3.2_linux_amd64.tar.gz
@@ -83,9 +62,8 @@ jobs:
         run: make test
 
       - name: Upload coverage report
-        uses: codecov/codecov-action@v1
+        uses: codecov/codecov-action@v2
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          file: ./coverage.txt
-          flags: unittests
-          name: codecov-umbrella
+          files: ./ut-coverage1.xml
+          flags: unit
