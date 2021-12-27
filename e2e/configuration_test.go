@@ -157,7 +157,7 @@ func TestBasicConfigurationRegression(t *testing.T) {
 	klog.Info("2. Checking Configurations status")
 	for i := 0; i < retryTimes; i++ {
 		var fields []string
-		output, err := exec.Command("bash", "-c", "kubectl get configuration").Output()
+		output, err := exec.Command("bash", "-c", "kubectl get configuration -A").Output()
 		assert.NilError(t, err)
 
 		lines := strings.Split(string(output), "\n")
@@ -173,8 +173,8 @@ func TestBasicConfigurationRegression(t *testing.T) {
 			}
 
 			fields = strings.Fields(line)
-			if len(fields) == 3 {
-				if fields[1] != Available {
+			if len(fields) == 4 {
+				if fields[2] != Available {
 					available = false
 					t.Logf("Configuration %s is not avaialble", fields[0])
 					break
@@ -205,7 +205,7 @@ deletion:
 			fields  []string
 			existed bool
 		)
-		output, err := exec.Command("bash", "-c", "kubectl get configuration").Output()
+		output, err := exec.Command("bash", "-c", "kubectl get configuration -A").Output()
 		assert.NilError(t, err)
 
 		lines := strings.Split(string(output), "\n")
@@ -217,8 +217,8 @@ deletion:
 			existed = true
 
 			fields = strings.Fields(line)
-			if len(fields) == 3 {
-				t.Logf("Retrying %d times. Configuration %s is deleting.", i+1, fields[0])
+			if len(fields) == 4 {
+				t.Logf("Retrying %d times. Configuration %s is deleting.", i+1, fields[1])
 			}
 		}
 		if existed {

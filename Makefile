@@ -22,7 +22,7 @@ all: manager
 
 # Run tests
 test: generate fmt vet manifests
-	go test ./controllers/... -coverprofile cover.out
+	go test -coverprofile=ut-coverage1.xml ./controllers/...
 
 # Build manager binary
 manager: generate fmt vet
@@ -137,7 +137,6 @@ GOIMPORTS=$(GOBIN)/goimports
 else
 GOIMPORTS=$(shell which goimports)
 endif
-
 
 install-chart:
 	helm lint ./chart
