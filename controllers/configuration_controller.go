@@ -103,6 +103,9 @@ var (
 	// terraformImage is the Terraform image which can run `terraform init/plan/apply`
 	terraformImage            = os.Getenv("TERRAFORM_IMAGE")
 	terraformBackendNamespace = os.Getenv("TERRAFORM_BACKEND_NAMESPACE")
+
+	busyboxImage = os.Getenv("BUSYBOX_IMAGE")
+	gitImage     = os.Getenv("GIT_IMAGE")
 )
 
 // TFConfigurationMeta is all the metadata of a Configuration
@@ -586,7 +589,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 
 	initContainer = v1.Container{
 		Name:            "prepare-input-terraform-configurations",
-		Image:           "busybox:latest",
+		Image:           busyboxImage,
 		ImagePullPolicy: v1.PullIfNotPresent,
 		Command: []string{
 			"sh",
@@ -603,7 +606,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 		initContainers = append(initContainers,
 			v1.Container{
 				Name:            "git-configuration",
-				Image:           "alpine/git:latest",
+				Image:           gitImage,
 				ImagePullPolicy: v1.PullIfNotPresent,
 				Command: []string{
 					"sh",
