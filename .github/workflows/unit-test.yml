@@ -32,8 +32,6 @@ jobs:
 
   unit-tests:
     runs-on: ubuntu-20.04
-    needs: detect-noop
-    if: needs.detect-noop.outputs.noop != 'true'
 
     steps:
       - name: Set up Go
