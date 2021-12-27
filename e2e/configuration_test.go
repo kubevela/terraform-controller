@@ -18,7 +18,21 @@ import (
 	"github.com/oam-dev/terraform-controller/controllers/client"
 )
 
-const backendSecretNamespace = "vela-system"
+const (
+	backendSecretNamespace = "vela-system"
+	Available              = "Available"
+)
+
+var (
+	testConfigurationsBasic      = "examples/alibaba/eip/configuration_eip.yaml"
+	testConfigurationsRegression = []string{
+		"examples/alibaba/eip/configuration_eip.yaml",
+		"examples/alibaba/eip/configuration_eip_remote_in_another_namespace.yaml",
+		"examples/alibaba/eip/configuration_eip_remote_subdirectory.yaml",
+		// "examples/alibaba/rds/configuration_hcl_rds.yaml",
+		"examples/alibaba/oss/configuration_hcl_bucket.yaml",
+	}
+)
 
 func TestBasicConfiguration(t *testing.T) {
 	clientSet, err := client.InitClientSet()
@@ -27,7 +41,7 @@ func TestBasicConfiguration(t *testing.T) {
 
 	klog.Info("1. Applying Configuration")
 	pwd, _ := os.Getwd()
-	configuration := filepath.Join(pwd, "..", "examples/alibaba/eip/configuration_eip.yaml")
+	configuration := filepath.Join(pwd, "..", testConfigurationsBasic)
 	cmd := fmt.Sprintf("kubectl apply -f %s", configuration)
 	err = exec.Command("bash", "-c", cmd).Start()
 	assert.NilError(t, err)
@@ -44,7 +58,7 @@ func TestBasicConfiguration(t *testing.T) {
 				continue
 			}
 			fields = strings.Fields(line)
-			if len(fields) == 3 && fields[0] == "alibaba-eip" && fields[1] == "Available" {
+			if len(fields) == 3 && fields[0] == "alibaba-eip" && fields[1] == Available {
 				goto continueCheck
 			}
 		}
@@ -124,51 +138,98 @@ continueCheck:
 	assert.Equal(t, kerrors.IsNotFound(err), true)
 }
 
-func TestTwoConfigurationsWithDifferentNamespace(t *testing.T) {
-	klog.Info("1. Create namespace")
+func TestBasicConfigurationRegression(t *testing.T) {
+	var retryTimes = 120
+
+	klog.Info("0. Create namespace")
 	err := exec.Command("bash", "-c", "kubectl create ns abc").Start()
 	assert.NilError(t, err)
 
-	klog.Info("2. Applying Configurations")
+	klog.Info("1. Applying Configuration")
 	pwd, _ := os.Getwd()
-	configurations := []string{
-		"examples/alibaba/eip/configuration_eip.yaml",
-		"examples/alibaba/eip/configuration_eip_remote_in_another_namespace.yaml",
-	}
-	for _, p := range configurations {
+	for _, p := range testConfigurationsRegression {
 		configuration := filepath.Join(pwd, "..", p)
 		cmd := fmt.Sprintf("kubectl apply -f %s", configuration)
 		err := exec.Command("bash", "-c", cmd).Start()
 		assert.NilError(t, err)
 	}
 
-	klog.Info("3. Checking Configurations status")
-	for i := 0; i < 60; i++ {
+	klog.Info("2. Checking Configurations status")
+	for i := 0; i < retryTimes; i++ {
 		var fields []string
 		output, err := exec.Command("bash", "-c", "kubectl get configuration").Output()
 		assert.NilError(t, err)
 
 		lines := strings.Split(string(output), "\n")
-		if len(lines) != len(configurations)+2 {
+
+		if len(lines) < len(testConfigurationsRegression)+2 {
 			continue
 		}
+
 		var available = true
 		for i, line := range lines {
 			if i == 0 {
 				continue
 			}
+
 			fields = strings.Fields(line)
-			if !(len(fields) == 3 && fields[1] == "Available") {
-				available = false
-				continue
+			if len(fields) == 3 {
+				if fields[1] != Available {
+					available = false
+					t.Logf("Configuration %s is not avaialble", fields[0])
+					break
+				}
 			}
 		}
 		if available {
-			return
+			goto deletion
 		}
-		if i == 59 {
-			t.Error("Two configurations with different namespaces are not ready")
+		if i == retryTimes-1 {
+			t.Error("Not all configurations are ready")
 		}
 		time.Sleep(time.Second * 5)
+	}
+
+deletion:
+	klog.Info("3. Deleting Configuration")
+	for _, p := range testConfigurationsRegression {
+		configuration := filepath.Join(pwd, "..", p)
+		cmd := fmt.Sprintf("kubectl delete -f %s", configuration)
+		err := exec.Command("bash", "-c", cmd).Start()
+		assert.NilError(t, err)
+	}
+
+	klog.Info("4. Checking Configuration is deleted")
+	for i := 0; i < retryTimes; i++ {
+		var (
+			fields  []string
+			existed bool
+		)
+		output, err := exec.Command("bash", "-c", "kubectl get configuration").Output()
+		assert.NilError(t, err)
+
+		lines := strings.Split(string(output), "\n")
+
+		for j, line := range lines {
+			if j == 0 {
+				continue
+			}
+			existed = true
+
+			fields = strings.Fields(line)
+			if len(fields) == 3 {
+				t.Logf("Retrying %d times. Configuration %s is deleting.", i+1, fields[0])
+			}
+		}
+		if existed {
+			if i == retryTimes-1 {
+				t.Error("Configuration are not deleted")
+			}
+
+			time.Sleep(time.Second * 5)
+			continue
+		} else {
+			break
+		}
 	}
 }

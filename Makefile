@@ -252,7 +252,7 @@ ucloud: ucloud-credentials ucloud-provider
 
 
 configuration:
-	go test -v ./e2e/... -count=1
+	go test -coverprofile=e2e-coverage1.xml -v ./e2e/... -count=1
 
 e2e-setup: install-chart alibaba
 
