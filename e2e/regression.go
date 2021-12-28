@@ -21,7 +21,7 @@ func Regression(t *testing.T, testcases []string, retryTimes int) {
 	for _, p := range testcases {
 		configuration := filepath.Join(pwd, "..", p)
 		cmd := fmt.Sprintf("kubectl apply -f %s", configuration)
-		err := exec.Command("bash", "-c", cmd).Start()
+		err := exec.Command("bash", "-c", cmd).Start() // #nosec
 		assert.NilError(t, err)
 	}
 
@@ -49,7 +49,7 @@ func Regression(t *testing.T, testcases []string, retryTimes int) {
 			if len(fields) == 4 {
 				if fields[2] != Available {
 					available = false
-					t.Logf("Configuration %s is not avaialble", fields[1])
+					t.Logf("Configuration %s is not available", fields[1])
 					break
 				}
 			}
@@ -68,7 +68,7 @@ deletion:
 	for _, p := range testcases {
 		configuration := filepath.Join(pwd, "..", p)
 		cmd := fmt.Sprintf("kubectl delete -f %s", configuration)
-		err := exec.Command("bash", "-c", cmd).Start()
+		err := exec.Command("bash", "-c", cmd).Start() // #nosec
 		assert.NilError(t, err)
 	}
 
