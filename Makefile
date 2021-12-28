@@ -256,3 +256,6 @@ configuration:
 e2e-setup: install-chart alibaba
 
 e2e: e2e-setup configuration
+
+e2e-gitee:
+	go test -coverprofile=e2e-gitee-coverage1.xml -v ./gitee/...

@@ -3,12 +3,12 @@ kind: Configuration
 metadata:
   name: alibaba-cs-ack
 spec:
-  remote: https://github.com/kubevela-contrib/terraform-modules.git
+  remote: https://gitee.com/kubevela-contrib/terraform-modules.git
   path: alibaba/cs/dedicated-kubernetes
 
   variable:
     k8s_version: "1.18.8-aliyun.1"
 
   writeConnectionSecretToRef:
-    name: ack-conn
+    name: cs-ack-conn
     namespace: default
