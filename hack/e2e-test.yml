@@ -52,9 +52,6 @@ jobs:
 
       - name: E2E tests
         run: |
-          kubectl get secret -n vela-system alibaba-account-creds
-          kubectl get secret alibaba-account-creds -n vela-system -o yaml
-
           make configuration
 
       - name: Upload coverage report
@@ -63,4 +60,3 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./e2e-coverage1.xml
           flags: e2e
-          verbose: true
