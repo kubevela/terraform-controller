@@ -106,6 +106,9 @@ var (
 
 	busyboxImage = os.Getenv("BUSYBOX_IMAGE")
 	gitImage     = os.Getenv("GIT_IMAGE")
+
+	// githubBlocked mark whether GitHub is blocked in the cluster
+	githubBlocked = os.Getenv("GITHUB_BLOCKED")
 )
 
 // TFConfigurationMeta is all the metadata of a Configuration
@@ -225,7 +228,7 @@ func initTFConfigurationMeta(req ctrl.Request, configuration v1beta1.Configurati
 		DestroyJobName:      req.Name + "-" + string(TerraformDestroy),
 	}
 
-	meta.RemoteGit = configuration.Spec.Remote
+	meta.RemoteGit = tfcfg.ReplaceTerraformSource(configuration.Spec.Remote, githubBlocked)
 	meta.DeleteResource = configuration.Spec.DeleteResource
 	if configuration.Spec.Path == "" {
 		meta.RemoteGitPath = "."

@@ -11,3 +11,5 @@ terraformImage: oamdev/docker-terraform:1.0.9
 
 backend:
   namespace: vela-system
+
+githubBlocked: false
