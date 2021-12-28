@@ -2,6 +2,8 @@ package configuration
 
 import (
 	"context"
+	"strconv"
+	"strings"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -15,6 +17,15 @@ import (
 	"github.com/oam-dev/terraform-controller/api/types"
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
 )
+
+const (
+	// GithubPrefix is the constant of GitHub domain
+	GithubPrefix = "https://github.com"
+	// GiteePrefix is the constant of Gitee domain
+	GiteePrefix = "https://gitee.com"
+)
+
+const errGitHubBlockedNotBoolean = "the value of githubBlocked is not a boolean"
 
 // ValidConfigurationObject will validate a Configuration
 func ValidConfigurationObject(configuration *v1beta1.Configuration) (types.ConfigurationType, error) {
@@ -105,4 +116,25 @@ func Get(ctx context.Context, k8sClient client.Client, namespacedName apitypes.N
 		return *configuration, err
 	}
 	return *configuration, nil
+}
+
+// ReplaceTerraformSource will replace the Terraform source from GitHub to Gitee
+func ReplaceTerraformSource(remote string, githubBlockedStr string) string {
+	githubBlocked, err := strconv.ParseBool(githubBlockedStr)
+	if err != nil {
+		klog.Warningf(errGitHubBlockedNotBoolean, err)
+		return remote
+	}
+
+	if !githubBlocked {
+		return remote
+	}
+
+	if remote == "" {
+		return ""
+	}
+	if strings.HasPrefix(remote, GithubPrefix) {
+		return strings.Replace(remote, GithubPrefix, GiteePrefix, 1)
+	}
+	return remote
 }

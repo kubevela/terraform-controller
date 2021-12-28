@@ -33,4 +33,6 @@ spec:
               value: {{ .Values.busyboxImage}}
             - name: GIT_IMAGE
               value: {{ .Values.gitImage}}
+            - name: GITHUB_BLOCKED
+              value: {{ .Values.githubBlocked }}
       serviceAccountName: tf-controller-service-account
