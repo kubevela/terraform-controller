@@ -9,7 +9,7 @@ on:
 
 env:
   BUCKET: kubevelacharts
-  ENDPOINT: charts.kubevela.net
+  ENDPOINT: oss-cn-hangzhou.aliyuncs.com
   ACCESS_KEY: ${{ secrets.OSS_ACCESS_KEY }}
   ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
 
@@ -52,7 +52,7 @@ jobs:
           labels: |-
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
           build-args: |
             GITVERSION=git-${{ steps.vars.outputs.git_revision }}
@@ -79,7 +79,7 @@ jobs:
           version: v3.4.0
       - uses: oprypin/find-latest-tag@v1
         with:
-          repository: oam-dev/kubevela
+          repository: oam-dev/terraform-controller
           releases-only: true
         id: latest_tag
       - name: Tag helm chart image
@@ -88,7 +88,7 @@ jobs:
           sub="."
           major="$(cut -d"$sub" -f1 <<<"$latest_repo_tag")"
           minor="$(cut -d"$sub" -f2 <<<"$latest_repo_tag")"
-          patch="0"
+          patch="$(cut -d"$sub" -f3 <<<"$latest_repo_tag")"
           current_repo_tag="$major.$minor.$patch"
           image_tag=${GITHUB_REF#refs/tags/}
           chart_version=$latest_repo_tag
@@ -106,12 +106,12 @@ jobs:
       - name: Configure Alibaba Cloud OSSUTIL
         run: ./ossutil --config-file .ossutilconfig config -i ${ACCESS_KEY} -k ${ACCESS_KEY_SECRET} -e ${ENDPOINT} -c .ossutilconfig
       - name: sync cloud to local
-        run: ./ossutil --config-file .ossutilconfig cp oss://$BUCKET/addons/index.yaml $LOCAL_OSS_DIRECTORY
+        run: ./ossutil --config-file .ossutilconfig cp oss://$BUCKET/addons/index.yaml $LOCAL_OSS_DIRECTORY -f
 
       - name: Package helm charts
         run: |
           helm package $HELM_CHART --destination $LOCAL_OSS_DIRECTORY
-          helm repo index --url https://charts.kubevela.net/addons . --merge index.yaml
+          helm repo index --url https://charts.kubevela.net/addons $LOCAL_OSS_DIRECTORY/ --merge $LOCAL_OSS_DIRECTORY/index.yaml
 
       - name: sync local to cloud
         run: ./ossutil --config-file .ossutilconfig sync $LOCAL_OSS_DIRECTORY oss://$BUCKET/addons -f
