@@ -82,7 +82,7 @@ jobs:
           patch="0"
           current_repo_tag="$major.$minor.$patch"
           tag=${GITHUB_REF#refs/tags/}
-          image_tag=${image_tag#"v"}
+          image_tag=${tag#"v"}
           chart_version=$latest_repo_tag
           if [[ ${GITHUB_REF} == "refs/heads/master" ]]; then
             image_tag=latest
