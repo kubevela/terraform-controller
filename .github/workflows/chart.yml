@@ -12,16 +12,19 @@ env:
   ENDPOINT: oss-cn-hangzhou.aliyuncs.com
   ACCESS_KEY: ${{ secrets.OSS_ACCESS_KEY }}
   ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+  HELM_CHART: chart
+  LOCAL_OSS_DIRECTORY: .oss/
 
 jobs:
-  docker-build:
-    runs-on: ubuntu-latest
+  chart-build:
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@master
       - name: Get the version
         id: get_version
         run: |
-          VERSION=${GITHUB_REF#refs/tags/}
+          tag=${GITHUB_REF#refs/tags/}
+          VERSION=${tag#"v"}
           if [[ ${GITHUB_REF} == "refs/heads/master" ]]; then
             VERSION=latest
           fi
@@ -61,12 +64,7 @@ jobs:
           tags: |-
             docker.io/oamdev/terraform-controller:${{ steps.get_version.outputs.VERSION }}
 
-  chart-build:
-    env:
-      HELM_CHART: chart
-      LOCAL_OSS_DIRECTORY: .oss/
-    runs-on: ubuntu-20.04
-    steps:
+
       - uses: actions/checkout@master
       - name: Get git revision
         id: vars
