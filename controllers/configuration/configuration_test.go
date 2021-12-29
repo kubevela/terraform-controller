@@ -22,8 +22,13 @@ func TestReplaceTerraformSource(t *testing.T) {
 		},
 		{
 			remote:        "https://github.com/kubevela-contrib/terraform-modules.git",
-			githubBlocked: "true",
 			expected:      "https://gitee.com/kubevela-contrib/terraform-modules.git",
+			githubBlocked: "true",
+		},
+		{
+			remote:        "https://github.com/abc/terraform-modules.git",
+			expected:      "https://gitee.com/kubevela-terraform-source/terraform-modules.git",
+			githubBlocked: "true",
 		},
 		{
 			remote:        "abc",
@@ -34,11 +39,6 @@ func TestReplaceTerraformSource(t *testing.T) {
 			remote:        "",
 			githubBlocked: "true",
 			expected:      "",
-		},
-		{
-			remote:        "https://github.com-https://github.com",
-			githubBlocked: "true",
-			expected:      "https://gitee.com-https://github.com",
 		},
 	}
 

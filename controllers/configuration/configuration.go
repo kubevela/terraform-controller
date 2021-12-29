@@ -20,9 +20,13 @@ import (
 
 const (
 	// GithubPrefix is the constant of GitHub domain
-	GithubPrefix = "https://github.com"
+	GithubPrefix = "https://github.com/"
+	// GithubKubeVelaContribPrefix is the prefix of GitHub repository of kubevela-contrib
+	GithubKubeVelaContribPrefix = "https://github.com/kubevela-contrib"
+	// GiteeTerraformSourceOrg is the Gitee organization of Terraform source
+	GiteeTerraformSourceOrg = "https://gitee.com/kubevela-terraform-source"
 	// GiteePrefix is the constant of Gitee domain
-	GiteePrefix = "https://gitee.com"
+	GiteePrefix = "https://gitee.com/"
 )
 
 const errGitHubBlockedNotBoolean = "the value of githubBlocked is not a boolean"
@@ -120,11 +124,13 @@ func Get(ctx context.Context, k8sClient client.Client, namespacedName apitypes.N
 
 // ReplaceTerraformSource will replace the Terraform source from GitHub to Gitee
 func ReplaceTerraformSource(remote string, githubBlockedStr string) string {
+	klog.InfoS("Whether GitHub is blocked", "githubBlocked", githubBlockedStr)
 	githubBlocked, err := strconv.ParseBool(githubBlockedStr)
 	if err != nil {
 		klog.Warningf(errGitHubBlockedNotBoolean, err)
 		return remote
 	}
+	klog.InfoS("Parsed GITHUB_BLOCKED env", "githubBlocked", githubBlocked)
 
 	if !githubBlocked {
 		return remote
@@ -134,7 +140,17 @@ func ReplaceTerraformSource(remote string, githubBlockedStr string) string {
 		return ""
 	}
 	if strings.HasPrefix(remote, GithubPrefix) {
-		return strings.Replace(remote, GithubPrefix, GiteePrefix, 1)
+		var repo string
+		if strings.HasPrefix(remote, GithubKubeVelaContribPrefix) {
+			repo = strings.Replace(remote, GithubPrefix, GiteePrefix, 1)
+		} else {
+			tmp := strings.Split(strings.Replace(remote, GithubPrefix, "", 1), "/")
+			if len(tmp) == 2 {
+				repo = GiteeTerraformSourceOrg + "/" + tmp[1]
+			}
+		}
+		klog.InfoS("New remote git", "Gitee", repo)
+		return repo
 	}
 	return remote
 }
