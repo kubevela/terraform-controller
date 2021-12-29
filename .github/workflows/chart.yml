@@ -81,8 +81,8 @@ jobs:
           minor="$(cut -d"$sub" -f2 <<<"$latest_repo_tag")"
           patch="0"
           current_repo_tag="$major.$minor.$patch"
-          image_tag=${GITHUB_REF#refs/tags/}
-          tag=${image_tag#"v"}
+          tag=${GITHUB_REF#refs/tags/}
+          image_tag=${image_tag#"v"}
           chart_version=$latest_repo_tag
           if [[ ${GITHUB_REF} == "refs/heads/master" ]]; then
             image_tag=latest
