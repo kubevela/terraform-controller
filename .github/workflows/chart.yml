@@ -64,13 +64,6 @@ jobs:
           tags: |-
             docker.io/oamdev/terraform-controller:${{ steps.get_version.outputs.VERSION }}
 
-
-      - uses: actions/checkout@master
-      - name: Get git revision
-        id: vars
-        shell: bash
-        run: |
-          echo "::set-output name=git_revision::$(git rev-parse --short HEAD)"
       - name: Install Helm
         uses: azure/setup-helm@v1
         with:
@@ -84,16 +77,21 @@ jobs:
         run: |
           latest_repo_tag=${{ steps.latest_tag.outputs.tag }}
           sub="."
+          major="$(cut -d"$sub" -f1 <<<"$latest_repo_tag")"
+          minor="$(cut -d"$sub" -f2 <<<"$latest_repo_tag")"
+          patch="0"
+          current_repo_tag="$major.$minor.$patch"
           image_tag=${GITHUB_REF#refs/tags/}
+          tag=${image_tag#"v"}
           chart_version=$latest_repo_tag
           if [[ ${GITHUB_REF} == "refs/heads/master" ]]; then
             image_tag=latest
-            chart_version=nightly-build
+            chart_version=${current_repo_tag}-nightly-build
           fi
           # sed -i "s/0.2.8/${image_tag}/g" $HELM_CHART/Makefile
           chart_smever=${chart_version#"v"}
           sed -i "s/0.2.8/$chart_smever/g" $HELM_CHART/Chart.yaml
-          sed -i "s/0.2.8/${chart_smever}/g" $HELM_CHART/values.yaml
+          sed -i "s/0.2.8/${image_tag}/g" $HELM_CHART/values.yaml
 
       - name: Install ossutil
         run: wget http://gosspublic.alicdn.com/ossutil/1.7.0/ossutil64 && chmod +x ossutil64 && mv ossutil64 ossutil
