@@ -2,7 +2,7 @@
 
 Terraform Controller is a Kubernetes Controller for Terraform.
 
-![](docs/resources/architecture.jpg)
+![](docs/resources/architecture.png)
 
 # Features
 
