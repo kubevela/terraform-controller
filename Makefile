@@ -250,6 +250,17 @@ ucloud-provider:
 ucloud: ucloud-credentials ucloud-provider
 
 
+custom-credentials:
+	echo "Token: mytoken" > custom-credentials.conf
+	kubectl create secret generic custom-account-creds -n vela-system --from-file=credentials=custom-credentials.conf
+	rm -f custom-credentials.conf
+
+custom-provider:
+	kubectl apply -f examples/custom/provider.yaml
+
+custom: custom-credentials custom-provider
+
+
 configuration:
 	go test -coverprofile=e2e-coverage1.xml -v ./e2e/... -count=1
 
