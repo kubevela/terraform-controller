@@ -7,7 +7,7 @@ image:
 
 gitImage: alpine/git:latest
 busyboxImage: busybox:latest
-terraformImage: oamdev/docker-terraform:1.0.9
+terraformImage: oamdev/docker-terraform:1.1.0
 
 backend:
   namespace: vela-system
