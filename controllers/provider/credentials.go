@@ -33,6 +33,7 @@ const (
 	vsphere CloudProvider = "vsphere"
 	ec      CloudProvider = "ec"
 	ucloud  CloudProvider = "ucloud"
+	custom  CloudProvider = "custom"
 )
 
 const (
@@ -119,6 +120,9 @@ type VSphereCredentials struct {
 type ECCredentials struct {
 	ECApiKey string `yaml:"ecApiKey"`
 }
+
+// CustomCredentials are credentials for custom (you self)
+type CustomCredentials map[string]string
 
 // GetProviderCredentials gets provider credentials by cloud provider name
 func GetProviderCredentials(ctx context.Context, k8sClient client.Client, provider *v1beta1.Provider, region string) (map[string]string, error) {
@@ -216,6 +220,13 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, provid
 			return map[string]string{
 				envECApiKey: ak.ECApiKey,
 			}, nil
+		case string(custom):
+			var ck = make(CustomCredentials)
+			if err := yaml.Unmarshal(secret.Data[secretRef.Key], &ck); err != nil {
+				klog.ErrorS(err, errConvertCredentials, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
+				return nil, errors.Wrap(err, errConvertCredentials)
+			}
+			return ck, nil
 		default:
 			errMsg := "unsupported provider"
 			klog.InfoS(errMsg, "Provider", provider.Spec.Provider)

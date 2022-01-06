@@ -1,0 +1,13 @@
+apiVersion: terraform.core.oam.dev/v1beta1
+kind: Provider
+metadata:
+  name: custom
+spec:
+  provider: custom
+  region: cn-beijing
+  credentials:
+    source: Secret
+    secretRef:
+      namespace: vela-system
+      name: custom-account-creds
+      key: credentials

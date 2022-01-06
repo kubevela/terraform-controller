@@ -1,0 +1,76 @@
+apiVersion: terraform.core.oam.dev/v1beta1
+kind: Configuration
+metadata:
+  name: custom-example
+spec:
+  hcl: |
+    terraform {
+      required_providers {
+        example = {
+          source  = "registry-tf.private.com/your-group/provider"
+          version = "0.0.1"
+        }
+      }
+    }
+
+    provider "example" {
+      token = "your token" // if nil, it is read Token from env.
+    }
+
+    #############
+    # Variables #
+    #############
+    variable "name" {
+      type        = string
+      description = "database name"
+    }
+
+    variable "code" {
+      type        = string
+      description = "package type"
+    }
+
+    variable "disk" {
+      type        = string
+      description = "disk size"
+    }
+
+    ############
+    # Resource #
+    ############
+    resource "example_mysql" "db" {
+      name          = var.name
+      offering_code = var.code
+      disk          = var.disk
+    }
+
+    ##########
+    # Config #
+    ##########
+    output "ADDRESS" {
+      value = example_mysql.db.address
+    }
+
+    output "DBNAME" {
+      value = example_mysql.db.name
+    }
+
+    output "USERNAME" {
+      value = example_mysql.db.username
+    }
+
+    output "PASSWORD" {
+      value = example_mysql.db.password
+    }
+
+  variable:
+    name: mydb
+    code: cloud.d3.m100
+    disk: 200Gi 
+
+  writeConnectionSecretToRef:
+    name: custom-example-output
+    namespace: default
+
+  providerRef:
+    name: custom
