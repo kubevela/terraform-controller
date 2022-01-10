@@ -17,16 +17,17 @@ limitations under the License.
 package v1beta1
 
 import (
-	state "github.com/oam-dev/terraform-controller/api/types"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
+	state "github.com/oam-dev/terraform-controller/api/types"
 	types "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
 )
 
 // ConfigurationSpec defines the desired state of Configuration
 type ConfigurationSpec struct {
-	// JSON is the Terraform JSON syntax configuration
+	// JSON is the Terraform JSON syntax configuration.
+	// Deprecated: after v0.3.1, use HCL instead.
 	JSON string `json:"JSON,omitempty"`
 	// HCL is the Terraform HCL type configuration
 	HCL string `json:"hcl,omitempty"`
