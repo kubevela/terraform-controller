@@ -17,4 +17,6 @@ const (
 	ConfigurationHCL ConfigurationType = "HCL"
 	// ConfigurationRemote means HCL stores in a remote git repository
 	ConfigurationRemote ConfigurationType = "Remote"
+	// ConfigurationGit means HCL stores in a remote git repository
+	ConfigurationGit ConfigurationType = "Git"
 )

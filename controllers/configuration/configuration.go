@@ -36,8 +36,9 @@ func ValidConfigurationObject(configuration *v1beta1.Configuration) (types.Confi
 	json := configuration.Spec.JSON
 	hcl := configuration.Spec.HCL
 	remote := configuration.Spec.Remote
+	git := configuration.Spec.Git
 	switch {
-	case json == "" && hcl == "" && remote == "":
+	case json == "" && hcl == "" && remote == "" && git == "":
 		return "", errors.New("spec.JSON, spec.HCL or spec.Remote should be set")
 	case json != "" && hcl != "", json != "" && remote != "", hcl != "" && remote != "":
 		return "", errors.New("spec.JSON, spec.HCL and/or spec.Remote cloud not be set at the same time")
@@ -45,8 +46,8 @@ func ValidConfigurationObject(configuration *v1beta1.Configuration) (types.Confi
 		return types.ConfigurationJSON, nil
 	case hcl != "":
 		return types.ConfigurationHCL, nil
-	case remote != "":
-		return types.ConfigurationRemote, nil
+	case remote != "" || git != "":
+		return types.ConfigurationGit, nil
 	}
 	return "", nil
 }

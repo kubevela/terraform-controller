@@ -117,7 +117,7 @@ type TFConfigurationMeta struct {
 	Namespace             string
 	ConfigurationType     types.ConfigurationType
 	CompleteConfiguration string
-	RemoteGit             string
+	Git                   string
 	RemoteGitPath         string
 	ConfigurationChanged  bool
 	ConfigurationCMName   string
@@ -228,7 +228,7 @@ func initTFConfigurationMeta(req ctrl.Request, configuration v1beta1.Configurati
 		DestroyJobName:      req.Name + "-" + string(TerraformDestroy),
 	}
 
-	meta.RemoteGit = tfcfg.ReplaceTerraformSource(configuration.Spec.Remote, githubBlocked)
+	meta.Git = tfcfg.ReplaceTerraformSource(configuration.Spec.Remote, githubBlocked)
 	meta.DeleteResource = configuration.Spec.DeleteResource
 	if configuration.Spec.Path == "" {
 		meta.RemoteGitPath = "."
@@ -605,7 +605,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 
 	hclPath := filepath.Join(BackendVolumeMountPath, meta.RemoteGitPath)
 
-	if meta.RemoteGit != "" {
+	if meta.Git != "" {
 		initContainers = append(initContainers,
 			v1.Container{
 				Name:            "git-configuration",
@@ -614,7 +614,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 				Command: []string{
 					"sh",
 					"-c",
-					fmt.Sprintf("git clone %s %s && cp -r %s/* %s", meta.RemoteGit, BackendVolumeMountPath,
+					fmt.Sprintf("git clone %s %s && cp -r %s/* %s", meta.Git, BackendVolumeMountPath,
 						hclPath, WorkingVolumeMountPath),
 				},
 				VolumeMounts: initContainerVolumeMounts,

@@ -32,6 +32,7 @@ type ConfigurationSpec struct {
 	HCL string `json:"hcl,omitempty"`
 
 	// Remote is a git repo which contains hcl files. Currently, only public git repos are supported.
+	// Deprecated in v0.3.1. Use BaseConfigurationSpec.Git instead.
 	Remote string `json:"remote,omitempty"`
 
 	// +kubebuilder:pruning:PreserveUnknownFields
@@ -66,6 +67,9 @@ type BaseConfigurationSpec struct {
 
 	// Region is cloud provider's region. It will override the region in the region field of ProviderReference
 	Region string `json:"region,omitempty"`
+
+	// Git is a git repo which contains Configuration(HCL) files. Currently, only public git repos are supported.
+	Git string `json:"git,omitempty"`
 }
 
 // ConfigurationStatus defines the observed state of Configuration
