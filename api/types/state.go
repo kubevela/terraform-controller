@@ -64,4 +64,6 @@ const (
 	ProviderIsReady ProviderState = "ready"
 	// ProviderIsInitializing marks the state of a Provider is initializing
 	ProviderIsInitializing ProviderState = "initializing"
+	// ProviderIsNotReady marks the state of a Provider is not ready
+	ProviderIsNotReady ProviderState = "ProviderNotReady"
 )

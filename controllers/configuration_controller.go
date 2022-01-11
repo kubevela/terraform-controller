@@ -137,10 +137,9 @@ type TFConfigurationMeta struct {
 
 // Reconcile will reconcile periodically
 func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	var ctx = context.Background()
-
 	klog.InfoS("reconciling Terraform Configuration...", "NamespacedName", req.NamespacedName)
 
+	var ctx = context.Background()
 	configuration, err := tfcfg.Get(ctx, r.Client, req.NamespacedName)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -163,7 +162,7 @@ func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		return ctrl.Result{}, err
 	}
 
-	var tfExecutionJob = &batchv1.Job{} //nolint:gofmt
+	var tfExecutionJob = &batchv1.Job{}
 	if err := r.Client.Get(ctx, client.ObjectKey{Name: meta.ApplyJobName, Namespace: meta.Namespace}, tfExecutionJob); err == nil {
 		if tfExecutionJob.Status.Succeeded == int32(1) {
 			if err := meta.updateApplyStatus(ctx, r.Client, types.Available, types.MessageCloudResourceDeployed); err != nil {
@@ -925,7 +924,7 @@ func (meta *TFConfigurationMeta) CheckWhetherConfigurationChanges(ctx context.Co
 func (meta *TFConfigurationMeta) checkProvider(ctx context.Context, k8sClient client.Client) error {
 	providerObj, err := provider.GetProviderFromConfiguration(ctx, k8sClient, meta.ProviderReference.Namespace, meta.ProviderReference.Name)
 	if err != nil {
-		return errors.Wrap(err, "failed to get the region from the provider")
+		return errors.Wrap(err, "failed to get Provider from Configuration")
 	}
 	region, err := tfcfg.SetRegion(ctx, k8sClient, meta.Namespace, meta.Name, providerObj)
 	if err != nil {

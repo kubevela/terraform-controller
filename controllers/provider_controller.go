@@ -64,9 +64,8 @@ func (r *ProviderReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	err := providercred.ValidateProviderCredentials(ctx, r.Client, &provider)
-	if err != nil {
-		provider.Status.State = types.ProviderIsInitializing
+	if _, err := providercred.GetProviderCredentials(ctx, r.Client, &provider, provider.Spec.Region); err != nil {
+		provider.Status.State = types.ProviderIsNotReady
 		provider.Status.Message = fmt.Sprintf("%s: %s", errGetCredentials, err.Error())
 		klog.ErrorS(err, errGetCredentials, "Provider", req.NamespacedName)
 		if updateErr := r.Status().Update(ctx, &provider); updateErr != nil {
