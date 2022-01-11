@@ -62,8 +62,6 @@ type ProviderState string
 const (
 	// ProviderIsReady is the `ready` state
 	ProviderIsReady ProviderState = "ready"
-	// ProviderIsInitializing marks the state of a Provider is initializing
-	ProviderIsInitializing ProviderState = "initializing"
 	// ProviderIsNotReady marks the state of a Provider is not ready
 	ProviderIsNotReady ProviderState = "ProviderNotReady"
 )

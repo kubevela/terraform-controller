@@ -184,7 +184,6 @@ func TestGetProviderCredentials(t *testing.T) {
 				envAliCloudStsToken:  ak.SecurityToken,
 			},
 		},
-
 		{
 			name: "Custom Provider",
 			args: args{

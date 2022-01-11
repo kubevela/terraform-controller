@@ -1,12 +1,19 @@
 package controllers
 
 import (
+	"context"
+	"github.com/oam-dev/terraform-controller/api/types"
+	"reflect"
+	"strings"
+	"testing"
+
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
 	crossplane "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"reflect"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"testing"
 )
 
 func TestInitTFConfigurationMeta(t *testing.T) {
@@ -84,6 +91,49 @@ func TestInitTFConfigurationMeta(t *testing.T) {
 			meta := initTFConfigurationMeta(req, tc.configuration)
 			if !reflect.DeepEqual(meta.Name, tc.want.Name) {
 				t.Errorf("initTFConfigurationMeta = %v, want %v", meta, tc.want)
+			}
+		})
+	}
+}
+
+func TestCheckProvider(t *testing.T) {
+	ctx := context.Background()
+	scheme := runtime.NewScheme()
+	v1beta1.AddToScheme(scheme)
+
+	provider := &v1beta1.Provider{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "default",
+			Namespace: "default",
+		},
+		Status: v1beta1.ProviderStatus{
+			State: types.ProviderIsNotReady,
+		},
+	}
+	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(provider).Build()
+
+	meta := &TFConfigurationMeta{
+		ProviderReference: &crossplane.Reference{
+			Name:      "default",
+			Namespace: "default",
+		},
+	}
+
+	testcases := []struct {
+		name string
+		want string
+	}{
+		{
+			name: "provider doesn't not exist",
+			want: "failed to get Provider from Configuration",
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := meta.checkProvider(ctx, k8sClient); err != nil &&
+				!strings.Contains(err.Error(), tc.want) {
+				t.Errorf("checkProvider = %v, want %v", err.Error(), tc.want)
 			}
 		})
 	}

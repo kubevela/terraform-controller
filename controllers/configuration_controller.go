@@ -136,10 +136,9 @@ type TFConfigurationMeta struct {
 // +kubebuilder:rbac:groups=terraform.core.oam.dev,resources=configurations/status,verbs=get;update;patch
 
 // Reconcile will reconcile periodically
-func (r *ConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
+func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	klog.InfoS("reconciling Terraform Configuration...", "NamespacedName", req.NamespacedName)
 
-	var ctx = context.Background()
 	configuration, err := tfcfg.Get(ctx, r.Client, req.NamespacedName)
 	if err != nil {
 		return ctrl.Result{}, err

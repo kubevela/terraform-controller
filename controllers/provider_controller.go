@@ -49,13 +49,10 @@ type ProviderReconciler struct {
 // +kubebuilder:rbac:groups=terraform.core.oam.dev,resources=providers/status,verbs=get;update;patch
 
 // Reconcile will reconcile periodically
-func (r *ProviderReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
+func (r *ProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	klog.InfoS("reconciling Terraform Provider...", "NamespacedName", req.NamespacedName)
 
-	var (
-		ctx      = context.Background()
-		provider terraformv1beta1.Provider
-	)
+	var provider terraformv1beta1.Provider
 
 	if err := r.Get(ctx, req.NamespacedName, &provider); err != nil {
 		if kerrors.IsNotFound(err) {
