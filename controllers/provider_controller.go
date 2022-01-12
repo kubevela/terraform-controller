@@ -49,13 +49,10 @@ type ProviderReconciler struct {
 // +kubebuilder:rbac:groups=terraform.core.oam.dev,resources=providers/status,verbs=get;update;patch
 
 // Reconcile will reconcile periodically
-func (r *ProviderReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
+func (r *ProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	klog.InfoS("reconciling Terraform Provider...", "NamespacedName", req.NamespacedName)
 
-	var (
-		ctx      = context.Background()
-		provider terraformv1beta1.Provider
-	)
+	var provider terraformv1beta1.Provider
 
 	if err := r.Get(ctx, req.NamespacedName, &provider); err != nil {
 		if kerrors.IsNotFound(err) {
@@ -64,9 +61,8 @@ func (r *ProviderReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	err := providercred.ValidateProviderCredentials(ctx, r.Client, &provider)
-	if err != nil {
-		provider.Status.State = types.ProviderIsInitializing
+	if _, err := providercred.GetProviderCredentials(ctx, r.Client, &provider, provider.Spec.Region); err != nil {
+		provider.Status.State = types.ProviderIsNotReady
 		provider.Status.Message = fmt.Sprintf("%s: %s", errGetCredentials, err.Error())
 		klog.ErrorS(err, errGetCredentials, "Provider", req.NamespacedName)
 		if updateErr := r.Status().Update(ctx, &provider); updateErr != nil {

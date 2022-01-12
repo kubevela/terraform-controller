@@ -240,26 +240,6 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, provid
 	}
 }
 
-// ValidateProviderCredentials validates provider credentials by cloud provider name
-func ValidateProviderCredentials(ctx context.Context, k8sClient client.Client, provider *v1beta1.Provider) error {
-	switch provider.Spec.Credentials.Source {
-	case "Secret":
-		var secret v1.Secret
-		secretRef := provider.Spec.Credentials.SecretRef
-		if err := k8sClient.Get(ctx, client.ObjectKey{Name: secretRef.Name, Namespace: secretRef.Namespace}, &secret); err != nil {
-			errMsg := "failed to get the Secret from Provider"
-			klog.ErrorS(err, errMsg, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
-			return errors.Wrap(err, errMsg)
-		}
-	default:
-		errMsg := "the credentials type is not supported."
-		err := errors.New(errMsg)
-		klog.ErrorS(err, "", "CredentialType", provider.Spec.Credentials.Source)
-		return err
-	}
-	return nil
-}
-
 // GetProviderFromConfiguration gets provider object from Configuration
 func GetProviderFromConfiguration(ctx context.Context, k8sClient client.Client, namespace, name string) (*v1beta1.Provider, error) {
 	var provider = &v1beta1.Provider{}

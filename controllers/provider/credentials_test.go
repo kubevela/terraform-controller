@@ -2,17 +2,21 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"reflect"
 	"testing"
 
-	types "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
-	"github.com/oam-dev/terraform-controller/api/v1beta1"
+	. "github.com/agiledragon/gomonkey/v2"
+	"github.com/aliyun/alibaba-cloud-sdk-go/services/sts"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	types "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
+	"github.com/oam-dev/terraform-controller/api/v1beta1"
 )
 
 func TestCheckAlibabaCloudCredentials(t *testing.T) {
@@ -84,6 +88,32 @@ func TestGetProviderCredentials(t *testing.T) {
 	ctx := context.TODO()
 	client := newFakeClient()
 
+	ak := AlibabaCloudCredentials{
+		AccessKeyID:     "aaaa",
+		AccessKeySecret: "bbbbb",
+	}
+	credentials, err := json.Marshal(&ak)
+	assert.Nil(t, err)
+
+	secret := &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "default",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"credentials": credentials,
+		},
+		Type: v1.SecretTypeOpaque,
+	}
+	assert.Nil(t, client.Create(ctx, secret))
+
+	patches := ApplyMethod(reflect.TypeOf(&sts.Client{}), "GetCallerIdentity", func(_ *sts.Client, request *sts.GetCallerIdentityRequest) (response *sts.GetCallerIdentityResponse, err error) {
+		response = nil
+		err = nil
+		return
+	})
+	defer patches.Reset()
+
 	type args struct {
 		provider *v1beta1.Provider
 		region   string
@@ -94,8 +124,6 @@ func TestGetProviderCredentials(t *testing.T) {
 		want    map[string]string
 		wantErr bool
 	}{
-		// TODO: Add test cases.
-		// basic
 		{
 			name: "Other source",
 			args: args{
@@ -129,8 +157,33 @@ func TestGetProviderCredentials(t *testing.T) {
 			},
 			wantErr: true,
 		},
-
-		// Provider
+		{
+			name: "Secret found",
+			args: args{
+				provider: &v1beta1.Provider{
+					Spec: v1beta1.ProviderSpec{
+						Provider: "alibaba",
+						Credentials: v1beta1.ProviderCredentials{
+							Source: "Secret",
+							SecretRef: &types.SecretKeySelector{
+								SecretReference: types.SecretReference{
+									Name:      "default",
+									Namespace: "default",
+								},
+								Key: "credentials",
+							},
+						},
+					},
+				},
+				region: "xxx",
+			},
+			want: map[string]string{
+				envAlicloudAcessKey:  ak.AccessKeyID,
+				envAlicloudSecretKey: ak.AccessKeySecret,
+				envAlicloudRegion:    "xxx",
+				envAliCloudStsToken:  ak.SecurityToken,
+			},
+		},
 		{
 			name: "Custom Provider",
 			args: args{
