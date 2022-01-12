@@ -298,7 +298,6 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, namespac
 		destroyJob batchv1.Job
 		k8sClient  = r.Client
 	)
-
 	if configuration.Status.Apply.State == types.ConfigurationProvisioningAndChecking {
 		warning := fmt.Sprintf("Destroy could not complete and needs to wait for Provision to complet first: %s", types.MessageCloudResourceProvisioningAndChecking)
 		klog.Warning(warning)
@@ -419,7 +418,7 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	// Validation: 1) validate Configuration itself
 	configurationType, err := tfcfg.ValidConfigurationObject(configuration)
 	if err != nil {
-		if updateErr := meta.updateApplyStatus(ctx, k8sClient, types.ConfigurationStaticCheckFailed, err.Error()); err != nil {
+		if updateErr := meta.updateApplyStatus(ctx, k8sClient, types.ConfigurationStaticCheckFailed, err.Error()); updateErr != nil {
 			return updateErr
 		}
 		return err
