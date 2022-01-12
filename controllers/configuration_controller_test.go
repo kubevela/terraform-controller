@@ -2,18 +2,20 @@ package controllers
 
 import (
 	"context"
-	"github.com/oam-dev/terraform-controller/api/types"
 	"reflect"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"strings"
 	"testing"
 
+	"gotest.tools/assert"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	"github.com/oam-dev/terraform-controller/api/types"
 	crossplane "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
 )
@@ -186,4 +188,108 @@ func TestConfigurationReconcile(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPreCheck(t *testing.T) {
+	r := &ConfigurationReconciler{}
+	ctx := context.Background()
+	s := runtime.NewScheme()
+	v1beta1.AddToScheme(s)
+	corev1.AddToScheme(s)
+	provider := &v1beta1.Provider{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "default",
+			Namespace: "default",
+		},
+		Status: v1beta1.ProviderStatus{
+			State: types.ProviderIsNotReady,
+		},
+	}
+	r.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(provider).Build()
+
+	type args struct {
+		r             *ConfigurationReconciler
+		configuration *v1beta1.Configuration
+		meta          *TFConfigurationMeta
+	}
+
+	type want struct {
+		err    error
+		errMsg string
+	}
+
+	testcases := []struct {
+		name string
+		args args
+		want want
+	}{
+		{
+			name: "configuration is invalid",
+			args: args{
+				r: r,
+				configuration: &v1beta1.Configuration{
+					ObjectMeta: v1.ObjectMeta{
+						Name: "abc",
+					},
+					Spec: v1beta1.ConfigurationSpec{
+						Remote: "aaa",
+						HCL:    "bbb",
+					},
+				},
+				meta: &TFConfigurationMeta{},
+			},
+			want: want{
+				errMsg: "spec.JSON, spec.HCL and/or spec.Remote cloud not be set at the same time",
+			},
+		},
+		{
+			name: "configuration is valid",
+			args: args{
+				r: r,
+				configuration: &v1beta1.Configuration{
+					ObjectMeta: v1.ObjectMeta{
+						Name: "abc",
+					},
+					Spec: v1beta1.ConfigurationSpec{
+						HCL: "bbb",
+					},
+				},
+				meta: &TFConfigurationMeta{
+					ConfigurationCMName: "abc",
+					ProviderReference: &crossplane.Reference{
+						Namespace: "default",
+						Name:      "default",
+					},
+				},
+			},
+			want: want{
+				errMsg: types.ErrProviderNotReady,
+			},
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := tc.args.r.preCheck(ctx, tc.args.configuration, tc.args.meta); (err != nil) &&
+				!strings.Contains(err.Error(), tc.want.errMsg) {
+				t.Errorf("preCheck() error = %v, wantErr %v", err, tc.want.err)
+			}
+		})
+	}
+}
+
+func TestAssembleTerraformJob(t *testing.T) {
+	meta := &TFConfigurationMeta{
+		Name:                "a",
+		ConfigurationCMName: "b",
+		BusyboxImage:        "c",
+		GitImage:            "d",
+		Namespace:           "e",
+		TerraformImage:      "f",
+		RemoteGit:           "g",
+	}
+	job := meta.assembleTerraformJob(TerraformApply)
+	containers := job.Spec.Template.Spec.InitContainers
+	assert.Equal(t, containers[0].Image, "c")
+	assert.Equal(t, containers[1].Image, "d")
 }
