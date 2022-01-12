@@ -99,18 +99,6 @@ type ConfigurationReconciler struct {
 	ProviderName string
 }
 
-var (
-	// terraformImage is the Terraform image which can run `terraform init/plan/apply`
-	terraformImage            = os.Getenv("TERRAFORM_IMAGE")
-	terraformBackendNamespace = os.Getenv("TERRAFORM_BACKEND_NAMESPACE")
-
-	busyboxImage = os.Getenv("BUSYBOX_IMAGE")
-	gitImage     = os.Getenv("GIT_IMAGE")
-
-	// githubBlocked mark whether GitHub is blocked in the cluster
-	githubBlocked = os.Getenv("GITHUB_BLOCKED")
-)
-
 // TFConfigurationMeta is all the metadata of a Configuration
 type TFConfigurationMeta struct {
 	Name                  string
@@ -130,6 +118,12 @@ type TFConfigurationMeta struct {
 	VariableSecretData    map[string][]byte
 	DeleteResource        bool
 	Credentials           map[string]string
+
+	// TerraformImage is the Terraform image which can run `terraform init/plan/apply`
+	TerraformImage            string
+	TerraformBackendNamespace string
+	BusyboxImage              string
+	GitImage                  string
 }
 
 // +kubebuilder:rbac:groups=terraform.core.oam.dev,resources=configurations,verbs=get;list;watch;create;update;patch;delete
@@ -226,7 +220,13 @@ func initTFConfigurationMeta(req ctrl.Request, configuration v1beta1.Configurati
 		DestroyJobName:      req.Name + "-" + string(TerraformDestroy),
 	}
 
-	meta.RemoteGit = tfcfg.ReplaceTerraformSource(configuration.Spec.Remote, githubBlocked)
+	// githubBlocked mark whether GitHub is blocked in the cluster
+	githubBlockedStr := os.Getenv("GITHUB_BLOCKED")
+	if githubBlockedStr == "" {
+		githubBlockedStr = "'false'"
+	}
+
+	meta.RemoteGit = tfcfg.ReplaceTerraformSource(configuration.Spec.Remote, githubBlockedStr)
 	meta.DeleteResource = configuration.Spec.DeleteResource
 	if configuration.Spec.Path == "" {
 		meta.RemoteGitPath = "."
@@ -298,6 +298,7 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, namespac
 		destroyJob batchv1.Job
 		k8sClient  = r.Client
 	)
+
 	if configuration.Status.Apply.State == types.ConfigurationProvisioningAndChecking {
 		warning := fmt.Sprintf("Destroy could not complete and needs to wait for Provision to complet first: %s", types.MessageCloudResourceProvisioningAndChecking)
 		klog.Warning(warning)
@@ -383,7 +384,7 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, namespac
 		// 6. delete Kubernetes backend secret
 		klog.InfoS("Deleting the secret which stores Kubernetes backend", "Name", meta.BackendSecretName)
 		var kubernetesBackendSecret v1.Secret
-		if err := r.Client.Get(ctx, client.ObjectKey{Name: meta.BackendSecretName, Namespace: terraformBackendNamespace}, &kubernetesBackendSecret); err == nil {
+		if err := r.Client.Get(ctx, client.ObjectKey{Name: meta.BackendSecretName, Namespace: meta.TerraformBackendNamespace}, &kubernetesBackendSecret); err == nil {
 			if err := r.Client.Delete(ctx, &kubernetesBackendSecret); err != nil {
 				return err
 			}
@@ -395,6 +396,25 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, namespac
 
 func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v1beta1.Configuration, meta *TFConfigurationMeta) error {
 	var k8sClient = r.Client
+
+	meta.TerraformImage = os.Getenv("TERRAFORM_IMAGE")
+	if meta.TerraformImage == "" {
+		meta.TerraformImage = "oamdev/docker-terraform:1.1.0"
+	}
+
+	meta.TerraformBackendNamespace = os.Getenv("TERRAFORM_BACKEND_NAMESPACE")
+	if meta.TerraformBackendNamespace == "" {
+		meta.TerraformBackendNamespace = "vela-system"
+	}
+
+	meta.BusyboxImage = os.Getenv("BUSYBOX_IMAGE")
+	if meta.BusyboxImage == "" {
+		meta.BusyboxImage = "busybox:latest"
+	}
+	meta.GitImage = os.Getenv("GIT_IMAGE")
+	if meta.GitImage == "" {
+		meta.GitImage = "alpine/git:latest"
+	}
 
 	// Validation: 1) validate Configuration itself
 	configurationType, err := tfcfg.ValidConfigurationObject(configuration)
@@ -409,7 +429,7 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	// TODO(zzxwill) Need to find an alternative to check whether there is an state backend in the Configuration
 
 	// Render configuration with backend
-	completeConfiguration, err := tfcfg.RenderConfiguration(configuration, terraformBackendNamespace, configurationType)
+	completeConfiguration, err := tfcfg.RenderConfiguration(configuration, meta.TerraformBackendNamespace, configurationType)
 	if err != nil {
 		return err
 	}
@@ -590,7 +610,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 
 	initContainer = v1.Container{
 		Name:            "prepare-input-terraform-configurations",
-		Image:           busyboxImage,
+		Image:           meta.BusyboxImage,
 		ImagePullPolicy: v1.PullIfNotPresent,
 		Command: []string{
 			"sh",
@@ -607,7 +627,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 		initContainers = append(initContainers,
 			v1.Container{
 				Name:            "git-configuration",
-				Image:           gitImage,
+				Image:           meta.GitImage,
 				ImagePullPolicy: v1.PullIfNotPresent,
 				Command: []string{
 					"sh",
@@ -641,7 +661,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 					// then run terraform init/apply.
 					Containers: []v1.Container{{
 						Name:            "terraform-executor",
-						Image:           terraformImage,
+						Image:           meta.TerraformImage,
 						ImagePullPolicy: v1.PullIfNotPresent,
 						Command: []string{
 							"bash",
@@ -701,7 +721,7 @@ type TFState struct {
 //nolint:funlen
 func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient client.Client, configuration v1beta1.Configuration) (map[string]v1beta1.Property, error) {
 	var s = v1.Secret{}
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.BackendSecretName, Namespace: terraformBackendNamespace}, &s); err != nil {
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.BackendSecretName, Namespace: meta.TerraformBackendNamespace}, &s); err != nil {
 		return nil, errors.Wrap(err, "terraform state file backend secret is not generated")
 	}
 	tfStateData, ok := s.Data[TerraformStateNameInSecret]
