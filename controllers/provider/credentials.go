@@ -2,16 +2,15 @@ package provider
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/sts"
 	"github.com/ghodss/yaml"
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/oam-dev/terraform-controller/api/types"
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
 )
 
@@ -244,14 +243,12 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, provid
 func GetProviderFromConfiguration(ctx context.Context, k8sClient client.Client, namespace, name string) (*v1beta1.Provider, error) {
 	var provider = &v1beta1.Provider{}
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: name, Namespace: namespace}, provider); err != nil {
+		if kerrors.IsNotFound(err) {
+			return nil, nil
+		}
 		errMsg := "failed to get Provider object"
 		klog.ErrorS(err, errMsg, "Name", name)
 		return nil, errors.Wrap(err, errMsg)
-	}
-	if provider.Status.State != types.ProviderIsReady {
-		err := fmt.Errorf("provider is not ready: %s/%s", provider.Namespace, provider.Name)
-		klog.ErrorS(err, "failed to get credential")
-		return nil, err
 	}
 	return provider, nil
 }

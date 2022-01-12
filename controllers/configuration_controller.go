@@ -234,14 +234,7 @@ func initTFConfigurationMeta(req ctrl.Request, configuration v1beta1.Configurati
 		meta.RemoteGitPath = configuration.Spec.Path
 	}
 
-	if configuration.Spec.ProviderReference != nil {
-		meta.ProviderReference = configuration.Spec.ProviderReference
-	} else {
-		meta.ProviderReference = &crossplane.Reference{
-			Name:      provider.DefaultName,
-			Namespace: provider.DefaultNamespace,
-		}
-	}
+	meta.ProviderReference = tfcfg.GetProviderNamespacedName(configuration)
 
 	// Check the existence of Terraform state secret which is used to store TF state file. For detailed information,
 	// please refer to https://www.terraform.io/docs/language/settings/backends/kubernetes.html#configuration-variables
@@ -298,13 +291,13 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, namespac
 		destroyJob batchv1.Job
 		k8sClient  = r.Client
 	)
-	if configuration.Status.Apply.State == types.ConfigurationProvisioningAndChecking {
-		warning := fmt.Sprintf("Destroy could not complete and needs to wait for Provision to complet first: %s", types.MessageCloudResourceProvisioningAndChecking)
-		klog.Warning(warning)
-		return errors.New(warning)
+
+	deletable, err := tfcfg.IsDeletable(ctx, k8sClient, &configuration)
+	if err != nil {
+		return err
 	}
 
-	if !meta.DeleteResource {
+	if deletable || !meta.DeleteResource {
 		// 1. delete Terraform input Configuration ConfigMap
 		if err := meta.deleteConfigMap(ctx, k8sClient); err != nil {
 			return err
@@ -944,14 +937,16 @@ func (meta *TFConfigurationMeta) checkProvider(ctx context.Context, k8sClient cl
 	if err != nil {
 		return errors.Wrap(err, "failed to get Provider from Configuration")
 	}
-	region, err := tfcfg.SetRegion(ctx, k8sClient, meta.Namespace, meta.Name, providerObj)
-	if err != nil {
-		return err
+	if providerObj != nil && providerObj.Status.State == types.ProviderIsReady {
+		region, err := tfcfg.SetRegion(ctx, k8sClient, meta.Namespace, meta.Name, providerObj)
+		if err != nil {
+			return err
+		}
+		credentials, err := provider.GetProviderCredentials(ctx, k8sClient, providerObj, region)
+		if err != nil {
+			return err
+		}
+		meta.Credentials = credentials
 	}
-	credentials, err := provider.GetProviderCredentials(ctx, k8sClient, providerObj, region)
-	if err != nil {
-		return err
-	}
-	meta.Credentials = credentials
 	return nil
 }

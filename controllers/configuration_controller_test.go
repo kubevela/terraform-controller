@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -273,6 +274,65 @@ func TestPreCheck(t *testing.T) {
 			if err := tc.args.r.preCheck(ctx, tc.args.configuration, tc.args.meta); (err != nil) &&
 				!strings.Contains(err.Error(), tc.want.errMsg) {
 				t.Errorf("preCheck() error = %v, wantErr %v", err, tc.want.err)
+			}
+		})
+	}
+}
+
+func TestTerraformDestroy(t *testing.T) {
+	r := &ConfigurationReconciler{}
+	ctx := context.Background()
+	s := runtime.NewScheme()
+	v1beta1.AddToScheme(s)
+	corev1.AddToScheme(s)
+	provider := &v1beta1.Provider{
+		ObjectMeta: ctrl.ObjectMeta{
+			Name:      "default",
+			Namespace: "default",
+		},
+		Status: v1beta1.ProviderStatus{
+			State: types.ProviderIsNotReady,
+		},
+	}
+	k8sClient := fake.NewClientBuilder().WithScheme(s).WithObjects(provider).Build()
+	r.Client = k8sClient
+	type args struct {
+		namespace     string
+		configuration v1beta1.Configuration
+		k8sClient     client.Client
+		meta          *TFConfigurationMeta
+	}
+	type want struct {
+		errMsg string
+	}
+	testcases := []struct {
+		name string
+		args args
+		want want
+	}{
+		{
+			name: "provider is not ready",
+			args: args{
+				k8sClient:     k8sClient,
+				configuration: v1beta1.Configuration{},
+				meta: &TFConfigurationMeta{
+					ConfigurationCMName: "tf-abc",
+					Namespace:           "default",
+				},
+			},
+			want: want{
+				errMsg: "The referenced provider could not be retrieved",
+			},
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := r.terraformDestroy(ctx, tc.args.namespace, tc.args.configuration, tc.args.meta)
+			if err != nil {
+				if !strings.Contains(err.Error(), tc.want.errMsg) {
+					t.Errorf("terraformDestroy() error = %v, wantErr %v", err, tc.want.errMsg)
+					return
+				}
 			}
 		})
 	}
