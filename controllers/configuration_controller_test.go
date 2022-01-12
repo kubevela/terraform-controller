@@ -4,11 +4,13 @@ import (
 	"context"
 	"github.com/oam-dev/terraform-controller/api/types"
 	"reflect"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"strings"
 	"testing"
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	k8stypes "k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -134,6 +136,53 @@ func TestCheckProvider(t *testing.T) {
 			if err := meta.checkProvider(ctx, k8sClient); err != nil &&
 				!strings.Contains(err.Error(), tc.want) {
 				t.Errorf("checkProvider = %v, want %v", err.Error(), tc.want)
+			}
+		})
+	}
+}
+
+func TestConfigurationReconcile(t *testing.T) {
+	r1 := &ConfigurationReconciler{}
+	ctx := context.Background()
+	s := runtime.NewScheme()
+	v1beta1.AddToScheme(s)
+	r1.Client = fake.NewClientBuilder().WithScheme(s).Build()
+
+	type args struct {
+		req reconcile.Request
+		r   *ConfigurationReconciler
+	}
+
+	type want struct {
+		err    error
+		errMsg string
+	}
+
+	req := ctrl.Request{}
+	req.NamespacedName = k8stypes.NamespacedName{
+		Name:      "abc",
+		Namespace: "default",
+	}
+
+	testcases := []struct {
+		name string
+		args args
+		want want
+	}{
+		{
+			name: "Provider is not found",
+			args: args{
+				req: req,
+				r:   r1,
+			},
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := tc.args.r.Reconcile(ctx, tc.args.req); (err != nil) &&
+				!strings.Contains(err.Error(), tc.want.errMsg) {
+				t.Errorf("Reconcile() error = %v, wantErr %v", err, tc.want.err)
 			}
 		})
 	}
