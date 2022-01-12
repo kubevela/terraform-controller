@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	crossplane "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -87,6 +89,18 @@ func TestIsDeletable(t *testing.T) {
 	k8sClient1 := fake.NewClientBuilder().WithScheme(s).Build()
 	k8sClient2 := fake.NewClientBuilder().WithScheme(s).WithObjects(provider2).Build()
 	k8sClient3 := fake.NewClientBuilder().WithScheme(s).WithObjects(provider3).Build()
+	k8sClient4 := fake.NewClientBuilder().Build()
+
+	configuration := &v1beta1.Configuration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "abc",
+		},
+	}
+	configuration.Spec.ProviderReference = &crossplane.Reference{
+		Name:      "default",
+		Namespace: "default",
+	}
+
 	type args struct {
 		configuration *v1beta1.Configuration
 		k8sClient     client.Client
@@ -111,10 +125,20 @@ func TestIsDeletable(t *testing.T) {
 			},
 		},
 		{
-			name: "provider is not ready",
+			name: "provider is not ready, use default providerRef",
 			args: args{
 				k8sClient:     k8sClient2,
 				configuration: &v1beta1.Configuration{},
+			},
+			want: want{
+				deletable: true,
+			},
+		},
+		{
+			name: "provider is not ready, providerRef is set in configuration spec",
+			args: args{
+				k8sClient:     k8sClient2,
+				configuration: configuration,
 			},
 			want: want{
 				deletable: true,
@@ -149,6 +173,16 @@ func TestIsDeletable(t *testing.T) {
 				},
 			},
 			want: want{},
+		},
+		{
+			name: "failed to get provider",
+			args: args{
+				k8sClient:     k8sClient4,
+				configuration: &v1beta1.Configuration{},
+			},
+			want: want{
+				errMsg: "failed to get Provider object",
+			},
 		},
 	}
 	for _, tc := range testcases {

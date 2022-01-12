@@ -115,7 +115,7 @@ func TestCheckProvider(t *testing.T) {
 			State: types.ProviderIsNotReady,
 		},
 	}
-	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(provider).Build()
+	k8sClient1 := fake.NewClientBuilder().WithScheme(scheme).WithObjects(provider).Build()
 
 	meta := &TFConfigurationMeta{
 		ProviderReference: &crossplane.Reference{
@@ -124,19 +124,32 @@ func TestCheckProvider(t *testing.T) {
 		},
 	}
 
+	type args struct {
+		k8sClient client.Client
+	}
+
 	testcases := []struct {
 		name string
+		args args
 		want string
 	}{
 		{
+			name: "provider exists, and is not ready",
+			args: args{
+				k8sClient: k8sClient1,
+			},
+		},
+		{
 			name: "provider doesn't not exist",
-			want: "failed to get Provider from Configuration",
+			args: args{
+				k8sClient: fake.NewClientBuilder().WithScheme(scheme).Build(),
+			},
 		},
 	}
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := meta.checkProvider(ctx, k8sClient); err != nil &&
+			if err := meta.checkProvider(ctx, tc.args.k8sClient); tc.want != "" &&
 				!strings.Contains(err.Error(), tc.want) {
 				t.Errorf("checkProvider = %v, want %v", err.Error(), tc.want)
 			}
@@ -157,7 +170,6 @@ func TestConfigurationReconcile(t *testing.T) {
 	}
 
 	type want struct {
-		err    error
 		errMsg string
 	}
 
@@ -183,9 +195,9 @@ func TestConfigurationReconcile(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := tc.args.r.Reconcile(ctx, tc.args.req); (err != nil) &&
+			if _, err := tc.args.r.Reconcile(ctx, tc.args.req); (tc.want.errMsg != "") &&
 				!strings.Contains(err.Error(), tc.want.errMsg) {
-				t.Errorf("Reconcile() error = %v, wantErr %v", err, tc.want.err)
+				t.Errorf("Reconcile() error = %v, wantErr %v", err, tc.want.errMsg)
 			}
 		})
 	}
@@ -215,7 +227,6 @@ func TestPreCheck(t *testing.T) {
 	}
 
 	type want struct {
-		err    error
 		errMsg string
 	}
 
@@ -263,17 +274,15 @@ func TestPreCheck(t *testing.T) {
 					},
 				},
 			},
-			want: want{
-				errMsg: types.ErrProviderNotReady,
-			},
+			want: want{},
 		},
 	}
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := tc.args.r.preCheck(ctx, tc.args.configuration, tc.args.meta); (err != nil) &&
+			if err := tc.args.r.preCheck(ctx, tc.args.configuration, tc.args.meta); (tc.want.errMsg != "") &&
 				!strings.Contains(err.Error(), tc.want.errMsg) {
-				t.Errorf("preCheck() error = %v, wantErr %v", err, tc.want.err)
+				t.Errorf("preCheck() error = %v, wantErr %v", err, tc.want.errMsg)
 			}
 		})
 	}

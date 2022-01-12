@@ -46,7 +46,6 @@ func TestReconcile(t *testing.T) {
 	}
 
 	type want struct {
-		err    error
 		errMsg string
 	}
 
@@ -82,9 +81,9 @@ func TestReconcile(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := tc.args.r.Reconcile(ctx, tc.args.req); (err != nil) &&
+			if _, err := tc.args.r.Reconcile(ctx, tc.args.req); (tc.want.errMsg != "") &&
 				!strings.Contains(err.Error(), tc.want.errMsg) {
-				t.Errorf("Reconcile() error = %v, wantErr %v", err, tc.want.err)
+				t.Errorf("Reconcile() error = %v, wantErr %v", err, tc.want.errMsg)
 			}
 		})
 	}
