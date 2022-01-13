@@ -4,6 +4,7 @@ import (
 	"context"
 	crossplanetypes "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -22,7 +23,7 @@ func TestReconcile(t *testing.T) {
 
 	r2 := &ProviderReconciler{}
 	provider := &v1beta1.Provider{
-		ObjectMeta: ctrl.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:      "abc",
 			Namespace: "default",
 		},

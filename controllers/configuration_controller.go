@@ -99,33 +99,6 @@ type ConfigurationReconciler struct {
 	ProviderName string
 }
 
-// TFConfigurationMeta is all the metadata of a Configuration
-type TFConfigurationMeta struct {
-	Name                  string
-	Namespace             string
-	ConfigurationType     types.ConfigurationType
-	CompleteConfiguration string
-	RemoteGit             string
-	RemoteGitPath         string
-	ConfigurationChanged  bool
-	ConfigurationCMName   string
-	BackendSecretName     string
-	ApplyJobName          string
-	DestroyJobName        string
-	Envs                  []v1.EnvVar
-	ProviderReference     *crossplane.Reference
-	VariableSecretName    string
-	VariableSecretData    map[string][]byte
-	DeleteResource        bool
-	Credentials           map[string]string
-
-	// TerraformImage is the Terraform image which can run `terraform init/plan/apply`
-	TerraformImage            string
-	TerraformBackendNamespace string
-	BusyboxImage              string
-	GitImage                  string
-}
-
 // +kubebuilder:rbac:groups=terraform.core.oam.dev,resources=configurations,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=terraform.core.oam.dev,resources=configurations/status,verbs=get;update;patch
 
@@ -141,7 +114,8 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	meta := initTFConfigurationMeta(req, configuration)
 
 	// add finalizer
-	if configuration.ObjectMeta.DeletionTimestamp.IsZero() {
+	var isDeleting = !configuration.ObjectMeta.DeletionTimestamp.IsZero()
+	if !isDeleting {
 		if !controllerutil.ContainsFinalizer(&configuration, configurationFinalizer) {
 			controllerutil.AddFinalizer(&configuration, configurationFinalizer)
 			if err := r.Update(ctx, &configuration); err != nil {
@@ -151,7 +125,7 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	// pre-check Configuration
-	if err := r.preCheck(ctx, &configuration, meta); err != nil {
+	if err := r.preCheck(ctx, &configuration, meta); err != nil && !isDeleting {
 		return ctrl.Result{}, err
 	}
 
@@ -164,7 +138,7 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		}
 	}
 
-	if !configuration.ObjectMeta.DeletionTimestamp.IsZero() {
+	if isDeleting {
 		// terraform destroy
 		klog.InfoS("performing Configuration Destroy", "Namespace", req.Namespace, "Name", req.Name, "JobName", meta.DestroyJobName)
 
@@ -210,6 +184,33 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	return ctrl.Result{}, nil
 }
 
+// TFConfigurationMeta is all the metadata of a Configuration
+type TFConfigurationMeta struct {
+	Name                  string
+	Namespace             string
+	ConfigurationType     types.ConfigurationType
+	CompleteConfiguration string
+	RemoteGit             string
+	RemoteGitPath         string
+	ConfigurationChanged  bool
+	ConfigurationCMName   string
+	BackendSecretName     string
+	ApplyJobName          string
+	DestroyJobName        string
+	Envs                  []v1.EnvVar
+	ProviderReference     *crossplane.Reference
+	VariableSecretName    string
+	VariableSecretData    map[string][]byte
+	DeleteResource        bool
+	Credentials           map[string]string
+
+	// TerraformImage is the Terraform image which can run `terraform init/plan/apply`
+	TerraformImage            string
+	TerraformBackendNamespace string
+	BusyboxImage              string
+	GitImage                  string
+}
+
 func initTFConfigurationMeta(req ctrl.Request, configuration v1beta1.Configuration) *TFConfigurationMeta {
 	var meta = &TFConfigurationMeta{
 		Namespace:           req.Namespace,
@@ -223,7 +224,7 @@ func initTFConfigurationMeta(req ctrl.Request, configuration v1beta1.Configurati
 	// githubBlocked mark whether GitHub is blocked in the cluster
 	githubBlockedStr := os.Getenv("GITHUB_BLOCKED")
 	if githubBlockedStr == "" {
-		githubBlockedStr = "'false'"
+		githubBlockedStr = "false"
 	}
 
 	meta.RemoteGit = tfcfg.ReplaceTerraformSource(configuration.Spec.Remote, githubBlockedStr)
@@ -297,28 +298,21 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, namespac
 		return err
 	}
 
-	if deletable || !meta.DeleteResource {
-		// 1. delete Terraform input Configuration ConfigMap
-		if err := meta.deleteConfigMap(ctx, k8sClient); err != nil {
-			return err
-		}
+	deleteConfigurationDirectly := deletable || !meta.DeleteResource
 
-		// 2. delete apply job
-		var applyJob batchv1.Job
-		if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.ApplyJobName, Namespace: namespace}, &applyJob); err == nil {
-			if err := k8sClient.Delete(ctx, &applyJob, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
-				return err
-			}
-		}
-	}
-
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.DestroyJobName, Namespace: meta.Namespace}, &destroyJob); err != nil {
-		if kerrors.IsNotFound(err) {
-			if err := r.Client.Get(ctx, client.ObjectKey{Name: configuration.Name, Namespace: configuration.Namespace}, &v1beta1.Configuration{}); err == nil {
-				if err = meta.assembleAndTriggerJob(ctx, k8sClient, &configuration, TerraformDestroy); err != nil {
-					return err
+	if !deleteConfigurationDirectly {
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.DestroyJobName, Namespace: meta.Namespace}, &destroyJob); err != nil {
+			if kerrors.IsNotFound(err) {
+				if err := r.Client.Get(ctx, client.ObjectKey{Name: configuration.Name, Namespace: configuration.Namespace}, &v1beta1.Configuration{}); err == nil {
+					if err = meta.assembleAndTriggerJob(ctx, k8sClient, &configuration, TerraformDestroy); err != nil {
+						return err
+					}
 				}
 			}
+		}
+		if err := meta.updateTerraformJobIfNeeded(ctx, k8sClient, configuration, destroyJob); err != nil {
+			klog.ErrorS(err, types.ErrUpdateTerraformApplyJob, "Name", meta.ApplyJobName)
+			return errors.Wrap(err, types.ErrUpdateTerraformApplyJob)
 		}
 	}
 
@@ -327,13 +321,8 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, namespac
 		return err
 	}
 
-	if err := meta.updateTerraformJobIfNeeded(ctx, k8sClient, configuration, destroyJob); err != nil {
-		klog.ErrorS(err, types.ErrUpdateTerraformApplyJob, "Name", meta.ApplyJobName)
-		return errors.Wrap(err, types.ErrUpdateTerraformApplyJob)
-	}
-
 	// When the deletion Job process succeeded, clean up work is starting.
-	if destroyJob.Status.Succeeded == int32(1) {
+	if destroyJob.Status.Succeeded == int32(1) || deleteConfigurationDirectly {
 		// 1. delete Terraform input Configuration ConfigMap
 		if err := meta.deleteConfigMap(ctx, k8sClient); err != nil {
 			return err
@@ -446,7 +435,19 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	}
 
 	// Check provider
-	if err := meta.checkProvider(ctx, k8sClient); err != nil {
+	provider, err := provider.GetProviderFromConfiguration(ctx, k8sClient, meta.ProviderReference.Namespace, meta.ProviderReference.Name)
+	if provider == nil {
+		msg := types.ErrProviderNotFound
+		if err != nil {
+			msg = err.Error()
+		}
+		if updateStatusErr := meta.updateApplyStatus(ctx, k8sClient, types.Authorizing, msg); updateStatusErr != nil {
+			return errors.Wrap(updateStatusErr, msg)
+		}
+		return errors.New(msg)
+	}
+
+	if err := meta.getCredentials(ctx, k8sClient, provider); err != nil {
 		if configuration.Status.Apply.State != types.ProviderNotReady {
 			if updateStatusErr := meta.updateApplyStatus(ctx, k8sClient, types.ProviderNotReady, types.ErrProviderNotReady); updateStatusErr != nil {
 				return errors.Wrap(updateStatusErr, errSettingStatus)
@@ -931,22 +932,16 @@ func (meta *TFConfigurationMeta) CheckWhetherConfigurationChanges(ctx context.Co
 	return errors.New("unknown issue")
 }
 
-// checkProver will check the Provider and get credentials from secret of the Provider
-func (meta *TFConfigurationMeta) checkProvider(ctx context.Context, k8sClient client.Client) error {
-	providerObj, err := provider.GetProviderFromConfiguration(ctx, k8sClient, meta.ProviderReference.Namespace, meta.ProviderReference.Name)
+// getCredentials will get credentials from secret of the Provider
+func (meta *TFConfigurationMeta) getCredentials(ctx context.Context, k8sClient client.Client, providerObj *v1beta1.Provider) error {
+	region, err := tfcfg.SetRegion(ctx, k8sClient, meta.Namespace, meta.Name, providerObj)
 	if err != nil {
-		return errors.Wrap(err, "failed to get Provider from Configuration")
+		return err
 	}
-	if providerObj != nil && providerObj.Status.State == types.ProviderIsReady {
-		region, err := tfcfg.SetRegion(ctx, k8sClient, meta.Namespace, meta.Name, providerObj)
-		if err != nil {
-			return err
-		}
-		credentials, err := provider.GetProviderCredentials(ctx, k8sClient, providerObj, region)
-		if err != nil {
-			return err
-		}
-		meta.Credentials = credentials
+	credentials, err := provider.GetProviderCredentials(ctx, k8sClient, providerObj, region)
+	if err != nil {
+		return err
 	}
+	meta.Credentials = credentials
 	return nil
 }

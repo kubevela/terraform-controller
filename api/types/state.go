@@ -21,6 +21,8 @@ type ConfigurationState string
 
 // Reasons a resource is or is not ready.
 const (
+	Authorizing                          ConfigurationState = "Authorizing"
+	ProviderNotFound                     ConfigurationState = "ProviderNotFound"
 	ProviderNotReady                     ConfigurationState = "ProviderNotReady"
 	ConfigurationStaticCheckFailed       ConfigurationState = "ConfigurationSpecNotValid"
 	Available                            ConfigurationState = "Available"
@@ -46,6 +48,8 @@ const (
 	MessageCloudResourceDeployed = "Cloud resources are deployed and ready to use"
 	// MessageCloudResourceDestroying is the message when cloud resource is being destroyed
 	MessageCloudResourceDestroying = "Cloud resources is being destroyed..."
+	// ErrProviderNotFound means provider not found
+	ErrProviderNotFound = "provider not found"
 	// ErrProviderNotReady means provider object is not ready
 	ErrProviderNotReady = "Provider is not ready"
 	// ConfigurationReloadingAsHCLChanged means Configuration changed and needs reloading

@@ -240,6 +240,10 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, provid
 }
 
 // GetProviderFromConfiguration gets provider object from Configuration
+// Returns:
+// 1) (nil, err): hit an issue to find the provider
+// 2) (nil, nil): provider not found
+// 3) (provider, nil): provider found
 func GetProviderFromConfiguration(ctx context.Context, k8sClient client.Client, namespace, name string) (*v1beta1.Provider, error) {
 	var provider = &v1beta1.Provider{}
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: name, Namespace: namespace}, provider); err != nil {

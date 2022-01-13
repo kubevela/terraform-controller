@@ -5,14 +5,13 @@ import (
 	"strings"
 	"testing"
 
-	crossplane "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/oam-dev/terraform-controller/api/types"
+	crossplane "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
 )
 
@@ -69,7 +68,7 @@ func TestIsDeletable(t *testing.T) {
 	s := runtime.NewScheme()
 	v1beta1.AddToScheme(s)
 	provider2 := &v1beta1.Provider{
-		ObjectMeta: ctrl.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:      "default",
 			Namespace: "default",
 		},
@@ -78,7 +77,7 @@ func TestIsDeletable(t *testing.T) {
 		},
 	}
 	provider3 := &v1beta1.Provider{
-		ObjectMeta: ctrl.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:      "default",
 			Namespace: "default",
 		},

@@ -8,6 +8,7 @@ import (
 
 	"gotest.tools/assert"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	k8stypes "k8s.io/apimachinery/pkg/types"
@@ -106,16 +107,7 @@ func TestCheckProvider(t *testing.T) {
 	scheme := runtime.NewScheme()
 	v1beta1.AddToScheme(scheme)
 
-	provider := &v1beta1.Provider{
-		ObjectMeta: v1.ObjectMeta{
-			Name:      "default",
-			Namespace: "default",
-		},
-		Status: v1beta1.ProviderStatus{
-			State: types.ProviderIsNotReady,
-		},
-	}
-	k8sClient1 := fake.NewClientBuilder().WithScheme(scheme).WithObjects(provider).Build()
+	k8sClient1 := fake.NewClientBuilder().WithScheme(scheme).Build()
 
 	meta := &TFConfigurationMeta{
 		ProviderReference: &crossplane.Reference{
@@ -126,6 +118,7 @@ func TestCheckProvider(t *testing.T) {
 
 	type args struct {
 		k8sClient client.Client
+		provider  *v1beta1.Provider
 	}
 
 	testcases := []struct {
@@ -137,6 +130,15 @@ func TestCheckProvider(t *testing.T) {
 			name: "provider exists, and is not ready",
 			args: args{
 				k8sClient: k8sClient1,
+				provider: &v1beta1.Provider{
+					ObjectMeta: v1.ObjectMeta{
+						Name:      "default",
+						Namespace: "default",
+					},
+					Status: v1beta1.ProviderStatus{
+						State: types.ProviderIsNotReady,
+					},
+				},
 			},
 		},
 		{
@@ -149,9 +151,9 @@ func TestCheckProvider(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := meta.checkProvider(ctx, tc.args.k8sClient); tc.want != "" &&
+			if err := meta.getCredentials(ctx, tc.args.k8sClient, tc.args.provider); tc.want != "" &&
 				!strings.Contains(err.Error(), tc.want) {
-				t.Errorf("checkProvider = %v, want %v", err.Error(), tc.want)
+				t.Errorf("getCredentials = %v, want %v", err.Error(), tc.want)
 			}
 		})
 	}
@@ -295,7 +297,7 @@ func TestTerraformDestroy(t *testing.T) {
 	v1beta1.AddToScheme(s)
 	corev1.AddToScheme(s)
 	provider := &v1beta1.Provider{
-		ObjectMeta: ctrl.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:      "default",
 			Namespace: "default",
 		},
