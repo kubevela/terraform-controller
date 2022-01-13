@@ -448,12 +448,7 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	}
 
 	if err := meta.getCredentials(ctx, k8sClient, provider); err != nil {
-		if configuration.Status.Apply.State != types.ProviderNotReady {
-			if updateStatusErr := meta.updateApplyStatus(ctx, k8sClient, types.ProviderNotReady, types.ErrProviderNotReady); updateStatusErr != nil {
-				return errors.Wrap(updateStatusErr, errSettingStatus)
-			}
-		}
-		return errors.Wrap(err, types.ErrProviderNotReady)
+		return err
 	}
 
 	// Apply ClusterRole

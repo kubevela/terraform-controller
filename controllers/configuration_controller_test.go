@@ -2,11 +2,15 @@ package controllers
 
 import (
 	"context"
+	"encoding/json"
+	batchv1 "k8s.io/api/batch/v1"
 	"reflect"
 	"strings"
 	"testing"
 
-	"gotest.tools/assert"
+	"github.com/agiledragon/gomonkey/v2"
+	"github.com/aliyun/alibaba-cloud-sdk-go/services/sts"
+	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -20,6 +24,7 @@ import (
 	"github.com/oam-dev/terraform-controller/api/types"
 	crossplane "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
+	"github.com/oam-dev/terraform-controller/controllers/provider"
 )
 
 func TestInitTFConfigurationMeta(t *testing.T) {
@@ -164,7 +169,75 @@ func TestConfigurationReconcile(t *testing.T) {
 	ctx := context.Background()
 	s := runtime.NewScheme()
 	v1beta1.AddToScheme(s)
+	corev1.AddToScheme(s)
+	batchv1.AddToScheme(s)
 	r1.Client = fake.NewClientBuilder().WithScheme(s).Build()
+
+	ak := provider.AlibabaCloudCredentials{
+		AccessKeyID:     "aaaa",
+		AccessKeySecret: "bbbbb",
+	}
+	credentials, err := json.Marshal(&ak)
+	assert.Nil(t, err)
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "default",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"credentials": credentials,
+		},
+		Type: corev1.SecretTypeOpaque,
+	}
+
+	provider := &v1beta1.Provider{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "terraform.core.oam.dev/v1beta1",
+			Kind:       "Provider",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "default",
+			Namespace: "default",
+		},
+		Spec: v1beta1.ProviderSpec{
+			Provider: "alibaba",
+			Credentials: v1beta1.ProviderCredentials{
+				Source: "Secret",
+				SecretRef: &crossplane.SecretKeySelector{
+					SecretReference: crossplane.SecretReference{
+						Name:      "default",
+						Namespace: "default",
+					},
+					Key: "credentials",
+				},
+			},
+			Region: "xxx",
+		},
+	}
+
+	configuration := &v1beta1.Configuration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "a",
+			Namespace: "b",
+		},
+		Spec: v1beta1.ConfigurationSpec{
+			HCL: "c",
+		},
+	}
+	configuration.Spec.ProviderReference = &crossplane.Reference{
+		Name:      "default",
+		Namespace: "default",
+	}
+
+	patches := gomonkey.ApplyMethod(reflect.TypeOf(&sts.Client{}), "GetCallerIdentity", func(_ *sts.Client, request *sts.GetCallerIdentityRequest) (response *sts.GetCallerIdentityResponse, err error) {
+		response = nil
+		err = nil
+		return
+	})
+	defer patches.Reset()
+
+	r2 := &ConfigurationReconciler{}
+	r2.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(secret, provider, configuration).Build()
 
 	type args struct {
 		req reconcile.Request
@@ -177,8 +250,8 @@ func TestConfigurationReconcile(t *testing.T) {
 
 	req := ctrl.Request{}
 	req.NamespacedName = k8stypes.NamespacedName{
-		Name:      "abc",
-		Namespace: "default",
+		Name:      "a",
+		Namespace: "b",
 	}
 
 	testcases := []struct {
@@ -187,19 +260,28 @@ func TestConfigurationReconcile(t *testing.T) {
 		want want
 	}{
 		{
-			name: "Provider is not found",
+			name: "Configuration is not found",
 			args: args{
 				req: req,
 				r:   r1,
+			},
+		},
+		{
+			name: "Configuration exists",
+			args: args{
+				req: req,
+				r:   r2,
 			},
 		},
 	}
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := tc.args.r.Reconcile(ctx, tc.args.req); (tc.want.errMsg != "") &&
-				!strings.Contains(err.Error(), tc.want.errMsg) {
-				t.Errorf("Reconcile() error = %v, wantErr %v", err, tc.want.errMsg)
+			for i := 0; i < 5; i++ {
+				if _, err := tc.args.r.Reconcile(ctx, tc.args.req); tc.want.errMsg != "" &&
+					!strings.Contains(err.Error(), tc.want.errMsg) {
+					t.Errorf("Reconcile() error = %v, wantErr %v", err, tc.want.errMsg)
+				}
 			}
 		})
 	}
