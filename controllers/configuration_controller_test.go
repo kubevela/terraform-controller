@@ -3,7 +3,6 @@ package controllers
 import (
 	"context"
 	"encoding/json"
-	batchv1 "k8s.io/api/batch/v1"
 	"reflect"
 	"strings"
 	"testing"
@@ -11,7 +10,9 @@ import (
 	"github.com/agiledragon/gomonkey/v2"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/sts"
 	"github.com/stretchr/testify/assert"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -373,12 +374,14 @@ func TestPreCheck(t *testing.T) {
 }
 
 func TestTerraformDestroy(t *testing.T) {
-	r := &ConfigurationReconciler{}
+	r1 := &ConfigurationReconciler{}
 	ctx := context.Background()
 	s := runtime.NewScheme()
 	v1beta1.AddToScheme(s)
 	corev1.AddToScheme(s)
-	provider := &v1beta1.Provider{
+	batchv1.AddToScheme(s)
+	rbacv1.AddToScheme(s)
+	provider1 := &v1beta1.Provider{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "default",
 			Namespace: "default",
@@ -387,11 +390,24 @@ func TestTerraformDestroy(t *testing.T) {
 			State: types.ProviderIsNotReady,
 		},
 	}
-	k8sClient := fake.NewClientBuilder().WithScheme(s).WithObjects(provider).Build()
-	r.Client = k8sClient
+	k8sClient1 := fake.NewClientBuilder().WithScheme(s).WithObjects(provider1).Build()
+	r1.Client = k8sClient1
+
+	r2 := &ConfigurationReconciler{}
+	provider1.Status.State = types.ProviderIsReady
+	configuration := &v1beta1.Configuration{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "b",
+		},
+	}
+	k8sClient2 := fake.NewClientBuilder().WithScheme(s).WithObjects(provider1, configuration).Build()
+	r2.Client = k8sClient2
+
 	type args struct {
+		r             *ConfigurationReconciler
 		namespace     string
-		configuration v1beta1.Configuration
+		configuration *v1beta1.Configuration
 		k8sClient     client.Client
 		meta          *TFConfigurationMeta
 	}
@@ -406,8 +422,9 @@ func TestTerraformDestroy(t *testing.T) {
 		{
 			name: "provider is not ready",
 			args: args{
-				k8sClient:     k8sClient,
-				configuration: v1beta1.Configuration{},
+				r:             r1,
+				k8sClient:     k8sClient1,
+				configuration: &v1beta1.Configuration{},
 				meta: &TFConfigurationMeta{
 					ConfigurationCMName: "tf-abc",
 					Namespace:           "default",
@@ -417,10 +434,26 @@ func TestTerraformDestroy(t *testing.T) {
 				errMsg: "The referenced provider could not be retrieved",
 			},
 		},
+		{
+			name: "provider is ready",
+			args: args{
+				r:             r2,
+				k8sClient:     k8sClient2,
+				configuration: configuration,
+				meta: &TFConfigurationMeta{
+					ConfigurationCMName: "tf-abc",
+					Namespace:           "default",
+					DeleteResource:      true,
+				},
+			},
+			want: want{
+				errMsg: "The referenced provider could not be retrieved",
+			},
+		},
 	}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := r.terraformDestroy(ctx, tc.args.namespace, tc.args.configuration, tc.args.meta)
+			err := tc.args.r.terraformDestroy(ctx, tc.args.namespace, *tc.args.configuration, tc.args.meta)
 			if err != nil {
 				if !strings.Contains(err.Error(), tc.want.errMsg) {
 					t.Errorf("terraformDestroy() error = %v, wantErr %v", err, tc.want.errMsg)
