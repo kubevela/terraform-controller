@@ -155,8 +155,7 @@ ifeq (, $(ALICLOUD_SECRET_KEY))
 	exit 1
 endif
 
-	echo -e "accessKeyID: ${ALICLOUD_ACCESS_KEY}\naccessKeySecret: ${ALICLOUD_SECRET_KEY}\nsecurityToken: ${ALICLOUD_SECURITY_TOKEN}" > alibaba-credentials.conf
-	kubectl create namespace vela-system
+	echo "accessKeyID: ${ALICLOUD_ACCESS_KEY}\naccessKeySecret: ${ALICLOUD_SECRET_KEY}\nsecurityToken: ${ALICLOUD_SECURITY_TOKEN}" > alibaba-credentials.conf
 	kubectl create secret generic alibaba-account-creds -n vela-system --from-file=credentials=alibaba-credentials.conf
 	rm -f alibaba-credentials.conf
 	kubectl get secret -n vela-system alibaba-account-creds
