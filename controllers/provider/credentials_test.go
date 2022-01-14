@@ -3,7 +3,9 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"github.com/google/go-cmp/cmp"
 	"reflect"
+	"strings"
 	"testing"
 
 	. "github.com/agiledragon/gomonkey/v2"
@@ -219,6 +221,86 @@ func TestGetProviderCredentials(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("GetProviderCredentials() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetProviderFromConfiguration(t *testing.T) {
+	ctx := context.Background()
+	k8sClient1 := fake.NewClientBuilder().Build()
+
+	s := runtime.NewScheme()
+	v1beta1.AddToScheme(s)
+	provider := &v1beta1.Provider{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "terraform.core.oam.dev/v1beta1",
+			Kind:       "Provider",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "a",
+			Namespace: "a",
+		},
+	}
+	k8sClient2 := fake.NewClientBuilder().WithScheme(s).WithObjects(provider).Build()
+
+	type args struct {
+		k8sClient client.Client
+		namespace string
+		name      string
+	}
+	type want struct {
+		provider *v1beta1.Provider
+		errMsg   string
+	}
+	testcases := []struct {
+		name string
+		args args
+		want want
+	}{
+		{
+			name: "failed to get provider",
+			args: args{
+				k8sClient: k8sClient1,
+				namespace: "a",
+				name:      "b",
+			},
+			want: want{
+				errMsg: "failed to get Provider object",
+			},
+		},
+		{
+			name: "provider is not found",
+			args: args{
+				k8sClient: k8sClient2,
+				namespace: "a",
+				name:      "b",
+			},
+			want: want{},
+		},
+		{
+			name: "provider is found",
+			args: args{
+				k8sClient: k8sClient2,
+				namespace: "a",
+				name:      "a",
+			},
+			want: want{
+				provider: provider,
+			},
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := GetProviderFromConfiguration(ctx, tc.args.k8sClient, tc.args.namespace, tc.args.name)
+			if err != nil {
+				if !strings.Contains(err.Error(), tc.want.errMsg) {
+					t.Errorf("IsDeletable() error = %v, wantErr %v", err, tc.want.errMsg)
+					return
+				}
+			}
+			if tc.want.provider != nil && !reflect.DeepEqual(got, tc.want.provider) {
+				t.Errorf("IsDeletable() differs between got and want: %s", cmp.Diff(got, tc.want.provider))
 			}
 		})
 	}

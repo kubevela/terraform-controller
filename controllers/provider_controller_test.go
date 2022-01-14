@@ -4,6 +4,7 @@ import (
 	"context"
 	crossplanetypes "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -22,7 +23,7 @@ func TestReconcile(t *testing.T) {
 
 	r2 := &ProviderReconciler{}
 	provider := &v1beta1.Provider{
-		ObjectMeta: ctrl.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:      "abc",
 			Namespace: "default",
 		},
@@ -46,7 +47,6 @@ func TestReconcile(t *testing.T) {
 	}
 
 	type want struct {
-		err    error
 		errMsg string
 	}
 
@@ -82,9 +82,9 @@ func TestReconcile(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := tc.args.r.Reconcile(ctx, tc.args.req); (err != nil) &&
+			if _, err := tc.args.r.Reconcile(ctx, tc.args.req); (tc.want.errMsg != "") &&
 				!strings.Contains(err.Error(), tc.want.errMsg) {
-				t.Errorf("Reconcile() error = %v, wantErr %v", err, tc.want.err)
+				t.Errorf("Reconcile() error = %v, wantErr %v", err, tc.want.errMsg)
 			}
 		})
 	}

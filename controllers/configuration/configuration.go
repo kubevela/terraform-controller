@@ -2,6 +2,7 @@ package configuration
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -15,7 +16,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/oam-dev/terraform-controller/api/types"
+	crossplane "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
+	"github.com/oam-dev/terraform-controller/controllers/provider"
 )
 
 const (
@@ -122,6 +125,29 @@ func Get(ctx context.Context, k8sClient client.Client, namespacedName apitypes.N
 	return *configuration, nil
 }
 
+// IsDeletable will check whether the Configuration can be deleted immediately
+// If deletable, it means no external cloud resources are provisioned
+func IsDeletable(ctx context.Context, k8sClient client.Client, configuration *v1beta1.Configuration) (bool, error) {
+	providerRef := GetProviderNamespacedName(*configuration)
+	providerObj, err := provider.GetProviderFromConfiguration(ctx, k8sClient, providerRef.Namespace, providerRef.Name)
+	if err != nil {
+		return false, err
+	}
+	// allow Configuration to delete when the Provider doesn't exist or is not ready, which means external cloud resources are
+	// not provisioned at all
+	if providerObj == nil || providerObj.Status.State == types.ProviderIsNotReady {
+		return true, nil
+	}
+
+	if configuration.Status.Apply.State == types.ConfigurationProvisioningAndChecking {
+		warning := fmt.Sprintf("Destroy could not complete and needs to wait for Provision to complete first: %s", types.MessageCloudResourceProvisioningAndChecking)
+		klog.Warning(warning)
+		return false, errors.New(warning)
+	}
+
+	return false, nil
+}
+
 // ReplaceTerraformSource will replace the Terraform source from GitHub to Gitee
 func ReplaceTerraformSource(remote string, githubBlockedStr string) string {
 	klog.InfoS("Whether GitHub is blocked", "githubBlocked", githubBlockedStr)
@@ -153,4 +179,15 @@ func ReplaceTerraformSource(remote string, githubBlockedStr string) string {
 		return repo
 	}
 	return remote
+}
+
+// GetProviderNamespacedName will get the provider namespaced name
+func GetProviderNamespacedName(configuration v1beta1.Configuration) *crossplane.Reference {
+	if configuration.Spec.ProviderReference != nil {
+		return configuration.Spec.ProviderReference
+	}
+	return &crossplane.Reference{
+		Name:      provider.DefaultName,
+		Namespace: provider.DefaultNamespace,
+	}
 }
