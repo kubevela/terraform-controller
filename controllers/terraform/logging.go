@@ -12,7 +12,7 @@ import (
 	"k8s.io/klog/v2"
 )
 
-func getPodLog(ctx context.Context, client *kubernetes.Clientset, namespace, jobName string) (string, error) {
+func getPodLog(ctx context.Context, client kubernetes.Interface, namespace, jobName string) (string, error) {
 	label := fmt.Sprintf("job-name=%s", jobName)
 	pods, err := client.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: label})
 	if err != nil || pods == nil || len(pods.Items) == 0 {

@@ -34,7 +34,7 @@ var (
 )
 
 func TestBasicConfiguration(t *testing.T) {
-	clientSet, err := client.InitClientSet()
+	clientSet, err := client.Init()
 	assert.NilError(t, err)
 	ctx := context.Background()
 
