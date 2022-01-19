@@ -269,3 +269,24 @@ e2e: e2e-setup configuration
 
 e2e-gitee:
 	go test -coverprofile=e2e-gitee-coverage1.xml -v ./gitee/...
+
+tencent-credentials:
+ifeq (, $(TENCENTCLOUD_SECRET_ID))
+	@echo "Environment variable TENCENTCLOUD_SECRET_ID is not set"
+	exit 1
+endif
+
+ifeq (, $(TENCENTCLOUD_SECRET_KEY))
+	@echo "Environment variable TENCENTCLOUD_SECRET_KEY is not set"
+	exit 1
+endif
+
+	echo "secretID: ${TENCENTCLOUD_SECRET_ID}\nsecretKey: ${TENCENTCLOUD_SECRET_KEY}" > tencent-credentials.conf
+	kubectl create secret generic tencent-account-creds -n vela-system --from-file=credentials=tencent-credentials.conf
+	rm -f tencent-credentials.conf
+	kubectl get secret -n vela-system tencent-account-creds
+
+tencent-provider:
+	kubectl apply -f examples/tencent/provider.yaml
+
+tencent: tencent-credentials tencent-provider

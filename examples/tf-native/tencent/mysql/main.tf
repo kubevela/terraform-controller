@@ -1,3 +1,11 @@
+terraform {
+  required_providers {
+    tencentcloud = {
+      source = "tencentcloudstack/tencentcloud"
+    }
+  }
+}
+
 resource "tencentcloud_mysql_instance" "main" {
   instance_name     = var.instance_name
   root_password     = var.instance_password

@@ -1,5 +1,13 @@
+terraform {
+  required_providers {
+    tencentcloud = {
+      source = "tencentcloudstack/tencentcloud"
+    }
+  }
+}
+
 resource "tencentcloud_redis_instance" "main" {
-  type              = "master_slave_redis"
+  type_id           = 8
   availability_zone = var.availability_zone
   name              = var.instance_name
   password          = var.user_password
@@ -21,29 +29,30 @@ output "DB_PORT" {
 
 variable "availability_zone" {
   description = "The available zone ID of an instance to be created."
-  type = string
+  type        = string
+  default = "ap-chengdu-1"
 }
 
 variable "instance_name" {
   description = "redis instance name"
-  type = string
-  default = "poc"
+  type        = string
+  default     = "sample"
 }
 
 variable "user_password" {
   description = "redis instance password"
-  type = string
-  default = "test1234"
+  type        = string
+  default     = "IEfewjf2342rfwfwYYfaked"
 }
 
 variable "mem_size" {
   description = "redis instance memory size"
-  type = number
-  default = 1000
+  type        = number
+  default     = 1024
 }
 
 variable "port" {
   description = "The port used to access a redis instance."
-  type = number
-  default = 6379
+  type        = number
+  default     = 6379
 }
