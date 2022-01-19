@@ -1,3 +1,7 @@
+[![Go Report Card](https://goreportcard.com/badge/github.com/oam-dev/terraform-controller)](https://goreportcard.com/report/github.com/oam-dev/terraform-controller)
+![Docker Pulls](https://img.shields.io/docker/pulls/oamdev/terraform-controller)
+[![codecov](https://codecov.io/gh/oam-dev/terraform-controller/branch/master/graph/badge.svg)](https://codecov.io/gh/oam-dev/terraform-controller)
+
 # Terraform Controller
 
 Terraform Controller is a Kubernetes Controller for Terraform.
