@@ -1,0 +1,13 @@
+apiVersion: terraform.core.oam.dev/v1beta1
+kind: Provider
+metadata:
+  name: default
+spec:
+  provider: tencent
+  region: ap-chengdu
+  credentials:
+    source: Secret
+    secretRef:
+      namespace: vela-system
+      name: tencent-account-creds
+      key: credentials

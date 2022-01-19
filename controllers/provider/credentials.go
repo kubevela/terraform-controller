@@ -28,6 +28,7 @@ const (
 	alibaba CloudProvider = "alibaba"
 	aws     CloudProvider = "aws"
 	gcp     CloudProvider = "gcp"
+	qcloud  CloudProvider = "tencent"
 	azure   CloudProvider = "azure"
 	vsphere CloudProvider = "vsphere"
 	ec      CloudProvider = "ec"
@@ -54,6 +55,10 @@ const (
 	envGCPCredentialsJSON = "GOOGLE_CREDENTIALS"
 	envGCPRegion          = "GOOGLE_REGION"
 	envGCPProject         = "GOOGLE_PROJECT"
+
+	envQCloudSecretID  = "TENCENTCLOUD_SECRET_ID"
+	envQCloudSecretKey = "TENCENTCLOUD_SECRET_KEY"
+	envQCloudRegion    = "TENCENTCLOUD_REGION"
 
 	envARMClientID       = "ARM_CLIENT_ID"
 	envARMClientSecret   = "ARM_CLIENT_SECRET"
@@ -97,6 +102,12 @@ type AWSCredentials struct {
 type GCPCredentials struct {
 	GCPCredentialsJSON string `yaml:"gcpCredentialsJSON"`
 	GCPProject         string `yaml:"gcpProject"`
+}
+
+// TencentCloudCredentials are credentials for Tencent Cloud
+type TencentCloudCredentials struct {
+	SecretID  string `yaml:"secretID"`
+	SecretKey string `yaml:"secretKey"`
 }
 
 // AzureCredentials are credentials for Azure
@@ -185,6 +196,17 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, provid
 				envGCPCredentialsJSON: ak.GCPCredentialsJSON,
 				envGCPProject:         ak.GCPProject,
 				envGCPRegion:          region,
+			}, nil
+		case string(qcloud):
+			var cred TencentCloudCredentials
+			if err := yaml.Unmarshal(secret.Data[secretRef.Key], &cred); err != nil {
+				klog.ErrorS(err, errConvertCredentials, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
+				return nil, errors.Wrap(err, errConvertCredentials)
+			}
+			return map[string]string{
+				envQCloudSecretID:  cred.SecretID,
+				envQCloudSecretKey: cred.SecretKey,
+				envQCloudRegion:    region,
 			}, nil
 		case string(azure):
 			var cred AzureCredentials
