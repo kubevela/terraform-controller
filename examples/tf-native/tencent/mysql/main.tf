@@ -32,13 +32,23 @@ output "DB_USER" {
   value = var.account_name
 }
 output "DB_PASSWORD" {
+  sensitive = true
   value = var.account_password
 }
-output "DB_HOST" {
+output "DB_PUBLIC_HOST" {
   value = tencentcloud_mysql_instance.main.internet_host
 }
+
+output "DB_HOST" {
+  value = tencentcloud_mysql_instance.main.intranet_ip
+}
+
+output "DB_PUBLIC_PORT" {
+  value = tencentcloud_mysql_instance.main.internet_host
+}
+
 output "DB_PORT" {
-  value = tencentcloud_mysql_instance.main.internet_port
+  value = tencentcloud_mysql_instance.main.intranet_port
 }
 
 variable "instance_name" {
