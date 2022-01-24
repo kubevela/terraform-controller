@@ -108,7 +108,7 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	configuration, err := tfcfg.Get(ctx, r.Client, req.NamespacedName)
 	if err != nil {
-		return ctrl.Result{}, err
+		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
 	meta := initTFConfigurationMeta(req, configuration)
