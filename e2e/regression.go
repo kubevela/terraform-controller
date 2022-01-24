@@ -13,8 +13,10 @@ import (
 	"k8s.io/klog/v2"
 )
 
+// Available is the available status of Configuration
 const Available = "Available"
 
+// Regression test for the e2e.
 func Regression(t *testing.T, testcases []string, retryTimes int) {
 	klog.Info("1. Applying Configuration")
 	pwd, _ := os.Getwd()

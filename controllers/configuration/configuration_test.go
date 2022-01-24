@@ -15,6 +15,148 @@ import (
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
 )
 
+func TestValidConfigurationObject(t *testing.T) {
+	type args struct {
+		configuration *v1beta1.Configuration
+	}
+	type want struct {
+		configurationType types.ConfigurationType
+		errMsg            string
+	}
+
+	testcases := []struct {
+		name string
+		args args
+		want want
+	}{
+		{
+			name: "hcl",
+			args: args{
+				configuration: &v1beta1.Configuration{
+					Spec: v1beta1.ConfigurationSpec{
+						HCL: "abc",
+					},
+				},
+			},
+			want: want{
+				configurationType: types.ConfigurationHCL,
+			},
+		},
+		{
+			name: "remote",
+			args: args{
+				configuration: &v1beta1.Configuration{
+					Spec: v1beta1.ConfigurationSpec{
+						Remote: "def",
+					},
+				},
+			},
+			want: want{
+				configurationType: types.ConfigurationRemote,
+			},
+		},
+		{
+			name: "remote and hcl are set",
+			args: args{
+				configuration: &v1beta1.Configuration{
+					Spec: v1beta1.ConfigurationSpec{
+						HCL:    "abc",
+						Remote: "def",
+					},
+				},
+			},
+			want: want{
+				configurationType: "",
+				errMsg:            "spec.JSON, spec.HCL and/or spec.Remote cloud not be set at the same time",
+			},
+		},
+		{
+			name: "remote and hcl are not set",
+			args: args{
+				configuration: &v1beta1.Configuration{
+					Spec: v1beta1.ConfigurationSpec{},
+				},
+			},
+			want: want{
+				configurationType: "",
+				errMsg:            "spec.JSON, spec.HCL or spec.Remote should be set",
+			},
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := ValidConfigurationObject(tc.args.configuration)
+			if tc.want.errMsg != "" && !strings.Contains(err.Error(), tc.want.errMsg) {
+				t.Errorf("ValidConfigurationObject() error = %v, wantErr %v", err, tc.want.errMsg)
+				return
+			}
+			if got != tc.want.configurationType {
+				t.Errorf("ValidConfigurationObject() = %v, want %v", got, tc.want.configurationType)
+			}
+		})
+	}
+
+}
+
+func TestRenderConfiguration(t *testing.T) {
+	type args struct {
+		configuration     *v1beta1.Configuration
+		ns                string
+		configurationType types.ConfigurationType
+	}
+	type want struct {
+		cfg    string
+		errMsg string
+	}
+
+	testcases := []struct {
+		name string
+		args args
+		want want
+	}{
+		{
+			name: "hcl",
+			args: args{
+				configuration: &v1beta1.Configuration{
+					Spec: v1beta1.ConfigurationSpec{
+						Backend: &v1beta1.Backend{},
+						HCL:     "abc",
+					},
+				},
+				ns:                "vela-system",
+				configurationType: types.ConfigurationHCL,
+			},
+			want: want{
+				cfg: `abc
+
+terraform {
+  backend "kubernetes" {
+    secret_suffix     = ""
+    in_cluster_config = true
+    namespace         = "vela-system"
+  }
+}
+`,
+			},
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := RenderConfiguration(tc.args.configuration, tc.args.ns, tc.args.configurationType)
+			if tc.want.errMsg != "" && !strings.Contains(err.Error(), tc.want.errMsg) {
+				t.Errorf("ValidConfigurationObject() error = %v, wantErr %v", err, tc.want.errMsg)
+				return
+			}
+			if got != tc.want.cfg {
+				t.Errorf("ValidConfigurationObject() = %v, want %v", got, tc.want.cfg)
+			}
+		})
+	}
+
+}
+
 func TestReplaceTerraformSource(t *testing.T) {
 	testcases := []struct {
 		remote        string
