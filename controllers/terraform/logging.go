@@ -43,6 +43,6 @@ func getPodLog(ctx context.Context, client kubernetes.Interface, namespace, jobN
 		return "", err
 	}
 	logContent := buf.String()
-	klog.Info("pod logs", "Pod", pod.Name, "Logs", logContent)
+	klog.V(4).Info("pod logs", "Pod", pod.Name, "Logs", logContent)
 	return logContent, nil
 }

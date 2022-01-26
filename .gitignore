@@ -15,6 +15,7 @@ ut-coverage1.xml
 # vendor/
 
 .idea/
+.vscode/
 
 .vela/
 
