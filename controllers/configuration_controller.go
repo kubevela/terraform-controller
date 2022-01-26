@@ -543,12 +543,17 @@ func (meta *TFConfigurationMeta) updateTerraformJobIfNeeded(ctx context.Context,
 
 	var envChanged bool
 	for k, v := range variableInSecret.Data {
+		if len(variableInSecret.Data) != len(meta.VariableSecretData) {
+			envChanged = true
+			break
+		}
 		if val, ok := meta.VariableSecretData[k]; !ok || !bytes.Equal(v, val) {
 			envChanged = true
 			klog.Info("Job's env changed")
 			if err := meta.updateApplyStatus(ctx, k8sClient, types.ConfigurationReloading, types.ConfigurationReloadingAsVariableChanged); err != nil {
 				return err
 			}
+			break
 		}
 	}
 
