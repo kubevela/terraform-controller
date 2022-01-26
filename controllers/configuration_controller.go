@@ -380,7 +380,7 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 
 	meta.TerraformImage = os.Getenv("TERRAFORM_IMAGE")
 	if meta.TerraformImage == "" {
-		meta.TerraformImage = "oamdev/docker-terraform:1.1.0"
+		meta.TerraformImage = "oamdev/docker-terraform:1.1.2"
 	}
 
 	meta.TerraformBackendNamespace = os.Getenv("TERRAFORM_BACKEND_NAMESPACE")
