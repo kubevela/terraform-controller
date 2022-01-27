@@ -1,10 +1,11 @@
 package configuration
 
 import (
+	"testing"
+
 	"gotest.tools/assert"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/yaml"
-	"testing"
 )
 
 func TestRawExtension2Map(t *testing.T) {
@@ -97,17 +98,38 @@ func TestInterface2String(t *testing.T) {
 				err:    nil,
 			},
 		},
+		"NumberType": {
+			variable: 1024.1,
+			want: want{
+				result: "1024.1",
+				err:    nil,
+			},
+		},
 		"ListType1": {
 			variable: []interface{}{"Will", "Catherine"},
 			want: want{
-				result: "[\"Will\", \"Catherine\", ]",
+				result: `["Will","Catherine"]`,
 				err:    nil,
 			},
 		},
 		"ListType2": {
 			variable: []interface{}{123, 456},
 			want: want{
-				result: "[123, 456, ]",
+				result: `[123,456]`,
+				err:    nil,
+			},
+		},
+		"ObjectType": {
+			variable: struct{ Name string }{"Terraform"},
+			want: want{
+				result: `{"Name":"Terraform"}`,
+				err:    nil,
+			},
+		},
+		"ListObjectType": {
+			variable: []struct{ Name string }{{"Terraform"}, {"OAM"}, {"Vela"}},
+			want: want{
+				result: `[{"Name":"Terraform"},{"Name":"OAM"},{"Name":"Vela"}]`,
 				err:    nil,
 			},
 		},
