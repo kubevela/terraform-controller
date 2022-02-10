@@ -248,6 +248,8 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, provid
 				return nil, errors.Wrap(err, errConvertCredentials)
 			}
 			return ck, nil
+		case string(baidu):
+			return getBaiduCloudCredentials(secret, secretRef, region)
 		default:
 			errMsg := "unsupported provider"
 			klog.InfoS(errMsg, "Provider", provider.Spec.Provider)
