@@ -56,6 +56,19 @@ func TestValidConfigurationObject(t *testing.T) {
 			},
 		},
 		{
+			name: "json",
+			args: args{
+				configuration: &v1beta1.Configuration{
+					Spec: v1beta1.ConfigurationSpec{
+						JSON: "abc",
+					},
+				},
+			},
+			want: want{
+				configurationType: types.ConfigurationJSON,
+			},
+		},
+		{
 			name: "remote and hcl are set",
 			args: args{
 				configuration: &v1beta1.Configuration{
@@ -116,7 +129,7 @@ func TestRenderConfiguration(t *testing.T) {
 		want want
 	}{
 		{
-			name: "hcl",
+			name: "backend is not nil, configuration is hcl",
 			args: args{
 				configuration: &v1beta1.Configuration{
 					Spec: v1beta1.ConfigurationSpec{
@@ -138,6 +151,41 @@ terraform {
   }
 }
 `,
+			},
+		},
+		{
+			name: "backend is nil, configuration is remote",
+			args: args{
+				configuration: &v1beta1.Configuration{
+					Spec: v1beta1.ConfigurationSpec{
+						Remote: "https://github.com/a/b.git",
+					},
+				},
+				ns:                "vela-system",
+				configurationType: types.ConfigurationRemote,
+			},
+			want: want{
+				cfg: `
+terraform {
+  backend "kubernetes" {
+    secret_suffix     = ""
+    in_cluster_config = true
+    namespace         = "vela-system"
+  }
+}
+`,
+			},
+		},
+		{
+			name: "backend is nil, configuration is not supported",
+			args: args{
+				configuration: &v1beta1.Configuration{
+					Spec: v1beta1.ConfigurationSpec{},
+				},
+				ns: "vela-system",
+			},
+			want: want{
+				errMsg: "Unsupported Configuration Type",
 			},
 		},
 	}

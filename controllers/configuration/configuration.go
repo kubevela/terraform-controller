@@ -6,10 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
-	v1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	apitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
@@ -84,14 +81,6 @@ func RenderConfiguration(configuration *v1beta1.Configuration, terraformBackendN
 	default:
 		return "", errors.New("Unsupported Configuration Type")
 	}
-}
-
-// CompareTwoContainerEnvs compares two slices of v1.EnvVar
-func CompareTwoContainerEnvs(s1 []v1.EnvVar, s2 []v1.EnvVar) bool {
-	less := func(env1 v1.EnvVar, env2 v1.EnvVar) bool {
-		return env1.Name < env2.Name
-	}
-	return cmp.Diff(s1, s2, cmpopts.SortSlices(less)) == ""
 }
 
 // SetRegion will set the region for Configuration
