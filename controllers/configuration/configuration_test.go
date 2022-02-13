@@ -2,6 +2,7 @@ package configuration
 
 import (
 	"context"
+	"github.com/stretchr/testify/assert"
 	"strings"
 	"testing"
 
@@ -385,6 +386,92 @@ func TestIsDeletable(t *testing.T) {
 			}
 			if got != tc.want.deletable {
 				t.Errorf("IsDeletable() = %v, want %v", got, tc.want.deletable)
+			}
+		})
+	}
+}
+
+func TestSetRegion(t *testing.T) {
+	ctx := context.Background()
+	s := runtime.NewScheme()
+	v1beta1.AddToScheme(s)
+	k8sClient := fake.NewClientBuilder().WithScheme(s).Build()
+	configuration1 := v1beta1.Configuration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "abc",
+			Namespace: "default",
+		},
+		Spec: v1beta1.ConfigurationSpec{},
+	}
+	configuration1.Spec.Region = "xxx"
+	assert.Nil(t, k8sClient.Create(ctx, &configuration1))
+
+	configuration2 := v1beta1.Configuration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "def",
+			Namespace: "default",
+		},
+		Spec: v1beta1.ConfigurationSpec{},
+	}
+	assert.Nil(t, k8sClient.Create(ctx, &configuration2))
+
+	provider := &v1beta1.Provider{
+		Spec: v1beta1.ProviderSpec{
+			Region: "yyy",
+		},
+	}
+
+	type args struct {
+		namespace string
+		name      string
+	}
+
+	type want struct {
+		region string
+		errMsg string
+	}
+
+	testcases := map[string]struct {
+		args args
+		want want
+	}{
+		"configuration is available, region is set": {
+			args: args{
+				namespace: "default",
+				name:      "abc",
+			},
+			want: want{
+				region: "xxx",
+			},
+		},
+		"configuration is available, region is not set": {
+			args: args{
+				namespace: "default",
+				name:      "def",
+			},
+			want: want{
+				region: "yyy",
+			},
+		},
+		"configuration isn't available": {
+			args: args{
+				namespace: "default",
+				name:      "ghi",
+			},
+			want: want{
+				errMsg: "failed to get configuration",
+			},
+		},
+	}
+	for name, tc := range testcases {
+		t.Run(name, func(t *testing.T) {
+			region, err := SetRegion(ctx, k8sClient, tc.args.namespace, tc.args.name, provider)
+			if tc.want.errMsg != "" && !strings.Contains(err.Error(), tc.want.errMsg) {
+				t.Errorf("SetRegion() error = %v, wantErr %v", err, tc.want.errMsg)
+			}
+			if region != tc.want.region {
+				t.Errorf("SetRegion() want = %s, got %s", tc.want.region, region)
+
 			}
 		})
 	}
