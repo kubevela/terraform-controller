@@ -34,6 +34,7 @@ const (
 	ec      CloudProvider = "ec"
 	ucloud  CloudProvider = "ucloud"
 	custom  CloudProvider = "custom"
+	baidu   CloudProvider = "baidu"
 )
 
 const (
@@ -140,16 +141,22 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, provid
 	case "Secret":
 		var secret v1.Secret
 		secretRef := provider.Spec.Credentials.SecretRef
-		if err := k8sClient.Get(ctx, client.ObjectKey{Name: secretRef.Name, Namespace: secretRef.Namespace}, &secret); err != nil {
+		name := secretRef.Name
+		namespace := secretRef.Namespace
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: name, Namespace: namespace}, &secret); err != nil {
 			errMsg := "failed to get the Secret from Provider"
-			klog.ErrorS(err, errMsg, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
+			klog.ErrorS(err, errMsg, "Name", name, "Namespace", namespace)
 			return nil, errors.Wrap(err, errMsg)
+		}
+		secretData, ok := secret.Data[secretRef.Key]
+		if !ok {
+			return nil, errors.Errorf("in the provider %s, the key %s not found in the referenced secret %s", provider.Name, secretRef.Key, name)
 		}
 		switch provider.Spec.Provider {
 		case string(alibaba):
 			var ak AlibabaCloudCredentials
 			if err := yaml.Unmarshal(secret.Data[secretRef.Key], &ak); err != nil {
-				klog.ErrorS(err, errConvertCredentials, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
+				klog.ErrorS(err, errConvertCredentials, "Name", name, "Namespace", namespace)
 				return nil, errors.Wrap(err, errConvertCredentials)
 			}
 			if err := checkAlibabaCloudCredentials(region, ak.AccessKeyID, ak.AccessKeySecret, ak.SecurityToken); err != nil {
@@ -164,8 +171,8 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, provid
 			}, nil
 		case string(ucloud):
 			var ak UCloudCredentials
-			if err := yaml.Unmarshal(secret.Data[secretRef.Key], &ak); err != nil {
-				klog.ErrorS(err, errConvertCredentials, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
+			if err := yaml.Unmarshal(secretData, &ak); err != nil {
+				klog.ErrorS(err, errConvertCredentials, "Name", name, "Namespace", namespace)
 				return nil, errors.Wrap(err, errConvertCredentials)
 			}
 			return map[string]string{
@@ -176,8 +183,8 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, provid
 			}, nil
 		case string(aws):
 			var ak AWSCredentials
-			if err := yaml.Unmarshal(secret.Data[secretRef.Key], &ak); err != nil {
-				klog.ErrorS(err, errConvertCredentials, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
+			if err := yaml.Unmarshal(secretData, &ak); err != nil {
+				klog.ErrorS(err, errConvertCredentials, "Name", name, "Namespace", namespace)
 				return nil, errors.Wrap(err, errConvertCredentials)
 			}
 			return map[string]string{
@@ -188,8 +195,8 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, provid
 			}, nil
 		case string(gcp):
 			var ak GCPCredentials
-			if err := yaml.Unmarshal(secret.Data[secretRef.Key], &ak); err != nil {
-				klog.ErrorS(err, errConvertCredentials, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
+			if err := yaml.Unmarshal(secretData, &ak); err != nil {
+				klog.ErrorS(err, errConvertCredentials, "Name", name, "Namespace", namespace)
 				return nil, errors.Wrap(err, errConvertCredentials)
 			}
 			return map[string]string{
@@ -199,8 +206,8 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, provid
 			}, nil
 		case string(qcloud):
 			var cred TencentCloudCredentials
-			if err := yaml.Unmarshal(secret.Data[secretRef.Key], &cred); err != nil {
-				klog.ErrorS(err, errConvertCredentials, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
+			if err := yaml.Unmarshal(secretData, &cred); err != nil {
+				klog.ErrorS(err, errConvertCredentials, "Name", name, "Namespace", namespace)
 				return nil, errors.Wrap(err, errConvertCredentials)
 			}
 			return map[string]string{
@@ -210,8 +217,8 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, provid
 			}, nil
 		case string(azure):
 			var cred AzureCredentials
-			if err := yaml.Unmarshal(secret.Data[secretRef.Key], &cred); err != nil {
-				klog.ErrorS(err, errConvertCredentials, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
+			if err := yaml.Unmarshal(secretData, &cred); err != nil {
+				klog.ErrorS(err, errConvertCredentials, "Name", name, "Namespace", namespace)
 				return nil, errors.Wrap(err, errConvertCredentials)
 			}
 			return map[string]string{
@@ -222,8 +229,8 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, provid
 			}, nil
 		case string(vsphere):
 			var cred VSphereCredentials
-			if err := yaml.Unmarshal(secret.Data[secretRef.Key], &cred); err != nil {
-				klog.ErrorS(err, errConvertCredentials, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
+			if err := yaml.Unmarshal(secretData, &cred); err != nil {
+				klog.ErrorS(err, errConvertCredentials, "Name", name, "Namespace", namespace)
 				return nil, errors.Wrap(err, errConvertCredentials)
 			}
 			return map[string]string{
@@ -234,8 +241,8 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, provid
 			}, nil
 		case string(ec):
 			var ak ECCredentials
-			if err := yaml.Unmarshal(secret.Data[secretRef.Key], &ak); err != nil {
-				klog.ErrorS(err, errConvertCredentials, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
+			if err := yaml.Unmarshal(secretData, &ak); err != nil {
+				klog.ErrorS(err, errConvertCredentials, "Name", name, "Namespace", namespace)
 				return nil, errors.Wrap(err, errConvertCredentials)
 			}
 			return map[string]string{
@@ -243,13 +250,13 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, provid
 			}, nil
 		case string(custom):
 			var ck = make(CustomCredentials)
-			if err := yaml.Unmarshal(secret.Data[secretRef.Key], &ck); err != nil {
-				klog.ErrorS(err, errConvertCredentials, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
+			if err := yaml.Unmarshal(secretData, &ck); err != nil {
+				klog.ErrorS(err, errConvertCredentials, "Name", name, "Namespace", namespace)
 				return nil, errors.Wrap(err, errConvertCredentials)
 			}
 			return ck, nil
 		case string(baidu):
-			return getBaiduCloudCredentials(secret, secretRef, region)
+			return getBaiduCloudCredentials(secretData, name, namespace, region)
 		default:
 			errMsg := "unsupported provider"
 			klog.InfoS(errMsg, "Provider", provider.Spec.Provider)
