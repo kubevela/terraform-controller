@@ -1,7 +1,7 @@
 package provider
 
 import (
-	"github.com/ghodss/yaml"
+	"github.com/go-yaml/yaml"
 	"github.com/pkg/errors"
 	"k8s.io/klog/v2"
 )
@@ -14,12 +14,12 @@ const (
 
 // BaiduCloudCredentials are credentials for Baidu Cloud
 type BaiduCloudCredentials struct {
-	KeyBaiduAccessKey string `yaml:"baiducloud_access_key"`
-	KeyBaiduSecretKey string `yaml:"baiducloud_secret_key"`
+	KeyBaiduAccessKey string `yaml:"accessKey"`
+	KeyBaiduSecretKey string `yaml:"secretKey"`
 }
 
 func getBaiduCloudCredentials(secretData []byte, name, namespace, region string) (map[string]string, error) {
-	var ak = &BaiduCloudCredentials{}
+	var ak BaiduCloudCredentials
 	if err := yaml.Unmarshal(secretData, &ak); err != nil {
 		klog.ErrorS(err, errConvertCredentials, "Name", name, "Namespace", namespace)
 		return nil, errors.Wrap(err, errConvertCredentials)
