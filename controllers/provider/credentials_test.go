@@ -2,15 +2,15 @@ package provider
 
 import (
 	"context"
-	"encoding/json"
-	"github.com/google/go-cmp/cmp"
-	"github.com/jinzhu/copier"
 	"reflect"
 	"strings"
 	"testing"
 
 	. "github.com/agiledragon/gomonkey/v2"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/sts"
+	"github.com/go-yaml/yaml"
+	"github.com/google/go-cmp/cmp"
+	"github.com/jinzhu/copier"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -95,7 +95,7 @@ func TestGetProviderCredentials(t *testing.T) {
 		AccessKeyID:     "aaaa",
 		AccessKeySecret: "bbbbb",
 	}
-	credentials, err := json.Marshal(&ak)
+	credentials, err := yaml.Marshal(&ak)
 	assert.Nil(t, err)
 
 	secret := &v1.Secret{
@@ -146,7 +146,7 @@ func TestGetProviderCredentials(t *testing.T) {
 
 	// baidu
 	k8sClient4Baidu := fake.NewClientBuilder().Build()
-	baiduCredentials, _ := json.Marshal(&BaiduCloudCredentials{
+	baiduCredentials, _ := yaml.Marshal(&BaiduCloudCredentials{
 		KeyBaiduAccessKey: "aaaa",
 		KeyBaiduSecretKey: "bbbbb",
 	})
