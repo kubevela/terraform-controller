@@ -8,6 +8,7 @@ require (
 	github.com/aliyun/alibaba-cloud-sdk-go v1.61.1384
 	github.com/ghodss/yaml v1.0.0
 	github.com/go-logr/logr v0.4.0
+	github.com/go-yaml/yaml v2.1.0+incompatible
 	github.com/google/go-cmp v0.5.5
 	github.com/gopherjs/gopherjs v0.0.0-20200217142428-fce0ec30dd00 // indirect
 	github.com/jinzhu/copier v0.3.5
