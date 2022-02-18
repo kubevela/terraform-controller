@@ -106,6 +106,7 @@ type Backend struct {
 
 // Configuration is the Schema for the configurations API
 // +kubebuilder:subresource:status
+// +kubebuilder:resource:shortName={velaconfig, config}
 // +kubebuilder:printcolumn:name="STATE",type="string",JSONPath=".status.apply.state"
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
 type Configuration struct {

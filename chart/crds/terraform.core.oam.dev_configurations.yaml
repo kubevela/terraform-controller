@@ -13,6 +13,9 @@ spec:
     kind: Configuration
     listKind: ConfigurationList
     plural: configurations
+    shortNames:
+    - velaconfig
+    - config
     singular: configuration
   scope: Namespaced
   versions:
