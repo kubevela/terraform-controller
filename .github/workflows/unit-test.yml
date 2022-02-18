@@ -15,7 +15,7 @@ on:
 
 env:
   # Common versions
-  GO_VERSION: '1.16.5'
+  GO_VERSION: '1.17.6'
 
 jobs:
   lint:

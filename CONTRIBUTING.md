@@ -2,6 +2,10 @@
 
 ## Prerequisites
 
+- Go
+
+Go version `>=1.17` is required.
+
 - Helm Cli
 
 Refer to [Helm official Doc](https://helm.sh/docs/intro/install/) to install `helm` Cli.
