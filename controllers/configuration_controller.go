@@ -785,6 +785,7 @@ func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient cli
 		data[k] = []byte(v.Value)
 	}
 	var gotSecret v1.Secret
+	configurationName := configuration.ObjectMeta.Name
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: name, Namespace: ns}, &gotSecret); err != nil {
 		if kerrors.IsNotFound(err) {
 			var secret = v1.Secret{
@@ -792,17 +793,24 @@ func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient cli
 					Name:      name,
 					Namespace: ns,
 					Labels: map[string]string{
-						"created-by": "terraform-controller",
+						"created-by":                 "terraform-controller",
+						"terraform-controller-owner": configurationName,
 					},
 				},
 				TypeMeta: metav1.TypeMeta{Kind: "Secret"},
 				Data:     data,
 			}
-			if err := k8sClient.Create(ctx, &secret); err != nil {
+			err = k8sClient.Create(ctx, &secret)
+			if kerrors.IsAlreadyExists(err) {
+				return nil, fmt.Errorf("secret(%s) already exists", name)
+			} else if err != nil {
 				return nil, err
 			}
 		}
 	} else {
+		if owner, ok := gotSecret.ObjectMeta.Labels["terraform-controller-owner"]; ok && owner != configurationName {
+			return nil, fmt.Errorf("configuration(%s) cannot update secret(%s) which owner is configuration(%s)", configurationName, name, owner)
+		}
 		gotSecret.Data = data
 		if err := k8sClient.Update(ctx, &gotSecret); err != nil {
 			return nil, err
