@@ -95,19 +95,12 @@ func Interface2String(v interface{}) (string, error) {
 		value = fmt.Sprint(v)
 	case bool:
 		value = strconv.FormatBool(v)
-	case []interface{}:
-		var tmp string
-		for _, i := range v {
-			switch i.(type) {
-			case string:
-				tmp += fmt.Sprintf("\"%v\", ", i)
-			case int, bool:
-				tmp += fmt.Sprintf("%v, ", i)
-			}
-		}
-		value = fmt.Sprintf(`[%s]`, tmp)
 	default:
-		return "", fmt.Errorf("could not convert %v to string", v)
+		valuejson, err := json.Marshal(v)
+		if err != nil {
+			return "", fmt.Errorf("cloud not convert %v to string", v)
+		}
+		value = string(valuejson)
 	}
 	return value, nil
 }
