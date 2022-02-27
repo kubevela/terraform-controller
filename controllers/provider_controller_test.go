@@ -6,7 +6,6 @@ import (
 	crossplanetypes "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
 	"github.com/oam-dev/terraform-controller/controllers/provider"
-	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -16,7 +15,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestReconcile(t *testing.T) {
@@ -144,22 +142,4 @@ func TestReconcile(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestSetupWithManager(t *testing.T) {
-	syncPeriod := time.Duration(10) * time.Second
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:             runtime.NewScheme(),
-		MetricsBindAddress: ":1234",
-		Port:               5678,
-		LeaderElection:     false,
-		SyncPeriod:         &syncPeriod,
-	})
-	assert.Nil(t, err)
-	r := &ProviderReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}
-	err = r.SetupWithManager(mgr)
-	assert.NotNil(t, err)
 }
