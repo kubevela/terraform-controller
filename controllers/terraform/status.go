@@ -40,7 +40,7 @@ func analyzeTerraformLog(logs string) (bool, types.ConfigurationState, string) {
 		if strings.Contains(line, "31mError:") {
 			errMsg := strings.Join(lines[i:], "\n")
 			if strings.Contains(errMsg, "Invalid Alibaba Cloud region") {
-				return false, types.InvalidRegion, line
+				return false, types.InvalidRegion, errMsg
 			}
 			return false, types.ConfigurationApplyFailed, errMsg
 		}

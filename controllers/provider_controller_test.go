@@ -2,8 +2,12 @@ package controllers
 
 import (
 	"context"
+	"github.com/go-yaml/yaml"
 	crossplanetypes "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
+	"github.com/oam-dev/terraform-controller/controllers/provider"
+	"github.com/stretchr/testify/assert"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -12,6 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestReconcile(t *testing.T) {
@@ -19,12 +24,13 @@ func TestReconcile(t *testing.T) {
 	ctx := context.Background()
 	s := runtime.NewScheme()
 	v1beta1.AddToScheme(s)
+	v1.AddToScheme(s)
 	r1.Client = fake.NewClientBuilder().WithScheme(s).Build()
 
 	r2 := &ProviderReconciler{}
-	provider := &v1beta1.Provider{
+	provider2 := &v1beta1.Provider{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "abc",
+			Name:      "aws",
 			Namespace: "default",
 		},
 		Spec: v1beta1.ProviderSpec{
@@ -35,11 +41,30 @@ func TestReconcile(t *testing.T) {
 						Name:      "abc",
 						Namespace: "default",
 					},
+					Key: "credentials",
 				},
 			},
+			Provider: "aws",
 		},
 	}
-	r2.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(provider).Build()
+
+	creds, _ := yaml.Marshal(&provider.AWSCredentials{
+		AWSAccessKeyID:     "a",
+		AWSSecretAccessKey: "b",
+		AWSSessionToken:    "c",
+	})
+	secret2 := &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "abc",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"credentials": creds,
+		},
+		Type: v1.SecretTypeOpaque,
+	}
+
+	r2.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(secret2, provider2).Build()
 
 	type args struct {
 		req reconcile.Request
@@ -52,7 +77,7 @@ func TestReconcile(t *testing.T) {
 
 	req := ctrl.Request{}
 	req.NamespacedName = types.NamespacedName{
-		Name:      "abc",
+		Name:      "aws",
 		Namespace: "default",
 	}
 
@@ -74,9 +99,7 @@ func TestReconcile(t *testing.T) {
 				req: req,
 				r:   r2,
 			},
-			want: want{
-				errMsg: errGetCredentials,
-			},
+			want: want{},
 		},
 	}
 
@@ -88,4 +111,22 @@ func TestReconcile(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSetupWithManager(t *testing.T) {
+	syncPeriod := time.Duration(10) * time.Second
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+		Scheme:             runtime.NewScheme(),
+		MetricsBindAddress: ":1234",
+		Port:               5678,
+		LeaderElection:     false,
+		SyncPeriod:         &syncPeriod,
+	})
+	assert.Nil(t, err)
+	r := &ProviderReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}
+	err = r.SetupWithManager(mgr)
+	assert.NotNil(t, err)
 }

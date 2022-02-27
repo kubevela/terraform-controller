@@ -556,3 +556,21 @@ func TestAssembleTerraformJob(t *testing.T) {
 	assert.Equal(t, containers[0].Image, "c")
 	assert.Equal(t, containers[1].Image, "d")
 }
+
+func TestSetupWithManager4Configuration(t *testing.T) {
+	syncPeriod := time.Duration(10) * time.Second
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+		Scheme:             runtime.NewScheme(),
+		MetricsBindAddress: ":1234",
+		Port:               5678,
+		LeaderElection:     false,
+		SyncPeriod:         &syncPeriod,
+	})
+	assert.Nil(t, err)
+	r := &ConfigurationReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}
+	err = r.SetupWithManager(mgr)
+	assert.NotNil(t, err)
+}

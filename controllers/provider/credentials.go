@@ -54,9 +54,6 @@ type AlibabaCloudCredentials struct {
 	SecurityToken   string `yaml:"securityToken"`
 }
 
-// CustomCredentials are credentials for custom (you self)
-type CustomCredentials map[string]string
-
 // GetProviderCredentials gets provider credentials by cloud provider name
 func GetProviderCredentials(ctx context.Context, k8sClient client.Client, provider *v1beta1.Provider, region string) (map[string]string, error) {
 	switch provider.Spec.Credentials.Source {
@@ -106,12 +103,7 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, provid
 		case string(ec):
 			return getECCloudCredentials(secretData, name, namespace)
 		case string(custom):
-			var ck = make(CustomCredentials)
-			if err := yaml.Unmarshal(secretData, &ck); err != nil {
-				klog.ErrorS(err, errConvertCredentials, "Name", name, "Namespace", namespace)
-				return nil, errors.Wrap(err, errConvertCredentials)
-			}
-			return ck, nil
+			return getCustomCredentials(secretData, name, namespace)
 		case string(baidu):
 			return getBaiduCloudCredentials(secretData, name, namespace, region)
 		default:
