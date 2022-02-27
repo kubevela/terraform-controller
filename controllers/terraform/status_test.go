@@ -79,7 +79,7 @@ func TestGetTerraformStatus2(t *testing.T) {
 		want want
 	}{
 		{
-			name: "cloud are init clientSet",
+			name: "failed to init clientSet",
 			args: args{},
 			want: want{
 				state:  types.ConfigurationProvisioningAndChecking,

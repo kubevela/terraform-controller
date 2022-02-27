@@ -1188,7 +1188,7 @@ func TestGetProviderCredentials4Custom(t *testing.T) {
 
 	provider := v1beta1.Provider{
 		Spec: v1beta1.ProviderSpec{
-			Provider: string(azure),
+			Provider: string(custom),
 			Credentials: v1beta1.ProviderCredentials{
 				Source: "Secret",
 				SecretRef: &types.SecretKeySelector{

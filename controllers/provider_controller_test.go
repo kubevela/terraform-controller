@@ -66,6 +66,29 @@ func TestReconcile(t *testing.T) {
 
 	r2.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(secret2, provider2).Build()
 
+	r3 := &ProviderReconciler{}
+	provider3 := &v1beta1.Provider{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "aws",
+			Namespace: "default",
+		},
+		Spec: v1beta1.ProviderSpec{
+			Credentials: v1beta1.ProviderCredentials{
+				Source: "Secret",
+				SecretRef: &crossplanetypes.SecretKeySelector{
+					SecretReference: crossplanetypes.SecretReference{
+						Name:      "abc",
+						Namespace: "default",
+					},
+					Key: "credentials",
+				},
+			},
+			Provider: "aws",
+		},
+	}
+
+	r3.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(provider3).Build()
+
 	type args struct {
 		req reconcile.Request
 		r   *ProviderReconciler
@@ -100,6 +123,16 @@ func TestReconcile(t *testing.T) {
 				r:   r2,
 			},
 			want: want{},
+		},
+		{
+			name: "Provider is found, but the secret is not available",
+			args: args{
+				req: req,
+				r:   r3,
+			},
+			want: want{
+				errMsg: errGetCredentials,
+			},
 		},
 	}
 
