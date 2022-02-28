@@ -2,9 +2,12 @@ package terraform
 
 import (
 	"context"
+	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/agiledragon/gomonkey/v2"
@@ -94,5 +97,40 @@ func TestGetPodLog(t *testing.T) {
 			}
 		})
 	}
+}
 
+func TestFlushStream(t *testing.T) {
+	type args struct {
+		rc   io.ReadCloser
+		name string
+	}
+	type want struct {
+		errMsg string
+	}
+
+	var testcases = []struct {
+		name string
+		args args
+		want want
+	}{
+		{
+			name: "Flush stream",
+			args: args{
+				rc:   ioutil.NopCloser(strings.NewReader("xxx")),
+				name: "p1",
+			},
+			want: want{},
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			logs, err := flushStream(tc.args.rc, tc.args.name)
+			if tc.want.errMsg != "" {
+				assert.Contains(t, err.Error(), tc.want.errMsg)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, "xxx", logs)
+			}
+		})
+	}
 }

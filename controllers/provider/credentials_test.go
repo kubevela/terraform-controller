@@ -67,7 +67,6 @@ func TestCheckAlibabaCloudCredentials(t *testing.T) {
 			assert.NotNil(t, err)
 		})
 	}
-
 }
 
 func newFakeClient4CustomProvider() client.Client {
@@ -166,6 +165,28 @@ func TestGetProviderCredentials(t *testing.T) {
 	copier.Copy(&baiduProvider, &defaultProvider)
 
 	baiduProvider.Spec.Provider = string(baidu)
+
+	// ec
+	k8sClient4EC := fake.NewClientBuilder().Build()
+	ecCredentials, _ := yaml.Marshal(&ECCredentials{
+		ECApiKey: "aaaa",
+	})
+	secret = &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "default",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"credentials": ecCredentials,
+		},
+		Type: v1.SecretTypeOpaque,
+	}
+	assert.Nil(t, k8sClient4EC.Create(ctx, secret))
+
+	var ecProvider v1beta1.Provider
+	copier.Copy(&ecProvider, &defaultProvider)
+
+	ecProvider.Spec.Provider = string(ec)
 
 	// not supported provider
 	var notSupportedProvider v1beta1.Provider
@@ -335,6 +356,16 @@ func TestGetProviderCredentials(t *testing.T) {
 			},
 		},
 		{
+			name: "EC",
+			args: args{
+				k8sClient: k8sClient4EC,
+				provider:  ecProvider,
+			},
+			want: map[string]string{
+				envECApiKey: "aaaa",
+			},
+		},
+		{
 			name: "not supported provider",
 			args: args{
 				k8sClient: k8sClient1,
@@ -342,6 +373,307 @@ func TestGetProviderCredentials(t *testing.T) {
 				region:    "xxx",
 			},
 			errMsg: "unsupported provider",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := GetProviderCredentials(ctx, tt.args.k8sClient, &tt.args.provider, tt.args.region)
+			if tt.errMsg != "" && err != nil && !strings.Contains(err.Error(), tt.errMsg) {
+				t.Errorf("GetProviderCredentials() error = %v, wantErr %v", err, err.Error())
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("GetProviderCredentials() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetProviderCredentials4EC(t *testing.T) {
+	ctx := context.TODO()
+	k8sClient4EC := fake.NewClientBuilder().Build()
+	ecCredentials, _ := yaml.Marshal(&ECCredentials{
+		ECApiKey: "aaaa",
+	})
+	secret := &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "default",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"credentials": ecCredentials,
+		},
+		Type: v1.SecretTypeOpaque,
+	}
+	assert.Nil(t, k8sClient4EC.Create(ctx, secret))
+
+	provider := v1beta1.Provider{
+		Spec: v1beta1.ProviderSpec{
+			Provider: string(ec),
+			Credentials: v1beta1.ProviderCredentials{
+				Source: "Secret",
+				SecretRef: &types.SecretKeySelector{
+					SecretReference: types.SecretReference{
+						Name:      "default",
+						Namespace: "default",
+					},
+					Key: "credentials",
+				},
+			},
+		},
+	}
+
+	secret2 := &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "wrong-data",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"credentials": []byte("xxx"),
+		},
+		Type: v1.SecretTypeOpaque,
+	}
+	k8sClient2 := fake.NewClientBuilder().Build()
+	assert.Nil(t, k8sClient2.Create(ctx, secret2))
+
+	var badProvider v1beta1.Provider
+	copier.CopyWithOption(&badProvider, &provider, copier.Option{DeepCopy: true})
+	badProvider.Spec.Credentials.SecretRef.Name = "wrong-data"
+
+	type args struct {
+		provider  v1beta1.Provider
+		region    string
+		k8sClient client.Client
+	}
+	tests := []struct {
+		name   string
+		args   args
+		want   map[string]string
+		errMsg string
+	}{
+		{
+			name: "EC",
+			args: args{
+				k8sClient: k8sClient4EC,
+				provider:  provider,
+			},
+			want: map[string]string{
+				envECApiKey: "aaaa",
+			},
+		},
+		{
+			name: "provider with wrong data",
+			args: args{
+				k8sClient: k8sClient2,
+				provider:  badProvider,
+				region:    "xxx",
+			},
+			errMsg: errConvertCredentials,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := GetProviderCredentials(ctx, tt.args.k8sClient, &tt.args.provider, tt.args.region)
+			if tt.errMsg != "" && err != nil && !strings.Contains(err.Error(), tt.errMsg) {
+				t.Errorf("GetProviderCredentials() error = %v, wantErr %v", err, err.Error())
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("GetProviderCredentials() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetProviderCredentials4VSphere(t *testing.T) {
+	ctx := context.TODO()
+	k8sClient := fake.NewClientBuilder().Build()
+	creds, _ := yaml.Marshal(&VSphereCredentials{
+		VSphereUser:               "a",
+		VSpherePassword:           "b",
+		VSphereServer:             "c",
+		VSphereAllowUnverifiedSSL: "d",
+	})
+	secret := &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "default",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"credentials": creds,
+		},
+		Type: v1.SecretTypeOpaque,
+	}
+	assert.Nil(t, k8sClient.Create(ctx, secret))
+
+	provider := v1beta1.Provider{
+		Spec: v1beta1.ProviderSpec{
+			Provider: string(vsphere),
+			Credentials: v1beta1.ProviderCredentials{
+				Source: "Secret",
+				SecretRef: &types.SecretKeySelector{
+					SecretReference: types.SecretReference{
+						Name:      "default",
+						Namespace: "default",
+					},
+					Key: "credentials",
+				},
+			},
+		},
+	}
+
+	secret2 := &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "wrong-data",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"credentials": []byte("xxx"),
+		},
+		Type: v1.SecretTypeOpaque,
+	}
+	k8sClient2 := fake.NewClientBuilder().Build()
+	assert.Nil(t, k8sClient2.Create(ctx, secret2))
+
+	var badProvider v1beta1.Provider
+	copier.CopyWithOption(&badProvider, &provider, copier.Option{DeepCopy: true})
+	badProvider.Spec.Credentials.SecretRef.Name = "wrong-data"
+
+	type args struct {
+		provider  v1beta1.Provider
+		region    string
+		k8sClient client.Client
+	}
+	tests := []struct {
+		name   string
+		args   args
+		want   map[string]string
+		errMsg string
+	}{
+		{
+			name: "provider",
+			args: args{
+				k8sClient: k8sClient,
+				provider:  provider,
+			},
+			want: map[string]string{
+				envVSphereUser:               "a",
+				envVSpherePassword:           "b",
+				envVSphereServer:             "c",
+				envVSphereAllowUnverifiedSSL: "d",
+			},
+		},
+		{
+			name: "provider with wrong data",
+			args: args{
+				k8sClient: k8sClient2,
+				provider:  badProvider,
+				region:    "xxx",
+			},
+			errMsg: errConvertCredentials,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := GetProviderCredentials(ctx, tt.args.k8sClient, &tt.args.provider, tt.args.region)
+			if tt.errMsg != "" && err != nil && !strings.Contains(err.Error(), tt.errMsg) {
+				t.Errorf("GetProviderCredentials() error = %v, wantErr %v", err, err.Error())
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("GetProviderCredentials() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetProviderCredentials4TencentCloud(t *testing.T) {
+	ctx := context.TODO()
+	k8sClient := fake.NewClientBuilder().Build()
+	creds, _ := yaml.Marshal(&TencentCloudCredentials{
+		SecretID:  "a",
+		SecretKey: "b",
+	})
+	secret := &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "default",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"credentials": creds,
+		},
+		Type: v1.SecretTypeOpaque,
+	}
+	assert.Nil(t, k8sClient.Create(ctx, secret))
+
+	provider := v1beta1.Provider{
+		Spec: v1beta1.ProviderSpec{
+			Provider: string(tencent),
+			Credentials: v1beta1.ProviderCredentials{
+				Source: "Secret",
+				SecretRef: &types.SecretKeySelector{
+					SecretReference: types.SecretReference{
+						Name:      "default",
+						Namespace: "default",
+					},
+					Key: "credentials",
+				},
+			},
+		},
+	}
+
+	secret2 := &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "wrong-data",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"credentials": []byte("xxx"),
+		},
+		Type: v1.SecretTypeOpaque,
+	}
+	k8sClient2 := fake.NewClientBuilder().Build()
+	assert.Nil(t, k8sClient2.Create(ctx, secret2))
+
+	var badProvider v1beta1.Provider
+	copier.CopyWithOption(&badProvider, &provider, copier.Option{DeepCopy: true})
+	badProvider.Spec.Credentials.SecretRef.Name = "wrong-data"
+
+	type args struct {
+		provider  v1beta1.Provider
+		region    string
+		k8sClient client.Client
+	}
+	tests := []struct {
+		name   string
+		args   args
+		want   map[string]string
+		errMsg string
+	}{
+		{
+			name: "provider",
+			args: args{
+				k8sClient: k8sClient,
+				provider:  provider,
+				region:    "bj",
+			},
+			want: map[string]string{
+				envQCloudSecretID:  "a",
+				envQCloudSecretKey: "b",
+				envQCloudRegion:    "bj",
+			},
+		},
+		{
+			name: "provider with wrong data",
+			args: args{
+				k8sClient: k8sClient2,
+				provider:  badProvider,
+				region:    "xxx",
+			},
+			errMsg: errConvertCredentials,
 		},
 	}
 
@@ -434,6 +766,490 @@ func TestGetProviderFromConfiguration(t *testing.T) {
 			}
 			if tc.want.provider != nil && !reflect.DeepEqual(got, tc.want.provider) {
 				t.Errorf("IsDeletable() differs between got and want: %s", cmp.Diff(got, tc.want.provider))
+			}
+		})
+	}
+}
+
+func TestGetProviderCredentials4UCloud(t *testing.T) {
+	ctx := context.TODO()
+	k8sClient := fake.NewClientBuilder().Build()
+	creds, _ := yaml.Marshal(&UCloudCredentials{
+		PublicKey:  "a",
+		PrivateKey: "b",
+		Region:     "bj",
+		ProjectID:  "c",
+	})
+	secret := &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "default",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"credentials": creds,
+		},
+		Type: v1.SecretTypeOpaque,
+	}
+	assert.Nil(t, k8sClient.Create(ctx, secret))
+
+	provider := v1beta1.Provider{
+		Spec: v1beta1.ProviderSpec{
+			Provider: string(ucloud),
+			Credentials: v1beta1.ProviderCredentials{
+				Source: "Secret",
+				SecretRef: &types.SecretKeySelector{
+					SecretReference: types.SecretReference{
+						Name:      "default",
+						Namespace: "default",
+					},
+					Key: "credentials",
+				},
+			},
+		},
+	}
+
+	secret2 := &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "wrong-data",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"credentials": []byte("xxx"),
+		},
+		Type: v1.SecretTypeOpaque,
+	}
+	k8sClient2 := fake.NewClientBuilder().Build()
+	assert.Nil(t, k8sClient2.Create(ctx, secret2))
+
+	var badProvider v1beta1.Provider
+	copier.CopyWithOption(&badProvider, &provider, copier.Option{DeepCopy: true})
+	badProvider.Spec.Credentials.SecretRef.Name = "wrong-data"
+
+	type args struct {
+		provider  v1beta1.Provider
+		region    string
+		k8sClient client.Client
+	}
+	tests := []struct {
+		name   string
+		args   args
+		want   map[string]string
+		errMsg string
+	}{
+		{
+			name: "provider",
+			args: args{
+				k8sClient: k8sClient,
+				provider:  provider,
+				region:    "bj",
+			},
+			want: map[string]string{
+				envUCloudPublicKey:  "a",
+				envUCloudPrivateKey: "b",
+				envUCloudRegion:     "bj",
+				envUCloudProjectID:  "c",
+			},
+		},
+		{
+			name: "provider with wrong data",
+			args: args{
+				k8sClient: k8sClient2,
+				provider:  badProvider,
+				region:    "xxx",
+			},
+			errMsg: errConvertCredentials,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := GetProviderCredentials(ctx, tt.args.k8sClient, &tt.args.provider, tt.args.region)
+			if tt.errMsg != "" && err != nil && !strings.Contains(err.Error(), tt.errMsg) {
+				t.Errorf("GetProviderCredentials() error = %v, wantErr %v", err, err.Error())
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("GetProviderCredentials() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetProviderCredentials4GCP(t *testing.T) {
+	ctx := context.TODO()
+	k8sClient := fake.NewClientBuilder().Build()
+	creds, _ := yaml.Marshal(&GCPCredentials{
+		GCPCredentialsJSON: "a",
+		GCPProject:         "b",
+	})
+	secret := &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "default",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"credentials": creds,
+		},
+		Type: v1.SecretTypeOpaque,
+	}
+	assert.Nil(t, k8sClient.Create(ctx, secret))
+
+	provider := v1beta1.Provider{
+		Spec: v1beta1.ProviderSpec{
+			Provider: string(gcp),
+			Credentials: v1beta1.ProviderCredentials{
+				Source: "Secret",
+				SecretRef: &types.SecretKeySelector{
+					SecretReference: types.SecretReference{
+						Name:      "default",
+						Namespace: "default",
+					},
+					Key: "credentials",
+				},
+			},
+		},
+	}
+
+	secret2 := &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "wrong-data",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"credentials": []byte("xxx"),
+		},
+		Type: v1.SecretTypeOpaque,
+	}
+	k8sClient2 := fake.NewClientBuilder().Build()
+	assert.Nil(t, k8sClient2.Create(ctx, secret2))
+
+	var badProvider v1beta1.Provider
+	copier.CopyWithOption(&badProvider, &provider, copier.Option{DeepCopy: true})
+	badProvider.Spec.Credentials.SecretRef.Name = "wrong-data"
+
+	type args struct {
+		provider  v1beta1.Provider
+		region    string
+		k8sClient client.Client
+	}
+	tests := []struct {
+		name   string
+		args   args
+		want   map[string]string
+		errMsg string
+	}{
+		{
+			name: "provider",
+			args: args{
+				k8sClient: k8sClient,
+				provider:  provider,
+				region:    "bj",
+			},
+			want: map[string]string{
+				envGCPCredentialsJSON: "a",
+				envGCPProject:         "b",
+				envGCPRegion:          "bj",
+			},
+		},
+		{
+			name: "provider with wrong data",
+			args: args{
+				k8sClient: k8sClient2,
+				provider:  badProvider,
+				region:    "xxx",
+			},
+			errMsg: errConvertCredentials,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := GetProviderCredentials(ctx, tt.args.k8sClient, &tt.args.provider, tt.args.region)
+			if tt.errMsg != "" && err != nil && !strings.Contains(err.Error(), tt.errMsg) {
+				t.Errorf("GetProviderCredentials() error = %v, wantErr %v", err, err.Error())
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("GetProviderCredentials() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetProviderCredentials4AWS(t *testing.T) {
+	ctx := context.TODO()
+	k8sClient := fake.NewClientBuilder().Build()
+	creds, _ := yaml.Marshal(&AWSCredentials{
+		AWSAccessKeyID:     "a",
+		AWSSecretAccessKey: "b",
+		AWSSessionToken:    "c",
+	})
+	secret := &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "default",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"credentials": creds,
+		},
+		Type: v1.SecretTypeOpaque,
+	}
+	assert.Nil(t, k8sClient.Create(ctx, secret))
+
+	provider := v1beta1.Provider{
+		Spec: v1beta1.ProviderSpec{
+			Provider: string(aws),
+			Credentials: v1beta1.ProviderCredentials{
+				Source: "Secret",
+				SecretRef: &types.SecretKeySelector{
+					SecretReference: types.SecretReference{
+						Name:      "default",
+						Namespace: "default",
+					},
+					Key: "credentials",
+				},
+			},
+		},
+	}
+
+	secret2 := &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "wrong-data",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"credentials": []byte("xxx"),
+		},
+		Type: v1.SecretTypeOpaque,
+	}
+	k8sClient2 := fake.NewClientBuilder().Build()
+	assert.Nil(t, k8sClient2.Create(ctx, secret2))
+
+	var badProvider v1beta1.Provider
+	copier.CopyWithOption(&badProvider, &provider, copier.Option{DeepCopy: true})
+	badProvider.Spec.Credentials.SecretRef.Name = "wrong-data"
+
+	type args struct {
+		provider  v1beta1.Provider
+		region    string
+		k8sClient client.Client
+	}
+	tests := []struct {
+		name   string
+		args   args
+		want   map[string]string
+		errMsg string
+	}{
+		{
+			name: "provider",
+			args: args{
+				k8sClient: k8sClient,
+				provider:  provider,
+				region:    "bj",
+			},
+			want: map[string]string{
+				envAWSAccessKeyID:     "a",
+				envAWSSecretAccessKey: "b",
+				envAWSSessionToken:    "c",
+				envAWSDefaultRegion:   "bj",
+			},
+		},
+		{
+			name: "provider with wrong data",
+			args: args{
+				k8sClient: k8sClient2,
+				provider:  badProvider,
+				region:    "xxx",
+			},
+			errMsg: errConvertCredentials,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := GetProviderCredentials(ctx, tt.args.k8sClient, &tt.args.provider, tt.args.region)
+			if tt.errMsg != "" && err != nil && !strings.Contains(err.Error(), tt.errMsg) {
+				t.Errorf("GetProviderCredentials() error = %v, wantErr %v", err, err.Error())
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("GetProviderCredentials() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetProviderCredentials4Azure(t *testing.T) {
+	ctx := context.TODO()
+	k8sClient := fake.NewClientBuilder().Build()
+	creds, _ := yaml.Marshal(&AzureCredentials{
+		ARMClientID:       "a",
+		ARMClientSecret:   "b",
+		ARMSubscriptionID: "c",
+		ARMTenantID:       "d",
+	})
+	secret := &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "default",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"credentials": creds,
+		},
+		Type: v1.SecretTypeOpaque,
+	}
+	assert.Nil(t, k8sClient.Create(ctx, secret))
+
+	provider := v1beta1.Provider{
+		Spec: v1beta1.ProviderSpec{
+			Provider: string(azure),
+			Credentials: v1beta1.ProviderCredentials{
+				Source: "Secret",
+				SecretRef: &types.SecretKeySelector{
+					SecretReference: types.SecretReference{
+						Name:      "default",
+						Namespace: "default",
+					},
+					Key: "credentials",
+				},
+			},
+		},
+	}
+
+	secret2 := &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "wrong-data",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"credentials": []byte("xxx"),
+		},
+		Type: v1.SecretTypeOpaque,
+	}
+	k8sClient2 := fake.NewClientBuilder().Build()
+	assert.Nil(t, k8sClient2.Create(ctx, secret2))
+
+	var badProvider v1beta1.Provider
+	copier.CopyWithOption(&badProvider, &provider, copier.Option{DeepCopy: true})
+	badProvider.Spec.Credentials.SecretRef.Name = "wrong-data"
+
+	type args struct {
+		provider  v1beta1.Provider
+		region    string
+		k8sClient client.Client
+	}
+	tests := []struct {
+		name   string
+		args   args
+		want   map[string]string
+		errMsg string
+	}{
+		{
+			name: "provider",
+			args: args{
+				k8sClient: k8sClient,
+				provider:  provider,
+				region:    "bj",
+			},
+			want: map[string]string{
+				envARMClientID:       "a",
+				envARMClientSecret:   "b",
+				envARMSubscriptionID: "c",
+				envARMTenantID:       "d",
+			},
+		},
+		{
+			name: "provider with wrong data",
+			args: args{
+				k8sClient: k8sClient2,
+				provider:  badProvider,
+				region:    "xxx",
+			},
+			errMsg: errConvertCredentials,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := GetProviderCredentials(ctx, tt.args.k8sClient, &tt.args.provider, tt.args.region)
+			if tt.errMsg != "" && err != nil && !strings.Contains(err.Error(), tt.errMsg) {
+				t.Errorf("GetProviderCredentials() error = %v, wantErr %v", err, err.Error())
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("GetProviderCredentials() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetProviderCredentials4Custom(t *testing.T) {
+	ctx := context.TODO()
+
+	provider := v1beta1.Provider{
+		Spec: v1beta1.ProviderSpec{
+			Provider: string(custom),
+			Credentials: v1beta1.ProviderCredentials{
+				Source: "Secret",
+				SecretRef: &types.SecretKeySelector{
+					SecretReference: types.SecretReference{
+						Name:      "default",
+						Namespace: "default",
+					},
+					Key: "credentials",
+				},
+			},
+		},
+	}
+
+	secret2 := &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "wrong-data",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"credentials": []byte("xxx"),
+		},
+		Type: v1.SecretTypeOpaque,
+	}
+	k8sClient2 := fake.NewClientBuilder().Build()
+	assert.Nil(t, k8sClient2.Create(ctx, secret2))
+
+	var badProvider v1beta1.Provider
+	copier.CopyWithOption(&badProvider, &provider, copier.Option{DeepCopy: true})
+	badProvider.Spec.Credentials.SecretRef.Name = "wrong-data"
+
+	type args struct {
+		provider  v1beta1.Provider
+		region    string
+		k8sClient client.Client
+	}
+	tests := []struct {
+		name   string
+		args   args
+		want   map[string]string
+		errMsg string
+	}{
+		{
+			name: "provider with wrong data",
+			args: args{
+				k8sClient: k8sClient2,
+				provider:  badProvider,
+				region:    "xxx",
+			},
+			errMsg: errConvertCredentials,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := GetProviderCredentials(ctx, tt.args.k8sClient, &tt.args.provider, tt.args.region)
+			if tt.errMsg != "" && err != nil && !strings.Contains(err.Error(), tt.errMsg) {
+				t.Errorf("GetProviderCredentials() error = %v, wantErr %v", err, err.Error())
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("GetProviderCredentials() = %v, want %v", got, tt.want)
 			}
 		})
 	}

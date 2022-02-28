@@ -79,7 +79,7 @@ func TestGetTerraformStatus2(t *testing.T) {
 		want want
 	}{
 		{
-			name: "cloud are init clientSet",
+			name: "failed to init clientSet",
 			args: args{},
 			want: want{
 				state:  types.ConfigurationProvisioningAndChecking,
@@ -93,6 +93,58 @@ func TestGetTerraformStatus2(t *testing.T) {
 			if tc.want.errMsg != "" {
 				assert.Contains(t, err.Error(), tc.want.errMsg)
 			} else {
+				assert.Equal(t, tc.want.state, state)
+
+			}
+		})
+	}
+}
+
+func TestAnalyzeTerraformLog(t *testing.T) {
+	type args struct {
+		logs string
+	}
+	type want struct {
+		success bool
+		state   types.ConfigurationState
+		errMsg  string
+	}
+
+	testcases := []struct {
+		name string
+		args args
+		want want
+	}{
+		{
+			name: "normal failed logs",
+			args: args{
+				logs: "31mError:",
+			},
+			want: want{
+				success: false,
+				state:   types.ConfigurationApplyFailed,
+				errMsg:  "31mError:",
+			},
+		},
+		{
+			name: "invalid region",
+			args: args{
+				logs: "31mError:\nInvalid Alibaba Cloud region",
+			},
+			want: want{
+				success: false,
+				state:   types.InvalidRegion,
+				errMsg:  "Invalid Alibaba Cloud region",
+			},
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			success, state, errMsg := analyzeTerraformLog(tc.args.logs)
+			if tc.want.errMsg != "" {
+				assert.Contains(t, errMsg, tc.want.errMsg)
+			} else {
+				assert.Equal(t, tc.want.success, success)
 				assert.Equal(t, tc.want.state, state)
 
 			}

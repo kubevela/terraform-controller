@@ -37,12 +37,16 @@ func getPodLog(ctx context.Context, client kubernetes.Interface, namespace, jobN
 		}
 	}(logs)
 
+	return flushStream(logs, pod.Name)
+}
+
+func flushStream(rc io.ReadCloser, podName string) (string, error) {
 	var buf = &bytes.Buffer{}
-	_, err = io.Copy(buf, logs)
+	_, err := io.Copy(buf, rc)
 	if err != nil {
 		return "", err
 	}
 	logContent := buf.String()
-	klog.V(4).Info("pod logs", "Pod", pod.Name, "Logs", logContent)
+	klog.V(4).Info("pod logs", "Pod", podName, "Logs", logContent)
 	return logContent, nil
 }
