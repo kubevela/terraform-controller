@@ -16,8 +16,9 @@ import (
 func TestGetTerraformStatus(t *testing.T) {
 	ctx := context.Background()
 	type args struct {
-		namespace string
-		name      string
+		namespace     string
+		name          string
+		containerName string
 	}
 	type want struct {
 		state  types.ConfigurationState
@@ -36,8 +37,9 @@ func TestGetTerraformStatus(t *testing.T) {
 		{
 			name: "logs are not available",
 			args: args{
-				namespace: "default",
-				name:      "test",
+				namespace:     "default",
+				name:          "test",
+				containerName: "terraform-executor",
 			},
 			want: want{
 				state:  types.ConfigurationProvisioningAndChecking,
@@ -47,7 +49,7 @@ func TestGetTerraformStatus(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			state, err := GetTerraformStatus(ctx, tc.args.namespace, tc.args.name)
+			state, err := GetTerraformStatus(ctx, tc.args.namespace, tc.args.name, tc.args.containerName)
 			if tc.want.errMsg != "" {
 				assert.EqualError(t, err, tc.want.errMsg)
 			} else {
@@ -61,8 +63,9 @@ func TestGetTerraformStatus(t *testing.T) {
 func TestGetTerraformStatus2(t *testing.T) {
 	ctx := context.Background()
 	type args struct {
-		namespace string
-		name      string
+		namespace     string
+		name          string
+		containerName string
 	}
 	type want struct {
 		state  types.ConfigurationState
@@ -89,7 +92,7 @@ func TestGetTerraformStatus2(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			state, err := GetTerraformStatus(ctx, tc.args.namespace, tc.args.name)
+			state, err := GetTerraformStatus(ctx, tc.args.namespace, tc.args.name, tc.args.containerName)
 			if tc.want.errMsg != "" {
 				assert.Contains(t, err.Error(), tc.want.errMsg)
 			} else {

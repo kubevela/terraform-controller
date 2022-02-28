@@ -60,6 +60,8 @@ const (
 	InputTFConfigurationVolumeMountPath = "/opt/tf-configuration"
 	// BackendVolumeMountPath is the volume mount path for Terraform backend
 	BackendVolumeMountPath = "/opt/tf-backend"
+	// terraformContainerName is the name of the container that executes the terraform in the pod
+	terraformContainerName = "terraform-executor"
 )
 
 const (
@@ -142,7 +144,7 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		// terraform destroy
 		klog.InfoS("performing Configuration Destroy", "Namespace", req.Namespace, "Name", req.Name, "JobName", meta.DestroyJobName)
 
-		_, err := terraform.GetTerraformStatus(ctx, meta.Namespace, meta.DestroyJobName)
+		_, err := terraform.GetTerraformStatus(ctx, meta.Namespace, meta.DestroyJobName, terraformContainerName)
 		if err != nil {
 			klog.ErrorS(err, "Terraform destroy failed")
 			if updateErr := meta.updateDestroyStatus(ctx, r.Client, types.ConfigurationDestroyFailed, err.Error()); updateErr != nil {
@@ -173,7 +175,7 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		}
 		return ctrl.Result{RequeueAfter: 3 * time.Second}, errors.Wrap(err, "failed to create/update cloud resource")
 	}
-	state, err := terraform.GetTerraformStatus(ctx, meta.Namespace, meta.ApplyJobName)
+	state, err := terraform.GetTerraformStatus(ctx, meta.Namespace, meta.ApplyJobName, terraformContainerName)
 	if err != nil {
 		klog.ErrorS(err, "Terraform apply failed")
 		if updateErr := meta.updateApplyStatus(ctx, r.Client, state, err.Error()); updateErr != nil {
@@ -648,7 +650,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 					// Container terraform-executor will first copy predefined terraform.d to working directory, and
 					// then run terraform init/apply.
 					Containers: []v1.Container{{
-						Name:            "terraform-executor",
+						Name:            terraformContainerName,
 						Image:           meta.TerraformImage,
 						ImagePullPolicy: v1.PullIfNotPresent,
 						Command: []string{
