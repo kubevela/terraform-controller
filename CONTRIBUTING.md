@@ -1,32 +1,50 @@
 # Contributing to Terraform Controller
 
+Thanks for contributing to Terraform Controller!
+
 ## Prerequisites
 
 - Go
 
 Go version `>=1.17` is required.
 
-- Helm Cli
+- Helm Cli (optional)
 
 Refer to [Helm official Doc](https://helm.sh/docs/intro/install/) to install `helm` Cli.
 
-- Install Kubernetes Terraform Controller Chart
+## How to start up the project
+
+- Apply CRDs to a Kubernetes cluster
 
 ```shell
-$ helm repo add kubevela-addons https://charts.kubevela.net/addons
-"kubevela-addons" has been added to your repositories
-
-$ helm upgrade --install terraform-controller -n terraform --create-namespace kubevela-addons/terraform-controller
-Release "terraform-controller" does not exist. Installing it now.
-NAME: terraform-controller
-LAST DEPLOYED: Mon Aug 30 11:23:47 2021
-NAMESPACE: terraform
-STATUS: deployed
-REVISION: 1
-TEST SUITE: None
+$ make install
+go: creating new go.mod: module tmp
+...
+go get: added sigs.k8s.io/controller-tools v0.6.0
+go get: added sigs.k8s.io/structured-merge-diff/v4 v4.1.0
+go get: added sigs.k8s.io/yaml v1.2.0
+/Users/zhouzhengxi/go/bin/controller-gen "crd:trivialVersions=true" webhook paths="./..." output:crd:artifacts:config=chart/crds
+kubectl apply -f chart/crds
+customresourcedefinition.apiextensions.k8s.io/configurations.terraform.core.oam.dev configured
+customresourcedefinition.apiextensions.k8s.io/providers.terraform.core.oam.dev configured
 ```
 
-## Cloud Resources Management
+- Run Terraform Controller
+
+```shell
+$ make run
+go: creating new go.mod: module tmp
+...
+go get: added sigs.k8s.io/yaml v1.2.0
+/Users/zhouzhengxi/go/bin/controller-gen object:headerFile="hack/boilerplate.go.txt" paths="./..."
+go fmt ./...
+go vet ./...
+/Users/zhouzhengxi/go/bin/controller-gen "crd:trivialVersions=true" webhook paths="./..." output:crd:artifacts:config=chart/crds
+go run ./main.go
+I0227 12:15:32.890376   38818 request.go:668] Waited for 1.001811845s due to client-side throttling, not priority and fairness, request: GET:https://47.242.126.78:6443/apis/apigatewayv2.aws.crossplane.io/v1alpha1?timeout=32s
+```
+
+## An development example for Cloud Resources Management
 
 Let's take Alibaba Cloud as an example.
 
@@ -47,7 +65,7 @@ $ make alibaba
 
 ### Apply Terraform Configuration
 
-Apply Terraform configuration [configuration_hcl_oss.yaml](./examples/alibaba/oss/configuration_hcl_bucket.yaml) (JSON configuration [configuration_oss.yaml](./examples/alibaba/oss/configuration_json_bucket.yaml) is also supported) to provision an Alibaba OSS bucket.
+Apply [OSS Terraform Configuration](./examples/alibaba/oss/configuration_hcl_bucket.yaml) to provision an Alibaba OSS bucket.
 
 ```shell
 $ kubectl get configuration.terraform.core.oam.dev
@@ -79,7 +97,7 @@ status:
   state: provisioned
 ```
 
-OSS bucket is provisioned.
+Use [ossutil cli](https://www.alibabacloud.com/help/en/doc-detail/207217.htm) to check whether OSS bucket is provisioned.
 
 ```shell
 $ ossutil ls oss://
@@ -108,8 +126,7 @@ kind: Configuration
 metadata:
   name: alibaba-oss
 spec:
-  JSON: |
-    ..
+    ...
 
   variable:
     ...
