@@ -643,6 +643,14 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 			Completions:  &completions,
 			BackoffLimit: &backoffLimit,
 			Template: v1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						// This annotation will prevent istio-proxy sidecar injection in the pods
+						// as having the sidecar would have kept the Job in `Running` state and would
+						// not transition to `Completed`
+						"sidecar.istio.io/inject": "false",
+					},
+				},
 				Spec: v1.PodSpec{
 					// InitContainer will copy Terraform configuration files to working directory and create Terraform
 					// state file directory in advance
