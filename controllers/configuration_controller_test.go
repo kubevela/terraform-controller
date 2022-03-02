@@ -2,10 +2,13 @@ package controllers
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/agiledragon/gomonkey/v2"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/sts"
@@ -166,6 +169,12 @@ func TestCheckProvider(t *testing.T) {
 }
 
 func TestConfigurationReconcile(t *testing.T) {
+	req := ctrl.Request{}
+	req.NamespacedName = k8stypes.NamespacedName{
+		Name:      "a",
+		Namespace: "b",
+	}
+
 	r1 := &ConfigurationReconciler{}
 	ctx := context.Background()
 	s := runtime.NewScheme()
@@ -216,17 +225,31 @@ func TestConfigurationReconcile(t *testing.T) {
 		},
 	}
 
-	configuration := &v1beta1.Configuration{
+	data, _ := json.Marshal(map[string]interface{}{
+		"name": "abc",
+	})
+	variables := &runtime.RawExtension{Raw: data}
+	configuration2 := &v1beta1.Configuration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "a",
 			Namespace: "b",
 		},
 		Spec: v1beta1.ConfigurationSpec{
-			HCL: "c",
+			HCL:      "c",
+			Variable: variables,
+		},
+		Status: v1beta1.ConfigurationStatus{
+			Apply: v1beta1.ConfigurationApplyStatus{
+				State: types.Available,
+			},
 		},
 	}
-	configuration.Spec.ProviderReference = &crossplane.Reference{
+	configuration2.Spec.ProviderReference = &crossplane.Reference{
 		Name:      "default",
+		Namespace: "default",
+	}
+	configuration2.Spec.WriteConnectionSecretToReference = &crossplane.SecretReference{
+		Name:      "db-conn",
 		Namespace: "default",
 	}
 
@@ -237,8 +260,61 @@ func TestConfigurationReconcile(t *testing.T) {
 	})
 	defer patches.Reset()
 
+	applyingJob2 := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      req.Name + "-" + string(TerraformApply),
+			Namespace: req.Namespace,
+		},
+		Status: batchv1.JobStatus{
+			Succeeded: int32(1),
+		},
+	}
+
+	stateData, _ := base64.StdEncoding.DecodeString("H4sIAAAAAAAA/0SMwa7CIBBF9/0KMutH80ArDb9ijKHDYEhqMQO4afrvBly4POfc3H0QAt7EOaYNrDj/NS7E7ELi5/1XQI3/o4beM3F0K1ihO65xI/egNsLThLPRWi6agkR/CVIppaSZJrfgbBx6//1ItbxqyWDFfnTBlFNlpKaut+EYPgEAAP//xUXpvZsAAAA=")
+
+	backendSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf(TFBackendSecret, terraformWorkspace, "a"),
+			Namespace: "vela-system",
+		},
+		Data: map[string][]byte{
+			TerraformStateNameInSecret: stateData,
+		},
+		Type: corev1.SecretTypeOpaque,
+	}
+
+	variableSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf(TFVariableSecret, req.Name),
+			Namespace: req.Namespace,
+		},
+		Data: map[string][]byte{
+			"name": []byte("def"),
+		},
+		Type: corev1.SecretTypeOpaque,
+	}
+
 	r2 := &ConfigurationReconciler{}
-	r2.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(secret, provider, configuration).Build()
+	r2.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(secret, provider, applyingJob2, backendSecret,
+		variableSecret, configuration2).Build()
+
+	time := v1.NewTime(time.Now())
+	configuration3 := &v1beta1.Configuration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "a",
+			Namespace:         "b",
+			DeletionTimestamp: &time,
+		},
+		Spec: v1beta1.ConfigurationSpec{
+			HCL: "c",
+		},
+	}
+	configuration2.Spec.ProviderReference = &crossplane.Reference{
+		Name:      "default",
+		Namespace: "default",
+	}
+	r3 := &ConfigurationReconciler{}
+	r3.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(secret, provider, configuration3).Build()
 
 	type args struct {
 		req reconcile.Request
@@ -247,12 +323,6 @@ func TestConfigurationReconcile(t *testing.T) {
 
 	type want struct {
 		errMsg string
-	}
-
-	req := ctrl.Request{}
-	req.NamespacedName = k8stypes.NamespacedName{
-		Name:      "a",
-		Namespace: "b",
 	}
 
 	testcases := []struct {
@@ -268,10 +338,17 @@ func TestConfigurationReconcile(t *testing.T) {
 			},
 		},
 		{
-			name: "Configuration exists",
+			name: "Configuration exists, and it's available",
 			args: args{
 				req: req,
 				r:   r2,
+			},
+		},
+		{
+			name: "Configuration is deleting",
+			args: args{
+				req: req,
+				r:   r3,
 			},
 		},
 	}

@@ -2,8 +2,11 @@ package controllers
 
 import (
 	"context"
+	"github.com/go-yaml/yaml"
 	crossplanetypes "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
+	"github.com/oam-dev/terraform-controller/controllers/provider"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -19,12 +22,13 @@ func TestReconcile(t *testing.T) {
 	ctx := context.Background()
 	s := runtime.NewScheme()
 	v1beta1.AddToScheme(s)
+	v1.AddToScheme(s)
 	r1.Client = fake.NewClientBuilder().WithScheme(s).Build()
 
 	r2 := &ProviderReconciler{}
-	provider := &v1beta1.Provider{
+	provider2 := &v1beta1.Provider{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "abc",
+			Name:      "aws",
 			Namespace: "default",
 		},
 		Spec: v1beta1.ProviderSpec{
@@ -35,11 +39,53 @@ func TestReconcile(t *testing.T) {
 						Name:      "abc",
 						Namespace: "default",
 					},
+					Key: "credentials",
 				},
 			},
+			Provider: "aws",
 		},
 	}
-	r2.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(provider).Build()
+
+	creds, _ := yaml.Marshal(&provider.AWSCredentials{
+		AWSAccessKeyID:     "a",
+		AWSSecretAccessKey: "b",
+		AWSSessionToken:    "c",
+	})
+	secret2 := &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "abc",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"credentials": creds,
+		},
+		Type: v1.SecretTypeOpaque,
+	}
+
+	r2.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(secret2, provider2).Build()
+
+	r3 := &ProviderReconciler{}
+	provider3 := &v1beta1.Provider{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "aws",
+			Namespace: "default",
+		},
+		Spec: v1beta1.ProviderSpec{
+			Credentials: v1beta1.ProviderCredentials{
+				Source: "Secret",
+				SecretRef: &crossplanetypes.SecretKeySelector{
+					SecretReference: crossplanetypes.SecretReference{
+						Name:      "abc",
+						Namespace: "default",
+					},
+					Key: "credentials",
+				},
+			},
+			Provider: "aws",
+		},
+	}
+
+	r3.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(provider3).Build()
 
 	type args struct {
 		req reconcile.Request
@@ -52,7 +98,7 @@ func TestReconcile(t *testing.T) {
 
 	req := ctrl.Request{}
 	req.NamespacedName = types.NamespacedName{
-		Name:      "abc",
+		Name:      "aws",
 		Namespace: "default",
 	}
 
@@ -73,6 +119,14 @@ func TestReconcile(t *testing.T) {
 			args: args{
 				req: req,
 				r:   r2,
+			},
+			want: want{},
+		},
+		{
+			name: "Provider is found, but the secret is not available",
+			args: args{
+				req: req,
+				r:   r3,
 			},
 			want: want{
 				errMsg: errGetCredentials,

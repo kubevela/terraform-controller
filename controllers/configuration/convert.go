@@ -54,7 +54,7 @@ func RawExtension2Map(raw *runtime.RawExtension) (map[string]interface{}, error)
 	if err != nil {
 		return nil, err
 	}
-	return ret, err
+	return ret, nil
 }
 
 type backendVars struct {

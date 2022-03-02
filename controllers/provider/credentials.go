@@ -28,12 +28,13 @@ const (
 	alibaba CloudProvider = "alibaba"
 	aws     CloudProvider = "aws"
 	gcp     CloudProvider = "gcp"
-	qcloud  CloudProvider = "tencent"
+	tencent CloudProvider = "tencent"
 	azure   CloudProvider = "azure"
 	vsphere CloudProvider = "vsphere"
 	ec      CloudProvider = "ec"
 	ucloud  CloudProvider = "ucloud"
 	custom  CloudProvider = "custom"
+	baidu   CloudProvider = "baidu"
 )
 
 const (
@@ -42,38 +43,8 @@ const (
 	envAlicloudRegion    = "ALICLOUD_REGION"
 	envAliCloudStsToken  = "ALICLOUD_SECURITY_TOKEN"
 
-	envUCloudPrivateKey = "UCLOUD_PRIVATE_KEY"
-	envUCloudProjectID  = "UCLOUD_PROJECT_ID"
-	envUCloudPublicKey  = "UCLOUD_PUBLIC_KEY"
-	envUCloudRegion     = "UCLOUD_REGION"
-
-	envAWSAccessKeyID     = "AWS_ACCESS_KEY_ID"
-	envAWSSecretAccessKey = "AWS_SECRET_ACCESS_KEY"
-	envAWSDefaultRegion   = "AWS_DEFAULT_REGION"
-	envAWSSessionToken    = "AWS_SESSION_TOKEN"
-
-	envGCPCredentialsJSON = "GOOGLE_CREDENTIALS"
-	envGCPRegion          = "GOOGLE_REGION"
-	envGCPProject         = "GOOGLE_PROJECT"
-
-	envQCloudSecretID  = "TENCENTCLOUD_SECRET_ID"
-	envQCloudSecretKey = "TENCENTCLOUD_SECRET_KEY"
-	envQCloudRegion    = "TENCENTCLOUD_REGION"
-
-	envARMClientID       = "ARM_CLIENT_ID"
-	envARMClientSecret   = "ARM_CLIENT_SECRET"
-	envARMSubscriptionID = "ARM_SUBSCRIPTION_ID"
-	envARMTenantID       = "ARM_TENANT_ID"
-
-	envVSphereUser               = "VSPHERE_USER"
-	envVSpherePassword           = "VSPHERE_PASSWORD"
-	envVSphereServer             = "VSPHERE_SERVER"
-	envVSphereAllowUnverifiedSSL = "VSPHERE_ALLOW_UNVERIFIED_SSL"
-
 	errConvertCredentials = "failed to convert the credentials of Secret from Provider"
 	errCredentialValid    = "Credentials are not valid"
-
-	envECApiKey = "EC_API_KEY"
 )
 
 // AlibabaCloudCredentials are credentials for Alibaba Cloud
@@ -83,73 +54,28 @@ type AlibabaCloudCredentials struct {
 	SecurityToken   string `yaml:"securityToken"`
 }
 
-// UCloudCredentials are credentials for UCloud
-type UCloudCredentials struct {
-	PublicKey  string `yaml:"publicKey"`
-	PrivateKey string `yaml:"privateKey"`
-	Region     string `yaml:"region"`
-	ProjectID  string `yaml:"projectID"`
-}
-
-// AWSCredentials are credentials for AWS
-type AWSCredentials struct {
-	AWSAccessKeyID     string `yaml:"awsAccessKeyID"`
-	AWSSecretAccessKey string `yaml:"awsSecretAccessKey"`
-	AWSSessionToken    string `yaml:"awsSessionToken"`
-}
-
-// GCPCredentials are credentials for GCP
-type GCPCredentials struct {
-	GCPCredentialsJSON string `yaml:"gcpCredentialsJSON"`
-	GCPProject         string `yaml:"gcpProject"`
-}
-
-// TencentCloudCredentials are credentials for Tencent Cloud
-type TencentCloudCredentials struct {
-	SecretID  string `yaml:"secretID"`
-	SecretKey string `yaml:"secretKey"`
-}
-
-// AzureCredentials are credentials for Azure
-type AzureCredentials struct {
-	ARMClientID       string `yaml:"armClientID"`
-	ARMClientSecret   string `yaml:"armClientSecret"`
-	ARMSubscriptionID string `yaml:"armSubscriptionID"`
-	ARMTenantID       string `yaml:"armTenantID"`
-}
-
-// VSphereCredentials are credentials for VSphere
-type VSphereCredentials struct {
-	VSphereUser               string `yaml:"vSphereUser"`
-	VSpherePassword           string `yaml:"vSpherePassword"`
-	VSphereServer             string `yaml:"vSphereServer"`
-	VSphereAllowUnverifiedSSL string `yaml:"vSphereAllowUnverifiedSSL,omitempty"`
-}
-
-// ECCredentials are credentials for Elastic CLoud
-type ECCredentials struct {
-	ECApiKey string `yaml:"ecApiKey"`
-}
-
-// CustomCredentials are credentials for custom (you self)
-type CustomCredentials map[string]string
-
 // GetProviderCredentials gets provider credentials by cloud provider name
 func GetProviderCredentials(ctx context.Context, k8sClient client.Client, provider *v1beta1.Provider, region string) (map[string]string, error) {
 	switch provider.Spec.Credentials.Source {
 	case "Secret":
 		var secret v1.Secret
 		secretRef := provider.Spec.Credentials.SecretRef
-		if err := k8sClient.Get(ctx, client.ObjectKey{Name: secretRef.Name, Namespace: secretRef.Namespace}, &secret); err != nil {
+		name := secretRef.Name
+		namespace := secretRef.Namespace
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: name, Namespace: namespace}, &secret); err != nil {
 			errMsg := "failed to get the Secret from Provider"
-			klog.ErrorS(err, errMsg, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
+			klog.ErrorS(err, errMsg, "Name", name, "Namespace", namespace)
 			return nil, errors.Wrap(err, errMsg)
+		}
+		secretData, ok := secret.Data[secretRef.Key]
+		if !ok {
+			return nil, errors.Errorf("in the provider %s, the key %s not found in the referenced secret %s", provider.Name, secretRef.Key, name)
 		}
 		switch provider.Spec.Provider {
 		case string(alibaba):
 			var ak AlibabaCloudCredentials
 			if err := yaml.Unmarshal(secret.Data[secretRef.Key], &ak); err != nil {
-				klog.ErrorS(err, errConvertCredentials, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
+				klog.ErrorS(err, errConvertCredentials, "Name", name, "Namespace", namespace)
 				return nil, errors.Wrap(err, errConvertCredentials)
 			}
 			if err := checkAlibabaCloudCredentials(region, ak.AccessKeyID, ak.AccessKeySecret, ak.SecurityToken); err != nil {
@@ -163,91 +89,23 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, provid
 				envAliCloudStsToken:  ak.SecurityToken,
 			}, nil
 		case string(ucloud):
-			var ak UCloudCredentials
-			if err := yaml.Unmarshal(secret.Data[secretRef.Key], &ak); err != nil {
-				klog.ErrorS(err, errConvertCredentials, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
-				return nil, errors.Wrap(err, errConvertCredentials)
-			}
-			return map[string]string{
-				envUCloudPublicKey:  ak.PublicKey,
-				envUCloudPrivateKey: ak.PrivateKey,
-				envUCloudRegion:     ak.Region,
-				envUCloudProjectID:  ak.ProjectID,
-			}, nil
+			return getUCloudCredentials(secretData, name, namespace)
 		case string(aws):
-			var ak AWSCredentials
-			if err := yaml.Unmarshal(secret.Data[secretRef.Key], &ak); err != nil {
-				klog.ErrorS(err, errConvertCredentials, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
-				return nil, errors.Wrap(err, errConvertCredentials)
-			}
-			return map[string]string{
-				envAWSAccessKeyID:     ak.AWSAccessKeyID,
-				envAWSSecretAccessKey: ak.AWSSecretAccessKey,
-				envAWSSessionToken:    ak.AWSSessionToken,
-				envAWSDefaultRegion:   region,
-			}, nil
+			return getAWSCredentials(secretData, name, namespace, region)
 		case string(gcp):
-			var ak GCPCredentials
-			if err := yaml.Unmarshal(secret.Data[secretRef.Key], &ak); err != nil {
-				klog.ErrorS(err, errConvertCredentials, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
-				return nil, errors.Wrap(err, errConvertCredentials)
-			}
-			return map[string]string{
-				envGCPCredentialsJSON: ak.GCPCredentialsJSON,
-				envGCPProject:         ak.GCPProject,
-				envGCPRegion:          region,
-			}, nil
-		case string(qcloud):
-			var cred TencentCloudCredentials
-			if err := yaml.Unmarshal(secret.Data[secretRef.Key], &cred); err != nil {
-				klog.ErrorS(err, errConvertCredentials, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
-				return nil, errors.Wrap(err, errConvertCredentials)
-			}
-			return map[string]string{
-				envQCloudSecretID:  cred.SecretID,
-				envQCloudSecretKey: cred.SecretKey,
-				envQCloudRegion:    region,
-			}, nil
+			return getGCPCredentials(secretData, name, namespace, region)
+		case string(tencent):
+			return getTencentCloudCredentials(secretData, name, namespace, region)
 		case string(azure):
-			var cred AzureCredentials
-			if err := yaml.Unmarshal(secret.Data[secretRef.Key], &cred); err != nil {
-				klog.ErrorS(err, errConvertCredentials, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
-				return nil, errors.Wrap(err, errConvertCredentials)
-			}
-			return map[string]string{
-				envARMClientID:       cred.ARMClientID,
-				envARMClientSecret:   cred.ARMClientSecret,
-				envARMSubscriptionID: cred.ARMSubscriptionID,
-				envARMTenantID:       cred.ARMTenantID,
-			}, nil
+			return getAzureCredentials(secretData, name, namespace)
 		case string(vsphere):
-			var cred VSphereCredentials
-			if err := yaml.Unmarshal(secret.Data[secretRef.Key], &cred); err != nil {
-				klog.ErrorS(err, errConvertCredentials, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
-				return nil, errors.Wrap(err, errConvertCredentials)
-			}
-			return map[string]string{
-				envVSphereUser:               cred.VSphereUser,
-				envVSpherePassword:           cred.VSpherePassword,
-				envVSphereServer:             cred.VSphereServer,
-				envVSphereAllowUnverifiedSSL: cred.VSphereAllowUnverifiedSSL,
-			}, nil
+			return getVSphereCredentials(secretData, name, namespace)
 		case string(ec):
-			var ak ECCredentials
-			if err := yaml.Unmarshal(secret.Data[secretRef.Key], &ak); err != nil {
-				klog.ErrorS(err, errConvertCredentials, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
-				return nil, errors.Wrap(err, errConvertCredentials)
-			}
-			return map[string]string{
-				envECApiKey: ak.ECApiKey,
-			}, nil
+			return getECCloudCredentials(secretData, name, namespace)
 		case string(custom):
-			var ck = make(CustomCredentials)
-			if err := yaml.Unmarshal(secret.Data[secretRef.Key], &ck); err != nil {
-				klog.ErrorS(err, errConvertCredentials, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
-				return nil, errors.Wrap(err, errConvertCredentials)
-			}
-			return ck, nil
+			return getCustomCredentials(secretData, name, namespace)
+		case string(baidu):
+			return getBaiduCloudCredentials(secretData, name, namespace, region)
 		default:
 			errMsg := "unsupported provider"
 			klog.InfoS(errMsg, "Provider", provider.Spec.Provider)

@@ -12,7 +12,7 @@ import (
 	"k8s.io/klog/v2"
 )
 
-func getPodLog(ctx context.Context, client kubernetes.Interface, namespace, jobName string) (string, error) {
+func getPodLog(ctx context.Context, client kubernetes.Interface, namespace, jobName, containerName string) (string, error) {
 	label := fmt.Sprintf("job-name=%s", jobName)
 	pods, err := client.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: label})
 	if err != nil || pods == nil || len(pods.Items) == 0 {
@@ -25,7 +25,7 @@ func getPodLog(ctx context.Context, client kubernetes.Interface, namespace, jobN
 		return "", nil
 	}
 
-	req := client.CoreV1().Pods(namespace).GetLogs(pod.Name, &v1.PodLogOptions{})
+	req := client.CoreV1().Pods(namespace).GetLogs(pod.Name, &v1.PodLogOptions{Container: containerName})
 	logs, err := req.Stream(ctx)
 	if err != nil {
 		return "", err
@@ -37,12 +37,16 @@ func getPodLog(ctx context.Context, client kubernetes.Interface, namespace, jobN
 		}
 	}(logs)
 
+	return flushStream(logs, pod.Name)
+}
+
+func flushStream(rc io.ReadCloser, podName string) (string, error) {
 	var buf = &bytes.Buffer{}
-	_, err = io.Copy(buf, logs)
+	_, err := io.Copy(buf, rc)
 	if err != nil {
 		return "", err
 	}
 	logContent := buf.String()
-	klog.V(4).Info("pod logs", "Pod", pod.Name, "Logs", logContent)
+	klog.V(4).Info("pod logs", "Pod", podName, "Logs", logContent)
 	return logContent, nil
 }

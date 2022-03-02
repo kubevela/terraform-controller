@@ -15,7 +15,6 @@ func TestRawExtension2Map(t *testing.T) {
 	}
 
 	type Spec struct {
-		// +kubebuilder:pruning:PreserveUnknownFields
 		Variable *runtime.RawExtension `json:"variable,omitempty"`
 	}
 
@@ -55,6 +54,12 @@ Variable:
 				err:    nil,
 			},
 		},
+		"nil": {
+			want: want{
+				result: nil,
+				err:    nil,
+			},
+		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -62,8 +67,46 @@ Variable:
 			err := yaml.Unmarshal([]byte(tc.variable), &spec)
 			assert.NilError(t, err)
 			result, err := RawExtension2Map(spec.Variable)
-			assert.Equal(t, tc.want.err, err)
-			assert.DeepEqual(t, tc.want.result, result["k"])
+			if tc.want.err != nil {
+				assert.Error(t, err, tc.want.err.Error())
+			} else {
+				assert.Equal(t, tc.want.err, err)
+				assert.DeepEqual(t, tc.want.result, result["k"])
+			}
+		})
+	}
+}
+
+func TestRawExtension2Map2(t *testing.T) {
+	type args struct {
+		raw *runtime.RawExtension
+	}
+	type want struct {
+		errMessage string
+	}
+
+	cases := map[string]struct {
+		args args
+		want want
+	}{
+		"bad raw": {
+			args: args{
+				raw: &runtime.RawExtension{
+					Raw: []byte("xxx"),
+				},
+			},
+			want: want{
+				errMessage: "invalid character 'x' looking for beginning of value",
+			},
+		}}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			_, err := RawExtension2Map(tc.args.raw)
+			if tc.want.errMessage != "" {
+				assert.Error(t, err, tc.want.errMessage)
+			} else {
+				assert.NilError(t, err)
+			}
 		})
 	}
 }

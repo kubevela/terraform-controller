@@ -2,9 +2,12 @@ package terraform
 
 import (
 	"context"
+	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/agiledragon/gomonkey/v2"
@@ -21,9 +24,10 @@ import (
 func TestGetPodLog(t *testing.T) {
 	ctx := context.Background()
 	type args struct {
-		client    kubernetes.Interface
-		namespace string
-		name      string
+		client        kubernetes.Interface
+		namespace     string
+		name          string
+		containerName string
 	}
 	type want struct {
 		log    string
@@ -74,9 +78,10 @@ func TestGetPodLog(t *testing.T) {
 		{
 			name: "Pod is available, but no logs",
 			args: args{
-				client:    k8sClientSet,
-				namespace: "default",
-				name:      "j1",
+				client:        k8sClientSet,
+				namespace:     "default",
+				name:          "j1",
+				containerName: "terraform-executor",
 			},
 			want: want{
 				errMsg: "can not be accept",
@@ -85,7 +90,7 @@ func TestGetPodLog(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := getPodLog(ctx, tc.args.client, tc.args.namespace, tc.args.name)
+			got, err := getPodLog(ctx, tc.args.client, tc.args.namespace, tc.args.name, tc.args.containerName)
 			if tc.want.errMsg != "" {
 				assert.EqualError(t, err, tc.want.errMsg)
 			} else {
@@ -94,5 +99,40 @@ func TestGetPodLog(t *testing.T) {
 			}
 		})
 	}
+}
 
+func TestFlushStream(t *testing.T) {
+	type args struct {
+		rc   io.ReadCloser
+		name string
+	}
+	type want struct {
+		errMsg string
+	}
+
+	var testcases = []struct {
+		name string
+		args args
+		want want
+	}{
+		{
+			name: "Flush stream",
+			args: args{
+				rc:   ioutil.NopCloser(strings.NewReader("xxx")),
+				name: "p1",
+			},
+			want: want{},
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			logs, err := flushStream(tc.args.rc, tc.args.name)
+			if tc.want.errMsg != "" {
+				assert.Contains(t, err.Error(), tc.want.errMsg)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, "xxx", logs)
+			}
+		})
+	}
 }

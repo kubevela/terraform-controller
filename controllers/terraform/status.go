@@ -12,7 +12,7 @@ import (
 )
 
 // GetTerraformStatus will get Terraform execution status
-func GetTerraformStatus(ctx context.Context, namespace, jobName string) (types.ConfigurationState, error) {
+func GetTerraformStatus(ctx context.Context, namespace, jobName, containerName string) (types.ConfigurationState, error) {
 	klog.InfoS("checking Terraform execution status", "Namespace", namespace, "Job", jobName)
 	clientSet, err := client.Init()
 	if err != nil {
@@ -20,7 +20,7 @@ func GetTerraformStatus(ctx context.Context, namespace, jobName string) (types.C
 		return types.ConfigurationProvisioningAndChecking, err
 	}
 
-	logs, err := getPodLog(ctx, clientSet, namespace, jobName)
+	logs, err := getPodLog(ctx, clientSet, namespace, jobName, containerName)
 	if err != nil {
 		klog.ErrorS(err, "failed to get pod logs")
 		return types.ConfigurationProvisioningAndChecking, err
@@ -40,7 +40,7 @@ func analyzeTerraformLog(logs string) (bool, types.ConfigurationState, string) {
 		if strings.Contains(line, "31mError:") {
 			errMsg := strings.Join(lines[i:], "\n")
 			if strings.Contains(errMsg, "Invalid Alibaba Cloud region") {
-				return false, types.InvalidRegion, line
+				return false, types.InvalidRegion, errMsg
 			}
 			return false, types.ConfigurationApplyFailed, errMsg
 		}
