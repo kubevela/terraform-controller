@@ -443,7 +443,7 @@ func TestTerraformDestroy(t *testing.T) {
 				meta: &TFConfigurationMeta{
 					ConfigurationCMName: "tf-abc",
 					Namespace:           "default",
-					DeleteResource:      true,
+					DeleteResource:      &[]bool{true}[0],
 				},
 			},
 			want: want{

@@ -201,7 +201,7 @@ type TFConfigurationMeta struct {
 	ProviderReference     *crossplane.Reference
 	VariableSecretName    string
 	VariableSecretData    map[string][]byte
-	DeleteResource        bool
+	DeleteResource        *bool
 	Credentials           map[string]string
 
 	// TerraformImage is the Terraform image which can run `terraform init/plan/apply`
@@ -298,7 +298,7 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, namespac
 		return err
 	}
 
-	deleteConfigurationDirectly := deletable || !meta.DeleteResource
+	deleteConfigurationDirectly := deletable || !(meta.DeleteResource != nil && *(*bool)(meta.DeleteResource))
 
 	if !deleteConfigurationDirectly {
 		if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.DestroyJobName, Namespace: meta.Namespace}, &destroyJob); err != nil {
