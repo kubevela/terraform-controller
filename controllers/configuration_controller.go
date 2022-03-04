@@ -701,9 +701,32 @@ func (meta *TFConfigurationMeta) createTFBackendVolume() v1.Volume {
 	return gitVolume
 }
 
+// TfStateProperty is the tf state property for an output
+type TfStateProperty struct {
+	Value interface{} `json:"value,omitempty"`
+	Type  string      `json:"type,omitempty"`
+}
+
+// ToProperty converts TfStateProperty type to Property
+func (tp *TfStateProperty) ToProperty() (v1beta1.Property, error) {
+	var (
+		property v1beta1.Property
+		err      error
+	)
+	sv, err := tfcfg.Interface2String(tp.Value)
+	if err != nil {
+		return property, errors.Wrap(err, "failed to get terraform state outputs")
+	}
+	property = v1beta1.Property{
+		Type:  tp.Type,
+		Value: sv,
+	}
+	return property, err
+}
+
 // TFState is Terraform State
 type TFState struct {
-	Outputs map[string]v1beta1.Property `json:"outputs"`
+	Outputs map[string]TfStateProperty `json:"outputs"`
 }
 
 //nolint:funlen
@@ -726,8 +749,14 @@ func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient cli
 	if err := json.Unmarshal(tfStateJSON, &tfState); err != nil {
 		return nil, err
 	}
-
-	outputs := tfState.Outputs
+	outputs := make(map[string]v1beta1.Property)
+	for k, v := range tfState.Outputs {
+		property, err := v.ToProperty()
+		if err != nil {
+			return outputs, err
+		}
+		outputs[k] = property
+	}
 	writeConnectionSecretToReference := configuration.Spec.WriteConnectionSecretToReference
 	if writeConnectionSecretToReference == nil || writeConnectionSecretToReference.Name == "" {
 		return outputs, nil

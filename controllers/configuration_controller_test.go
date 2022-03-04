@@ -479,3 +479,41 @@ func TestAssembleTerraformJob(t *testing.T) {
 	assert.Equal(t, containers[0].Image, "c")
 	assert.Equal(t, containers[1].Image, "d")
 }
+
+func TestTfStatePropertyToToProperty(t *testing.T) {
+	testcases := []TfStateProperty{
+		{
+			Value: 123,
+			Type:  "b",
+		},
+		{
+			Value: 123.1,
+			Type:  "b",
+		},
+		{
+			Value: "123",
+			Type:  "b",
+		},
+		{
+			Value: true,
+			Type:  "b",
+		},
+		{
+			Value: []interface{}{"21", "aaa", 12, true},
+			Type:  "b",
+		},
+	}
+	for _, testcase := range testcases {
+		property, err := testcase.ToProperty()
+		assert.Equal(t, err, nil)
+		if testcase.Value == 123 {
+			assert.Equal(t, property.Value, "123")
+		}
+		if testcase.Value == 123.1 {
+			assert.Equal(t, property.Value, "123.1")
+		}
+		if testcase.Value == true {
+			assert.Equal(t, property.Value, "true")
+		}
+	}
+}
