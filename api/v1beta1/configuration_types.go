@@ -79,19 +79,13 @@ type ConfigurationStatus struct {
 type ConfigurationApplyStatus struct {
 	State   state.ConfigurationState `json:"state,omitempty"`
 	Message string                   `json:"message,omitempty"`
-	Outputs map[string]Property      `json:"outputs,omitempty"`
+	Outputs *runtime.RawExtension    `json:"outputs,omitempty"`
 }
 
 // ConfigurationDestroyStatus is the status for Configuration destroy
 type ConfigurationDestroyStatus struct {
 	State   state.ConfigurationState `json:"state,omitempty"`
 	Message string                   `json:"message,omitempty"`
-}
-
-// Property is the property for an output
-type Property struct {
-	Value string `json:"value,omitempty"`
-	Type  string `json:"type,omitempty"`
 }
 
 // Backend stores the state in a Kubernetes secret with locking done using a Lease resource.

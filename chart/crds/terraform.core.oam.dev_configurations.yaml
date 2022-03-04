@@ -125,15 +125,8 @@ spec:
                   message:
                     type: string
                   outputs:
-                    additionalProperties:
-                      description: Property is the property for an output
-                      properties:
-                        type:
-                          type: string
-                        value:
-                          type: string
-                      type: object
                     type: object
+                    x-kubernetes-preserve-unknown-fields: true
                   state:
                     description: A ConfigurationState represents the status of a resource
                     type: string

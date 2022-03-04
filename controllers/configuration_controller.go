@@ -701,13 +701,19 @@ func (meta *TFConfigurationMeta) createTFBackendVolume() v1.Volume {
 	return gitVolume
 }
 
+// TfStateProperty is the tf state property for an output
+type TfStateProperty struct {
+	Value interface{} `json:"value,omitempty"`
+	Type  string      `json:"type,omitempty"`
+}
+
 // TFState is Terraform State
 type TFState struct {
-	Outputs map[string]v1beta1.Property `json:"outputs"`
+	Outputs map[string]TfStateProperty `json:"outputs"`
 }
 
 //nolint:funlen
-func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient client.Client, configuration v1beta1.Configuration) (map[string]v1beta1.Property, error) {
+func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient client.Client, configuration v1beta1.Configuration) (*runtime.RawExtension, error) {
 	var s = v1.Secret{}
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.BackendSecretName, Namespace: meta.TerraformBackendNamespace}, &s); err != nil {
 		return nil, errors.Wrap(err, "terraform state file backend secret is not generated")
@@ -726,8 +732,11 @@ func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient cli
 	if err := json.Unmarshal(tfStateJSON, &tfState); err != nil {
 		return nil, err
 	}
-
-	outputs := tfState.Outputs
+	b, err := json.Marshal(tfState.Outputs)
+	if err != nil {
+		return nil, err
+	}
+	outputs := &runtime.RawExtension{Raw: b}
 	writeConnectionSecretToReference := configuration.Spec.WriteConnectionSecretToReference
 	if writeConnectionSecretToReference == nil || writeConnectionSecretToReference.Name == "" {
 		return outputs, nil
@@ -739,8 +748,12 @@ func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient cli
 		ns = "default"
 	}
 	data := make(map[string][]byte)
-	for k, v := range outputs {
-		data[k] = []byte(v.Value)
+	for k, v := range tfState.Outputs {
+		outputValue, err := tfcfg.Interface2String(v.Value)
+		if err != nil {
+			return outputs, err
+		}
+		data[k] = []byte(outputValue)
 	}
 	var gotSecret v1.Secret
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: name, Namespace: ns}, &gotSecret); err != nil {
