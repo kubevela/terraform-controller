@@ -158,6 +158,11 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			}
 			return ctrl.Result{RequeueAfter: 3 * time.Second}, errors.Wrap(err, "continue reconciling to destroy cloud resource")
 		}
+
+		configuration, err := tfcfg.Get(ctx, r.Client, req.NamespacedName)
+		if err != nil {
+			return ctrl.Result{}, client.IgnoreNotFound(err)
+		}
 		if controllerutil.ContainsFinalizer(&configuration, configurationFinalizer) {
 			controllerutil.RemoveFinalizer(&configuration, configurationFinalizer)
 			if err := r.Update(ctx, &configuration); err != nil {
@@ -324,6 +329,9 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, namespac
 	}
 
 	// When the deletion Job process succeeded, clean up work is starting.
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.DestroyJobName, Namespace: meta.Namespace}, &destroyJob); err != nil {
+		return err
+	}
 	if destroyJob.Status.Succeeded == int32(1) || deleteConfigurationDirectly {
 		// 1. delete Terraform input Configuration ConfigMap
 		if err := meta.deleteConfigMap(ctx, k8sClient); err != nil {
