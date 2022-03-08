@@ -764,6 +764,57 @@ func TestAssembleTerraformJob(t *testing.T) {
 	assert.Equal(t, containers[1].Image, "d")
 }
 
+func TestTfStatePropertyToToProperty(t *testing.T) {
+	testcases := []TfStateProperty{
+		{
+			Value: 123,
+			Type:  "integer",
+		},
+		{
+			Value: 123.1,
+			Type:  "float64",
+		},
+		{
+			Value: "123",
+			Type:  "string",
+		},
+		{
+			Value: true,
+			Type:  "bool",
+		},
+		{
+			Value: []interface{}{"21", "aaa", 12, true},
+			Type:  "slice",
+		},
+		{
+			Value: map[string]interface{}{
+				"test1": "abc",
+				"test2": 123,
+			},
+			Type: "map",
+		},
+	}
+	for _, testcase := range testcases {
+		property, err := testcase.ToProperty()
+		assert.Equal(t, err, nil)
+		if testcase.Type == "integer" {
+			assert.Equal(t, property.Value, "123")
+		}
+		if testcase.Type == "float64" {
+			assert.Equal(t, property.Value, "123.1")
+		}
+		if testcase.Type == "bool" {
+			assert.Equal(t, property.Value, "true")
+		}
+		if testcase.Type == "slice" {
+			assert.Equal(t, property.Value, `["21","aaa",12,true]`)
+		}
+		if testcase.Type == "map" {
+			assert.Equal(t, property.Value, `{"test1":"abc","test2":123}`)
+		}
+	}
+}
+
 func TestGetTFOutputs(t *testing.T) {
 	type args struct {
 		ctx           context.Context
