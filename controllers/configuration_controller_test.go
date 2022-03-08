@@ -309,12 +309,23 @@ func TestConfigurationReconcile(t *testing.T) {
 			HCL: "c",
 		},
 	}
-	configuration2.Spec.ProviderReference = &crossplane.Reference{
+	configuration3.Spec.ProviderReference = &crossplane.Reference{
 		Name:      "default",
 		Namespace: "default",
 	}
+
+	destroyJob3 := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "a-destroy",
+			Namespace: req.Namespace,
+		},
+		Status: batchv1.JobStatus{
+			Succeeded: int32(1),
+		},
+	}
+
 	r3 := &ConfigurationReconciler{}
-	r3.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(secret, provider, configuration3).Build()
+	r3.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(secret, provider, configuration3, destroyJob3).Build()
 
 	type args struct {
 		req reconcile.Request
