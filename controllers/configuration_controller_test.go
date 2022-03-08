@@ -327,6 +327,69 @@ func TestConfigurationReconcile(t *testing.T) {
 	r3 := &ConfigurationReconciler{}
 	r3.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(secret, provider, configuration3, destroyJob3).Build()
 
+	configuration4 := &v1beta1.Configuration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "a",
+			Namespace:         "b",
+			DeletionTimestamp: &time,
+			Finalizers:        []string{configurationFinalizer},
+		},
+		Spec: v1beta1.ConfigurationSpec{
+			HCL: "c",
+		},
+		Status: v1beta1.ConfigurationStatus{
+			Apply: v1beta1.ConfigurationApplyStatus{
+				State: types.ConfigurationProvisioningAndChecking,
+			},
+		},
+	}
+	configuration4.Spec.ProviderReference = &crossplane.Reference{
+		Name:      "default",
+		Namespace: "default",
+	}
+
+	destroyJob4 := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "a-destroy",
+			Namespace: req.Namespace,
+		},
+		Status: batchv1.JobStatus{
+			Succeeded: int32(1),
+		},
+	}
+
+	r4 := &ConfigurationReconciler{}
+	r4.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(secret, provider, configuration4, destroyJob4).Build()
+
+	configuration5 := &v1beta1.Configuration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "a",
+			Namespace:         "b",
+			DeletionTimestamp: &time,
+			Finalizers:        []string{configurationFinalizer},
+		},
+		Spec: v1beta1.ConfigurationSpec{
+			HCL: "c",
+		},
+	}
+	configuration5.Spec.ProviderReference = &crossplane.Reference{
+		Name:      "default",
+		Namespace: "default",
+	}
+
+	destroyJob5 := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "a-destroy",
+			Namespace: req.Namespace,
+		},
+		Status: batchv1.JobStatus{
+			Succeeded: int32(1),
+		},
+	}
+
+	r5 := &ConfigurationReconciler{}
+	r5.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(secret, provider, configuration5, destroyJob5).Build()
+
 	type args struct {
 		req reconcile.Request
 		r   *ConfigurationReconciler
@@ -360,6 +423,23 @@ func TestConfigurationReconcile(t *testing.T) {
 			args: args{
 				req: req,
 				r:   r3,
+			},
+		},
+		{
+			name: "Configuration is deleting, but failed to delete",
+			args: args{
+				req: req,
+				r:   r4,
+			},
+			want: want{
+				errMsg: "Destroy could not complete and needs to wait for Provision to complete first: Cloud resources are being provisioned and provisioning status is checking...",
+			},
+		},
+		{
+			name: "Configuration is deleting, and succeeded to delete",
+			args: args{
+				req: req,
+				r:   r5,
 			},
 		},
 	}
@@ -704,7 +784,7 @@ func TestTerraformDestroy(t *testing.T) {
 				},
 			},
 			want: want{
-				errMsg: "The referenced provider could not be retrieved",
+				errMsg: "jobs.batch \"\" not found",
 			},
 		},
 		{
