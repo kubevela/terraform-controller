@@ -71,6 +71,11 @@ type BaseConfigurationSpec struct {
 
 // ConfigurationStatus defines the observed state of Configuration
 type ConfigurationStatus struct {
+	// observedGeneration is the most recent generation observed for this Configuration. It corresponds to the
+	// Configuration's generation, which is updated on mutation by the API Server.
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
 	Apply   ConfigurationApplyStatus   `json:"apply,omitempty"`
 	Destroy ConfigurationDestroyStatus `json:"destroy,omitempty"`
 }

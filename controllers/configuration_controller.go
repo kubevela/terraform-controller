@@ -133,7 +133,7 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	var tfExecutionJob = &batchv1.Job{}
 	if err := r.Client.Get(ctx, client.ObjectKey{Name: meta.ApplyJobName, Namespace: meta.Namespace}, tfExecutionJob); err == nil {
-		if tfExecutionJob.Status.Succeeded == int32(1) {
+		if !meta.EnvChanged && tfExecutionJob.Status.Succeeded == int32(1) {
 			if err := meta.updateApplyStatus(ctx, r.Client, types.Available, types.MessageCloudResourceDeployed); err != nil {
 				return ctrl.Result{}, err
 			}
@@ -195,6 +195,7 @@ type TFConfigurationMeta struct {
 	RemoteGit             string
 	RemoteGitPath         string
 	ConfigurationChanged  bool
+	EnvChanged            bool
 	ConfigurationCMName   string
 	BackendSecretName     string
 	ApplyJobName          string
@@ -272,7 +273,7 @@ func (r *ConfigurationReconciler) terraformApply(ctx context.Context, namespace 
 		return errors.Wrap(err, types.ErrUpdateTerraformApplyJob)
 	}
 
-	if tfExecutionJob.Status.Succeeded == int32(1) {
+	if !meta.EnvChanged && tfExecutionJob.Status.Succeeded == int32(1) {
 		if err := meta.updateApplyStatus(ctx, k8sClient, types.Available, types.MessageCloudResourceDeployed); err != nil {
 			return err
 		}
@@ -453,6 +454,28 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 		return err
 	}
 
+	// Check whether env changes
+	if err := meta.prepareTFVariables(configuration); err != nil {
+		return err
+	}
+
+	var variableInSecret v1.Secret
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.VariableSecretName, Namespace: meta.Namespace}, &variableInSecret); err == nil {
+		for k, v := range variableInSecret.Data {
+			if val, ok := meta.VariableSecretData[k]; !ok || !bytes.Equal(v, val) {
+				meta.EnvChanged = true
+				klog.Info("Job's env changed")
+				if err := meta.updateApplyStatus(ctx, k8sClient, types.ConfigurationReloading, types.ConfigurationReloadingAsVariableChanged); err != nil {
+					return err
+				}
+
+				break
+			}
+		}
+	} else if !kerrors.IsNotFound(err) {
+		return err
+	}
+
 	// Apply ClusterRole
 	return createTerraformExecutorClusterRole(ctx, k8sClient, fmt.Sprintf("%s-%s", meta.Namespace, ClusterRoleName))
 }
@@ -464,6 +487,7 @@ func (meta *TFConfigurationMeta) updateApplyStatus(ctx context.Context, k8sClien
 			State:   state,
 			Message: message,
 		}
+		configuration.Status.ObservedGeneration = configuration.Generation
 		if state == types.Available {
 			outputs, err := meta.getTFOutputs(ctx, k8sClient, configuration)
 			if err != nil {
@@ -531,31 +555,11 @@ func (meta *TFConfigurationMeta) assembleAndTriggerJob(ctx context.Context, k8sC
 
 // updateTerraformJob will set deletion finalizer to the Terraform job if its envs are changed, which will result in
 // deleting the job. Finally, a new Terraform job will be generated
-func (meta *TFConfigurationMeta) updateTerraformJobIfNeeded(ctx context.Context, k8sClient client.Client, configuration v1beta1.Configuration,
+func (meta *TFConfigurationMeta) updateTerraformJobIfNeeded(ctx context.Context, k8sClient client.Client, _ v1beta1.Configuration,
 	job batchv1.Job) error {
-	if err := meta.prepareTFVariables(&configuration); err != nil {
-		return err
-	}
-
-	// check whether env changes
-	var variableInSecret v1.Secret
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.VariableSecretName, Namespace: meta.Namespace}, &variableInSecret); err != nil {
-		return err
-	}
-
-	var envChanged bool
-	for k, v := range variableInSecret.Data {
-		if val, ok := meta.VariableSecretData[k]; !ok || !bytes.Equal(v, val) {
-			envChanged = true
-			klog.Info("Job's env changed")
-			if err := meta.updateApplyStatus(ctx, k8sClient, types.ConfigurationReloading, types.ConfigurationReloadingAsVariableChanged); err != nil {
-				return err
-			}
-		}
-	}
 
 	// if either one changes, delete the job
-	if envChanged || meta.ConfigurationChanged {
+	if meta.EnvChanged || meta.ConfigurationChanged {
 		klog.InfoS("about to delete job", "Name", job.Name, "Namespace", job.Namespace)
 		var j batchv1.Job
 		if err := k8sClient.Get(ctx, client.ObjectKey{Name: job.Name, Namespace: job.Namespace}, &j); err == nil {
