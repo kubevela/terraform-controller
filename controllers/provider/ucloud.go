@@ -1,9 +1,7 @@
 package provider
 
 import (
-	"github.com/go-yaml/yaml"
 	"github.com/pkg/errors"
-	"k8s.io/klog/v2"
 )
 
 const (
