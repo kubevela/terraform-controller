@@ -1,0 +1,26 @@
+apiVersion: terraform.core.oam.dev/v1beta2
+kind: Configuration
+metadata:
+  name: aws-emr
+spec:
+  remote: https://github.com/cloudposse/terraform-aws-emr-cluster.git
+
+  variable:
+    name: "anoop-emr-tf-component"
+    region: "us-east-2"
+    vpc_id: "xxxx"
+    subnet_id: "xxxxxx"
+    applications:
+      - "Spark"
+    core_instance_group_instance_type: "m4.large"
+    core_instance_group_ebs_size: 1
+    master_instance_group_instance_type: "m4.large"
+    master_instance_group_ebs_size: 1
+
+  writeConnectionSecretToRef:
+      name: anoop-emr-details
+      namespace: default
+
+  providerRef:
+    name: aws
+    namespace: default
