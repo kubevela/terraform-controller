@@ -2,6 +2,8 @@ package provider
 
 import (
 	"github.com/pkg/errors"
+	"gopkg.in/yaml.v2"
+	"k8s.io/klog/v2"
 )
 
 const (
