@@ -26,7 +26,7 @@ import (
 	"github.com/Masterminds/sprig/v3"
 	"k8s.io/apimachinery/pkg/runtime"
 
-	"github.com/oam-dev/terraform-controller/api/v1beta1"
+	"github.com/oam-dev/terraform-controller/api/v1beta2"
 )
 
 var backendTF = `
@@ -64,7 +64,7 @@ type backendVars struct {
 }
 
 // RenderTemplate renders Backend template
-func RenderTemplate(backend *v1beta1.Backend, namespace string) (string, error) {
+func RenderTemplate(backend *v1beta2.Backend, namespace string) (string, error) {
 	tmpl, err := template.New("backend").Funcs(template.FuncMap(sprig.FuncMap())).Parse(backendTF)
 	if err != nil {
 		return "", err
@@ -96,11 +96,11 @@ func Interface2String(v interface{}) (string, error) {
 	case bool:
 		value = strconv.FormatBool(v)
 	default:
-		valuejson, err := json.Marshal(v)
+		valueJSON, err := json.Marshal(v)
 		if err != nil {
 			return "", fmt.Errorf("cloud not convert %v to string", v)
 		}
-		value = string(valuejson)
+		value = string(valueJSON)
 	}
 	return value, nil
 }

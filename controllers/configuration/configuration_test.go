@@ -2,10 +2,10 @@ package configuration
 
 import (
 	"context"
-	"github.com/stretchr/testify/assert"
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -14,11 +14,12 @@ import (
 	"github.com/oam-dev/terraform-controller/api/types"
 	crossplane "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
+	"github.com/oam-dev/terraform-controller/api/v1beta2"
 )
 
 func TestValidConfigurationObject(t *testing.T) {
 	type args struct {
-		configuration *v1beta1.Configuration
+		configuration *v1beta2.Configuration
 	}
 	type want struct {
 		configurationType types.ConfigurationType
@@ -33,8 +34,8 @@ func TestValidConfigurationObject(t *testing.T) {
 		{
 			name: "hcl",
 			args: args{
-				configuration: &v1beta1.Configuration{
-					Spec: v1beta1.ConfigurationSpec{
+				configuration: &v1beta2.Configuration{
+					Spec: v1beta2.ConfigurationSpec{
 						HCL: "abc",
 					},
 				},
@@ -46,8 +47,8 @@ func TestValidConfigurationObject(t *testing.T) {
 		{
 			name: "remote",
 			args: args{
-				configuration: &v1beta1.Configuration{
-					Spec: v1beta1.ConfigurationSpec{
+				configuration: &v1beta2.Configuration{
+					Spec: v1beta2.ConfigurationSpec{
 						Remote: "def",
 					},
 				},
@@ -59,8 +60,8 @@ func TestValidConfigurationObject(t *testing.T) {
 		{
 			name: "json",
 			args: args{
-				configuration: &v1beta1.Configuration{
-					Spec: v1beta1.ConfigurationSpec{
+				configuration: &v1beta2.Configuration{
+					Spec: v1beta2.ConfigurationSpec{
 						JSON: "abc",
 					},
 				},
@@ -72,8 +73,8 @@ func TestValidConfigurationObject(t *testing.T) {
 		{
 			name: "remote and hcl are set",
 			args: args{
-				configuration: &v1beta1.Configuration{
-					Spec: v1beta1.ConfigurationSpec{
+				configuration: &v1beta2.Configuration{
+					Spec: v1beta2.ConfigurationSpec{
 						HCL:    "abc",
 						Remote: "def",
 					},
@@ -87,8 +88,8 @@ func TestValidConfigurationObject(t *testing.T) {
 		{
 			name: "remote and hcl are not set",
 			args: args{
-				configuration: &v1beta1.Configuration{
-					Spec: v1beta1.ConfigurationSpec{},
+				configuration: &v1beta2.Configuration{
+					Spec: v1beta2.ConfigurationSpec{},
 				},
 			},
 			want: want{
@@ -115,7 +116,7 @@ func TestValidConfigurationObject(t *testing.T) {
 
 func TestRenderConfiguration(t *testing.T) {
 	type args struct {
-		configuration     *v1beta1.Configuration
+		configuration     *v1beta2.Configuration
 		ns                string
 		configurationType types.ConfigurationType
 	}
@@ -132,9 +133,9 @@ func TestRenderConfiguration(t *testing.T) {
 		{
 			name: "backend is not nil, configuration is hcl",
 			args: args{
-				configuration: &v1beta1.Configuration{
-					Spec: v1beta1.ConfigurationSpec{
-						Backend: &v1beta1.Backend{},
+				configuration: &v1beta2.Configuration{
+					Spec: v1beta2.ConfigurationSpec{
+						Backend: &v1beta2.Backend{},
 						HCL:     "abc",
 					},
 				},
@@ -157,8 +158,8 @@ terraform {
 		{
 			name: "backend is nil, configuration is remote",
 			args: args{
-				configuration: &v1beta1.Configuration{
-					Spec: v1beta1.ConfigurationSpec{
+				configuration: &v1beta2.Configuration{
+					Spec: v1beta2.ConfigurationSpec{
 						Remote: "https://github.com/a/b.git",
 					},
 				},
@@ -180,8 +181,8 @@ terraform {
 		{
 			name: "backend is nil, configuration is not supported",
 			args: args{
-				configuration: &v1beta1.Configuration{
-					Spec: v1beta1.ConfigurationSpec{},
+				configuration: &v1beta2.Configuration{
+					Spec: v1beta2.ConfigurationSpec{},
 				},
 				ns: "vela-system",
 			},
@@ -258,6 +259,7 @@ func TestIsDeletable(t *testing.T) {
 	ctx := context.Background()
 	s := runtime.NewScheme()
 	v1beta1.AddToScheme(s)
+	v1beta2.AddToScheme(s)
 	provider2 := &v1beta1.Provider{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "default",
@@ -281,7 +283,7 @@ func TestIsDeletable(t *testing.T) {
 	k8sClient3 := fake.NewClientBuilder().WithScheme(s).WithObjects(provider3).Build()
 	k8sClient4 := fake.NewClientBuilder().Build()
 
-	configuration := &v1beta1.Configuration{
+	configuration := &v1beta2.Configuration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "abc",
 		},
@@ -292,7 +294,7 @@ func TestIsDeletable(t *testing.T) {
 	}
 
 	type args struct {
-		configuration *v1beta1.Configuration
+		configuration *v1beta2.Configuration
 		k8sClient     client.Client
 	}
 	type want struct {
@@ -308,7 +310,7 @@ func TestIsDeletable(t *testing.T) {
 			name: "provider is not found",
 			args: args{
 				k8sClient:     k8sClient1,
-				configuration: &v1beta1.Configuration{},
+				configuration: &v1beta2.Configuration{},
 			},
 			want: want{
 				deletable: true,
@@ -318,7 +320,7 @@ func TestIsDeletable(t *testing.T) {
 			name: "provider is not ready, use default providerRef",
 			args: args{
 				k8sClient:     k8sClient2,
-				configuration: &v1beta1.Configuration{},
+				configuration: &v1beta2.Configuration{},
 			},
 			want: want{
 				deletable: true,
@@ -338,9 +340,9 @@ func TestIsDeletable(t *testing.T) {
 			name: "configuration is provisioning",
 			args: args{
 				k8sClient: k8sClient3,
-				configuration: &v1beta1.Configuration{
-					Status: v1beta1.ConfigurationStatus{
-						Apply: v1beta1.ConfigurationApplyStatus{
+				configuration: &v1beta2.Configuration{
+					Status: v1beta2.ConfigurationStatus{
+						Apply: v1beta2.ConfigurationApplyStatus{
 							State: types.ConfigurationProvisioningAndChecking,
 						},
 					},
@@ -354,9 +356,9 @@ func TestIsDeletable(t *testing.T) {
 			name: "configuration is ready",
 			args: args{
 				k8sClient: k8sClient3,
-				configuration: &v1beta1.Configuration{
-					Status: v1beta1.ConfigurationStatus{
-						Apply: v1beta1.ConfigurationApplyStatus{
+				configuration: &v1beta2.Configuration{
+					Status: v1beta2.ConfigurationStatus{
+						Apply: v1beta2.ConfigurationApplyStatus{
 							State: types.Available,
 						},
 					},
@@ -368,7 +370,7 @@ func TestIsDeletable(t *testing.T) {
 			name: "failed to get provider",
 			args: args{
 				k8sClient:     k8sClient4,
-				configuration: &v1beta1.Configuration{},
+				configuration: &v1beta2.Configuration{},
 			},
 			want: want{
 				errMsg: "failed to get Provider object",
@@ -394,24 +396,24 @@ func TestIsDeletable(t *testing.T) {
 func TestSetRegion(t *testing.T) {
 	ctx := context.Background()
 	s := runtime.NewScheme()
-	v1beta1.AddToScheme(s)
+	v1beta2.AddToScheme(s)
 	k8sClient := fake.NewClientBuilder().WithScheme(s).Build()
-	configuration1 := v1beta1.Configuration{
+	configuration1 := v1beta2.Configuration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "abc",
 			Namespace: "default",
 		},
-		Spec: v1beta1.ConfigurationSpec{},
+		Spec: v1beta2.ConfigurationSpec{},
 	}
 	configuration1.Spec.Region = "xxx"
 	assert.Nil(t, k8sClient.Create(ctx, &configuration1))
 
-	configuration2 := v1beta1.Configuration{
+	configuration2 := v1beta2.Configuration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "def",
 			Namespace: "default",
 		},
-		Spec: v1beta1.ConfigurationSpec{},
+		Spec: v1beta2.ConfigurationSpec{},
 	}
 	assert.Nil(t, k8sClient.Create(ctx, &configuration2))
 

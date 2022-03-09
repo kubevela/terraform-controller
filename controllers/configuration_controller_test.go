@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/oam-dev/terraform-controller/api/v1beta1"
 	"reflect"
 	"strings"
 	"testing"
@@ -27,7 +28,7 @@ import (
 
 	"github.com/oam-dev/terraform-controller/api/types"
 	crossplane "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
-	"github.com/oam-dev/terraform-controller/api/v1beta1"
+	"github.com/oam-dev/terraform-controller/api/v1beta2"
 	"github.com/oam-dev/terraform-controller/controllers/provider"
 )
 
@@ -36,13 +37,13 @@ func TestInitTFConfigurationMeta(t *testing.T) {
 	req.Namespace = "default"
 	req.Name = "abc"
 
-	completeConfiguration := v1beta1.Configuration{
+	completeConfiguration := v1beta2.Configuration{
 		ObjectMeta: v1.ObjectMeta{
 			Name: "abc",
 		},
-		Spec: v1beta1.ConfigurationSpec{
+		Spec: v1beta2.ConfigurationSpec{
 			Path: "alibaba/rds",
-			Backend: &v1beta1.Backend{
+			Backend: &v1beta2.Backend{
 				SecretSuffix: "s1",
 			},
 		},
@@ -54,12 +55,12 @@ func TestInitTFConfigurationMeta(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		configuration v1beta1.Configuration
+		configuration v1beta2.Configuration
 		want          *TFConfigurationMeta
 	}{
 		{
 			name: "empty configuration",
-			configuration: v1beta1.Configuration{
+			configuration: v1beta2.Configuration{
 				ObjectMeta: v1.ObjectMeta{
 					Name: "abc",
 				},
@@ -114,7 +115,7 @@ func TestInitTFConfigurationMeta(t *testing.T) {
 func TestCheckProvider(t *testing.T) {
 	ctx := context.Background()
 	scheme := runtime.NewScheme()
-	v1beta1.AddToScheme(scheme)
+	v1beta2.AddToScheme(scheme)
 
 	k8sClient1 := fake.NewClientBuilder().WithScheme(scheme).Build()
 
@@ -179,6 +180,7 @@ func TestConfigurationReconcile(t *testing.T) {
 	ctx := context.Background()
 	s := runtime.NewScheme()
 	v1beta1.AddToScheme(s)
+	v1beta2.AddToScheme(s)
 	corev1.AddToScheme(s)
 	batchv1.AddToScheme(s)
 	r1.Client = fake.NewClientBuilder().WithScheme(s).Build()
@@ -202,7 +204,7 @@ func TestConfigurationReconcile(t *testing.T) {
 
 	provider := &v1beta1.Provider{
 		TypeMeta: metav1.TypeMeta{
-			APIVersion: "terraform.core.oam.dev/v1beta1",
+			APIVersion: "terraform.core.oam.dev/v1beta2",
 			Kind:       "Provider",
 		},
 		ObjectMeta: metav1.ObjectMeta{
@@ -229,17 +231,17 @@ func TestConfigurationReconcile(t *testing.T) {
 		"name": "abc",
 	})
 	variables := &runtime.RawExtension{Raw: data}
-	configuration2 := &v1beta1.Configuration{
+	configuration2 := &v1beta2.Configuration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "a",
 			Namespace: "b",
 		},
-		Spec: v1beta1.ConfigurationSpec{
+		Spec: v1beta2.ConfigurationSpec{
 			HCL:      "c",
 			Variable: variables,
 		},
-		Status: v1beta1.ConfigurationStatus{
-			Apply: v1beta1.ConfigurationApplyStatus{
+		Status: v1beta2.ConfigurationStatus{
+			Apply: v1beta2.ConfigurationApplyStatus{
 				State: types.Available,
 			},
 		},
@@ -299,13 +301,13 @@ func TestConfigurationReconcile(t *testing.T) {
 		variableSecret, configuration2).Build()
 
 	time := v1.NewTime(time.Now())
-	configuration3 := &v1beta1.Configuration{
+	configuration3 := &v1beta2.Configuration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              "a",
 			Namespace:         "b",
 			DeletionTimestamp: &time,
 		},
-		Spec: v1beta1.ConfigurationSpec{
+		Spec: v1beta2.ConfigurationSpec{
 			HCL: "c",
 		},
 	}
@@ -327,18 +329,18 @@ func TestConfigurationReconcile(t *testing.T) {
 	r3 := &ConfigurationReconciler{}
 	r3.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(secret, provider, configuration3, destroyJob3).Build()
 
-	configuration4 := &v1beta1.Configuration{
+	configuration4 := &v1beta2.Configuration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              "a",
 			Namespace:         "b",
 			DeletionTimestamp: &time,
 			Finalizers:        []string{configurationFinalizer},
 		},
-		Spec: v1beta1.ConfigurationSpec{
+		Spec: v1beta2.ConfigurationSpec{
 			HCL: "c",
 		},
-		Status: v1beta1.ConfigurationStatus{
-			Apply: v1beta1.ConfigurationApplyStatus{
+		Status: v1beta2.ConfigurationStatus{
+			Apply: v1beta2.ConfigurationApplyStatus{
 				State: types.ConfigurationProvisioningAndChecking,
 			},
 		},
@@ -361,14 +363,14 @@ func TestConfigurationReconcile(t *testing.T) {
 	r4 := &ConfigurationReconciler{}
 	r4.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(secret, provider, configuration4, destroyJob4).Build()
 
-	configuration5 := &v1beta1.Configuration{
+	configuration5 := &v1beta2.Configuration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              "a",
 			Namespace:         "b",
 			DeletionTimestamp: &time,
 			Finalizers:        []string{configurationFinalizer},
 		},
-		Spec: v1beta1.ConfigurationSpec{
+		Spec: v1beta2.ConfigurationSpec{
 			HCL: "c",
 		},
 	}
@@ -461,6 +463,7 @@ func TestPreCheck(t *testing.T) {
 	ctx := context.Background()
 	s := runtime.NewScheme()
 	v1beta1.AddToScheme(s)
+	v1beta2.AddToScheme(s)
 	corev1.AddToScheme(s)
 	corev1.AddToScheme(s)
 	provider := &v1beta1.Provider{
@@ -476,7 +479,7 @@ func TestPreCheck(t *testing.T) {
 
 	type args struct {
 		r             *ConfigurationReconciler
-		configuration *v1beta1.Configuration
+		configuration *v1beta2.Configuration
 		meta          *TFConfigurationMeta
 	}
 
@@ -493,11 +496,11 @@ func TestPreCheck(t *testing.T) {
 			name: "configuration is invalid",
 			args: args{
 				r: r,
-				configuration: &v1beta1.Configuration{
+				configuration: &v1beta2.Configuration{
 					ObjectMeta: v1.ObjectMeta{
 						Name: "abc",
 					},
-					Spec: v1beta1.ConfigurationSpec{
+					Spec: v1beta2.ConfigurationSpec{
 						Remote: "aaa",
 						HCL:    "bbb",
 					},
@@ -512,11 +515,11 @@ func TestPreCheck(t *testing.T) {
 			name: "configuration is valid",
 			args: args{
 				r: r,
-				configuration: &v1beta1.Configuration{
+				configuration: &v1beta2.Configuration{
 					ObjectMeta: v1.ObjectMeta{
 						Name: "abc",
 					},
-					Spec: v1beta1.ConfigurationSpec{
+					Spec: v1beta2.ConfigurationSpec{
 						HCL: "bbb",
 					},
 				},
@@ -534,11 +537,11 @@ func TestPreCheck(t *testing.T) {
 			name: "could not find provider",
 			args: args{
 				r: r,
-				configuration: &v1beta1.Configuration{
+				configuration: &v1beta2.Configuration{
 					ObjectMeta: v1.ObjectMeta{
 						Name: "abc",
 					},
-					Spec: v1beta1.ConfigurationSpec{
+					Spec: v1beta2.ConfigurationSpec{
 						HCL: "bbb",
 					},
 				},
@@ -571,6 +574,7 @@ func TestPreCheckWhenConfigurationIsChanged(t *testing.T) {
 	ctx := context.Background()
 	s := runtime.NewScheme()
 	v1beta1.AddToScheme(s)
+	v1beta2.AddToScheme(s)
 	corev1.AddToScheme(s)
 	corev1.AddToScheme(s)
 	provider := &v1beta1.Provider{
@@ -617,7 +621,7 @@ func TestPreCheckWhenConfigurationIsChanged(t *testing.T) {
 
 	type args struct {
 		r             *ConfigurationReconciler
-		configuration *v1beta1.Configuration
+		configuration *v1beta2.Configuration
 		meta          *TFConfigurationMeta
 	}
 
@@ -634,11 +638,11 @@ func TestPreCheckWhenConfigurationIsChanged(t *testing.T) {
 			name: "configuration is changed",
 			args: args{
 				r: r,
-				configuration: &v1beta1.Configuration{
+				configuration: &v1beta2.Configuration{
 					ObjectMeta: v1.ObjectMeta{
 						Name: "abc",
 					},
-					Spec: v1beta1.ConfigurationSpec{
+					Spec: v1beta2.ConfigurationSpec{
 						HCL: "bbb",
 					},
 				},
@@ -663,6 +667,7 @@ func TestTerraformDestroy(t *testing.T) {
 	ctx := context.Background()
 	s := runtime.NewScheme()
 	v1beta1.AddToScheme(s)
+	v1beta2.AddToScheme(s)
 	corev1.AddToScheme(s)
 	batchv1.AddToScheme(s)
 	rbacv1.AddToScheme(s)
@@ -680,7 +685,7 @@ func TestTerraformDestroy(t *testing.T) {
 
 	r2 := &ConfigurationReconciler{}
 	provider1.Status.State = types.ProviderIsReady
-	configuration := &v1beta1.Configuration{
+	configuration := &v1beta2.Configuration{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "b",
@@ -704,12 +709,12 @@ func TestTerraformDestroy(t *testing.T) {
 		"name": "abc",
 	})
 	variables := &runtime.RawExtension{Raw: data}
-	configuration4 := &v1beta1.Configuration{
+	configuration4 := &v1beta2.Configuration{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "b",
 		},
-		Spec: v1beta1.ConfigurationSpec{
+		Spec: v1beta2.ConfigurationSpec{
 			Variable: variables,
 		},
 	}
@@ -747,7 +752,7 @@ func TestTerraformDestroy(t *testing.T) {
 	type args struct {
 		r             *ConfigurationReconciler
 		namespace     string
-		configuration *v1beta1.Configuration
+		configuration *v1beta2.Configuration
 		meta          *TFConfigurationMeta
 	}
 	type want struct {
@@ -762,7 +767,7 @@ func TestTerraformDestroy(t *testing.T) {
 			name: "provider is not ready",
 			args: args{
 				r:             r1,
-				configuration: &v1beta1.Configuration{},
+				configuration: &v1beta2.Configuration{},
 				meta: &TFConfigurationMeta{
 					ConfigurationCMName: "tf-abc",
 					Namespace:           "default",
@@ -881,11 +886,11 @@ func TestGetTFOutputs(t *testing.T) {
 	type args struct {
 		ctx           context.Context
 		k8sClient     client.Client
-		configuration v1beta1.Configuration
+		configuration v1beta2.Configuration
 		meta          *TFConfigurationMeta
 	}
 	type want struct {
-		property map[string]v1beta1.Property
+		property map[string]v1beta2.Property
 		errMsg   string
 	}
 
@@ -894,7 +899,7 @@ func TestGetTFOutputs(t *testing.T) {
 	meta1 := &TFConfigurationMeta{}
 
 	//scheme := runtime.NewScheme()
-	//v1beta1.AddToScheme(scheme)
+	//v1beta2.AddToScheme(scheme)
 	secret2 := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "a",
