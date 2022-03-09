@@ -309,12 +309,23 @@ func TestConfigurationReconcile(t *testing.T) {
 			HCL: "c",
 		},
 	}
-	configuration2.Spec.ProviderReference = &crossplane.Reference{
+	configuration3.Spec.ProviderReference = &crossplane.Reference{
 		Name:      "default",
 		Namespace: "default",
 	}
+
+	destroyJob3 := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "a-destroy",
+			Namespace: req.Namespace,
+		},
+		Status: batchv1.JobStatus{
+			Succeeded: int32(1),
+		},
+	}
+
 	r3 := &ConfigurationReconciler{}
-	r3.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(secret, provider, configuration3).Build()
+	r3.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(secret, provider, configuration3, destroyJob3).Build()
 
 	type args struct {
 		req reconcile.Request
@@ -598,35 +609,6 @@ func TestTerraformDestroy(t *testing.T) {
 	k8sClient2 := fake.NewClientBuilder().WithScheme(s).WithObjects(provider1, configuration).Build()
 	r2.Client = k8sClient2
 
-	//r3 := &ConfigurationReconciler{}
-	//provider1.Status.State = types.ProviderIsReady
-	//job3 := &batchv1.Job{
-	//	ObjectMeta: metav1.ObjectMeta{
-	//		Name:      "a",
-	//		Namespace: "default",
-	//	},
-	//	Status: batchv1.JobStatus{
-	//		Succeeded: int32(1),
-	//	},
-	//}
-	//configuration3 := &v1beta1.Configuration{
-	//	ObjectMeta: metav1.ObjectMeta{
-	//		Namespace: "default",
-	//		Name:      "b",
-	//	},
-	//}
-	//configuration3.Spec.WriteConnectionSecretToReference = &crossplane.SecretReference{
-	//	Name:      "b",
-	//	Namespace: "default",
-	//}
-	//k8sClient3 := fake.NewClientBuilder().WithScheme(s).WithObjects(provider1, job3, configuration3).Build()
-	//r3.Client = k8sClient3
-	//meta3 := &TFConfigurationMeta{
-	//	DestroyJobName: "a",
-	//	Namespace:      "b",
-	//	DeleteResource: true,
-	//}
-
 	r4 := &ConfigurationReconciler{}
 	provider1.Status.State = types.ProviderIsReady
 	job4 := &batchv1.Job{
@@ -707,11 +689,11 @@ func TestTerraformDestroy(t *testing.T) {
 				},
 			},
 			want: want{
-				errMsg: "The referenced provider could not be retrieved",
+				errMsg: "jobs.batch \"\" not found",
 			},
 		},
 		{
-			name: "provider is ready",
+			name: "referenced provider is not available",
 			args: args{
 				r:             r2,
 				configuration: configuration,
@@ -738,7 +720,7 @@ func TestTerraformDestroy(t *testing.T) {
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.args.r.terraformDestroy(ctx, tc.args.namespace, *tc.args.configuration, tc.args.meta)
-			if err != nil {
+			if err != nil || tc.want.errMsg != "" {
 				if !strings.Contains(err.Error(), tc.want.errMsg) {
 					t.Errorf("terraformDestroy() error = %v, wantErr %v", err, tc.want.errMsg)
 					return
