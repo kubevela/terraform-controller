@@ -269,11 +269,11 @@ func (r *ConfigurationReconciler) terraformApply(ctx context.Context, namespace 
 
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.ApplyJobName, Namespace: namespace}, &tfExecutionJob); err != nil {
 		if kerrors.IsNotFound(err) {
-			return meta.assembleAndTriggerJob(ctx, k8sClient, &configuration, TerraformApply)
+			return meta.assembleAndTriggerJob(ctx, k8sClient, TerraformApply)
 		}
 	}
 
-	if err := meta.updateTerraformJobIfNeeded(ctx, k8sClient, configuration, tfExecutionJob); err != nil {
+	if err := meta.updateTerraformJobIfNeeded(ctx, k8sClient, tfExecutionJob); err != nil {
 		klog.ErrorS(err, types.ErrUpdateTerraformApplyJob, "Name", meta.ApplyJobName)
 		return errors.Wrap(err, types.ErrUpdateTerraformApplyJob)
 	}
@@ -312,13 +312,13 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, namespac
 		if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.DestroyJobName, Namespace: meta.Namespace}, &destroyJob); err != nil {
 			if kerrors.IsNotFound(err) {
 				if err := r.Client.Get(ctx, client.ObjectKey{Name: configuration.Name, Namespace: configuration.Namespace}, &v1beta1.Configuration{}); err == nil {
-					if err = meta.assembleAndTriggerJob(ctx, k8sClient, &configuration, TerraformDestroy); err != nil {
+					if err = meta.assembleAndTriggerJob(ctx, k8sClient, TerraformDestroy); err != nil {
 						return err
 					}
 				}
 			}
 		}
-		if err := meta.updateTerraformJobIfNeeded(ctx, k8sClient, configuration, destroyJob); err != nil {
+		if err := meta.updateTerraformJobIfNeeded(ctx, k8sClient, destroyJob); err != nil {
 			klog.ErrorS(err, types.ErrUpdateTerraformApplyJob, "Name", meta.ApplyJobName)
 			return errors.Wrap(err, types.ErrUpdateTerraformApplyJob)
 		}
@@ -446,8 +446,8 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	}
 
 	// Check provider
-	provider, err := provider.GetProviderFromConfiguration(ctx, k8sClient, meta.ProviderReference.Namespace, meta.ProviderReference.Name)
-	if provider == nil {
+	p, err := provider.GetProviderFromConfiguration(ctx, k8sClient, meta.ProviderReference.Namespace, meta.ProviderReference.Name)
+	if p == nil {
 		msg := types.ErrProviderNotFound
 		if err != nil {
 			msg = err.Error()
@@ -458,7 +458,7 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 		return errors.New(msg)
 	}
 
-	if err := meta.getCredentials(ctx, k8sClient, provider); err != nil {
+	if err := meta.getCredentials(ctx, k8sClient, p); err != nil {
 		return err
 	}
 
@@ -468,7 +468,22 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	}
 
 	var variableInSecret v1.Secret
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.VariableSecretName, Namespace: meta.Namespace}, &variableInSecret); err == nil {
+	err = k8sClient.Get(ctx, client.ObjectKey{Name: meta.VariableSecretName, Namespace: meta.Namespace}, &variableInSecret)
+	switch {
+	case kerrors.IsNotFound(err):
+		var secret = v1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      meta.VariableSecretName,
+				Namespace: meta.Namespace,
+			},
+			TypeMeta: metav1.TypeMeta{Kind: "Secret"},
+			Data:     meta.VariableSecretData,
+		}
+
+		if err := k8sClient.Create(ctx, &secret); err != nil {
+			return err
+		}
+	case err == nil:
 		for k, v := range variableInSecret.Data {
 			if val, ok := meta.VariableSecretData[k]; !ok || !bytes.Equal(v, val) {
 				meta.EnvChanged = true
@@ -476,11 +491,10 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 				if err := meta.updateApplyStatus(ctx, k8sClient, types.ConfigurationReloading, types.ConfigurationReloadingAsVariableChanged); err != nil {
 					return err
 				}
-
 				break
 			}
 		}
-	} else if !kerrors.IsNotFound(err) {
+	default:
 		return err
 	}
 
@@ -525,8 +539,7 @@ func (meta *TFConfigurationMeta) updateDestroyStatus(ctx context.Context, k8sCli
 	return nil
 }
 
-func (meta *TFConfigurationMeta) assembleAndTriggerJob(ctx context.Context, k8sClient client.Client,
-	configuration *v1beta1.Configuration, executionType TerraformExecutionType) error {
+func (meta *TFConfigurationMeta) assembleAndTriggerJob(ctx context.Context, k8sClient client.Client, executionType TerraformExecutionType) error {
 
 	// apply rbac
 	if err := createTerraformExecutorServiceAccount(ctx, k8sClient, meta.Namespace, ServiceAccountName); err != nil {
@@ -536,36 +549,13 @@ func (meta *TFConfigurationMeta) assembleAndTriggerJob(ctx context.Context, k8sC
 		return err
 	}
 
-	if err := meta.prepareTFVariables(configuration); err != nil {
-		return err
-	}
-
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.VariableSecretName, Namespace: meta.Namespace}, &v1.Secret{}); err != nil {
-		if kerrors.IsNotFound(err) {
-			var secret = v1.Secret{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      meta.VariableSecretName,
-					Namespace: meta.Namespace,
-				},
-				TypeMeta: metav1.TypeMeta{Kind: "Secret"},
-				Data:     meta.VariableSecretData,
-			}
-
-			if err := k8sClient.Create(ctx, &secret); err != nil {
-				return err
-			}
-		}
-	}
-
 	job := meta.assembleTerraformJob(executionType)
 	return k8sClient.Create(ctx, job)
 }
 
 // updateTerraformJob will set deletion finalizer to the Terraform job if its envs are changed, which will result in
 // deleting the job. Finally, a new Terraform job will be generated
-func (meta *TFConfigurationMeta) updateTerraformJobIfNeeded(ctx context.Context, k8sClient client.Client, _ v1beta1.Configuration,
-	job batchv1.Job) error {
-
+func (meta *TFConfigurationMeta) updateTerraformJobIfNeeded(ctx context.Context, k8sClient client.Client, job batchv1.Job) error {
 	// if either one changes, delete the job
 	if meta.EnvChanged || meta.ConfigurationChanged {
 		klog.InfoS("about to delete job", "Name", job.Name, "Namespace", job.Namespace)
@@ -848,11 +838,18 @@ func (meta *TFConfigurationMeta) prepareTFVariables(configuration *v1beta1.Confi
 		envs = append(envs, v1.EnvVar{Name: k, ValueFrom: valueFrom})
 	}
 
+	if meta.Credentials == nil {
+		return errors.New(provider.ErrCredentialNotRetrieved)
+	}
 	for k, v := range meta.Credentials {
 		data[k] = []byte(v)
 		valueFrom := &v1.EnvVarSource{SecretKeyRef: &v1.SecretKeySelector{Key: k}}
 		valueFrom.SecretKeyRef.Name = meta.VariableSecretName
 		envs = append(envs, v1.EnvVar{Name: k, ValueFrom: valueFrom})
+	}
+	// make sure the env of the Job is set
+	if envs == nil {
+		return errors.New(provider.ErrCredentialNotRetrieved)
 	}
 	meta.Envs = envs
 	meta.VariableSecretData = data
@@ -987,6 +984,9 @@ func (meta *TFConfigurationMeta) getCredentials(ctx context.Context, k8sClient c
 	credentials, err := provider.GetProviderCredentials(ctx, k8sClient, providerObj, region)
 	if err != nil {
 		return err
+	}
+	if credentials == nil {
+		return errors.New(provider.ErrCredentialNotRetrieved)
 	}
 	meta.Credentials = credentials
 	return nil
