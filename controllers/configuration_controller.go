@@ -158,6 +158,11 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			}
 			return ctrl.Result{RequeueAfter: 3 * time.Second}, errors.Wrap(err, "continue reconciling to destroy cloud resource")
 		}
+
+		configuration, err := tfcfg.Get(ctx, r.Client, req.NamespacedName)
+		if err != nil {
+			return ctrl.Result{}, client.IgnoreNotFound(err)
+		}
 		if controllerutil.ContainsFinalizer(&configuration, configurationFinalizer) {
 			controllerutil.RemoveFinalizer(&configuration, configurationFinalizer)
 			if err := r.Update(ctx, &configuration); err != nil {
@@ -325,6 +330,9 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, namespac
 	}
 
 	// When the deletion Job process succeeded, clean up work is starting.
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.DestroyJobName, Namespace: meta.Namespace}, &destroyJob); err != nil {
+		return err
+	}
 	if destroyJob.Status.Succeeded == int32(1) || deleteConfigurationDirectly {
 		// 1. delete Terraform input Configuration ConfigMap
 		if err := meta.deleteConfigMap(ctx, k8sClient); err != nil {
@@ -715,9 +723,32 @@ func (meta *TFConfigurationMeta) createTFBackendVolume() v1.Volume {
 	return gitVolume
 }
 
+// TfStateProperty is the tf state property for an output
+type TfStateProperty struct {
+	Value interface{} `json:"value,omitempty"`
+	Type  string      `json:"type,omitempty"`
+}
+
+// ToProperty converts TfStateProperty type to Property
+func (tp *TfStateProperty) ToProperty() (v1beta1.Property, error) {
+	var (
+		property v1beta1.Property
+		err      error
+	)
+	sv, err := tfcfg.Interface2String(tp.Value)
+	if err != nil {
+		return property, errors.Wrap(err, "failed to get terraform state outputs")
+	}
+	property = v1beta1.Property{
+		Type:  tp.Type,
+		Value: sv,
+	}
+	return property, err
+}
+
 // TFState is Terraform State
 type TFState struct {
-	Outputs map[string]v1beta1.Property `json:"outputs"`
+	Outputs map[string]TfStateProperty `json:"outputs"`
 }
 
 //nolint:funlen
@@ -740,8 +771,14 @@ func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient cli
 	if err := json.Unmarshal(tfStateJSON, &tfState); err != nil {
 		return nil, err
 	}
-
-	outputs := tfState.Outputs
+	outputs := make(map[string]v1beta1.Property)
+	for k, v := range tfState.Outputs {
+		property, err := v.ToProperty()
+		if err != nil {
+			return outputs, err
+		}
+		outputs[k] = property
+	}
 	writeConnectionSecretToReference := configuration.Spec.WriteConnectionSecretToReference
 	if writeConnectionSecretToReference == nil || writeConnectionSecretToReference.Name == "" {
 		return outputs, nil

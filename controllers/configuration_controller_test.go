@@ -309,12 +309,23 @@ func TestConfigurationReconcile(t *testing.T) {
 			HCL: "c",
 		},
 	}
-	configuration2.Spec.ProviderReference = &crossplane.Reference{
+	configuration3.Spec.ProviderReference = &crossplane.Reference{
 		Name:      "default",
 		Namespace: "default",
 	}
+
+	destroyJob3 := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "a-destroy",
+			Namespace: req.Namespace,
+		},
+		Status: batchv1.JobStatus{
+			Succeeded: int32(1),
+		},
+	}
+
 	r3 := &ConfigurationReconciler{}
-	r3.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(secret, provider, configuration3).Build()
+	r3.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(secret, provider, configuration3, destroyJob3).Build()
 
 	type args struct {
 		req reconcile.Request
@@ -370,6 +381,7 @@ func TestPreCheck(t *testing.T) {
 	ctx := context.Background()
 	s := runtime.NewScheme()
 	v1beta1.AddToScheme(s)
+	corev1.AddToScheme(s)
 	corev1.AddToScheme(s)
 	provider := &v1beta1.Provider{
 		ObjectMeta: v1.ObjectMeta{
@@ -438,6 +450,122 @@ func TestPreCheck(t *testing.T) {
 			},
 			want: want{},
 		},
+		{
+			name: "could not find provider",
+			args: args{
+				r: r,
+				configuration: &v1beta1.Configuration{
+					ObjectMeta: v1.ObjectMeta{
+						Name: "abc",
+					},
+					Spec: v1beta1.ConfigurationSpec{
+						HCL: "bbb",
+					},
+				},
+				meta: &TFConfigurationMeta{
+					ConfigurationCMName: "abc",
+					ProviderReference: &crossplane.Reference{
+						Namespace: "d",
+						Name:      "default",
+					},
+				},
+			},
+			want: want{
+				errMsg: "provider not found",
+			},
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := tc.args.r.preCheck(ctx, tc.args.configuration, tc.args.meta); (tc.want.errMsg != "") &&
+				!strings.Contains(err.Error(), tc.want.errMsg) {
+				t.Errorf("preCheck() error = %v, wantErr %v", err, tc.want.errMsg)
+			}
+		})
+	}
+}
+
+func TestPreCheckWhenConfigurationIsChanged(t *testing.T) {
+	r := &ConfigurationReconciler{}
+	ctx := context.Background()
+	s := runtime.NewScheme()
+	v1beta1.AddToScheme(s)
+	corev1.AddToScheme(s)
+	corev1.AddToScheme(s)
+	provider := &v1beta1.Provider{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "default",
+			Namespace: "default",
+		},
+		Status: v1beta1.ProviderStatus{
+			State: types.ProviderIsNotReady,
+		},
+	}
+	r.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(provider).Build()
+
+	provider3 := &v1beta1.Provider{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "default",
+			Namespace: "default",
+		},
+		Status: v1beta1.ProviderStatus{
+			State: types.ProviderIsNotReady,
+		},
+	}
+	configurationCM3 := &corev1.ConfigMap{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "abc",
+			Namespace: "default",
+		},
+	}
+	r.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(provider3, configurationCM3).Build()
+	meta3 := &TFConfigurationMeta{
+		ConfigurationCMName: "abc",
+		ProviderReference: &crossplane.Reference{
+			Namespace: "default",
+			Name:      "default",
+		},
+		CompleteConfiguration: "d",
+		Namespace:             "default",
+	}
+
+	patches := gomonkey.ApplyFunc(reflect.DeepEqual, func(x, y interface{}) bool {
+		return true
+	})
+	defer patches.Reset()
+
+	type args struct {
+		r             *ConfigurationReconciler
+		configuration *v1beta1.Configuration
+		meta          *TFConfigurationMeta
+	}
+
+	type want struct {
+		errMsg string
+	}
+
+	testcases := []struct {
+		name string
+		args args
+		want want
+	}{
+		{
+			name: "configuration is changed",
+			args: args{
+				r: r,
+				configuration: &v1beta1.Configuration{
+					ObjectMeta: v1.ObjectMeta{
+						Name: "abc",
+					},
+					Spec: v1beta1.ConfigurationSpec{
+						HCL: "bbb",
+					},
+				},
+				meta: meta3,
+			},
+			want: want{},
+		},
 	}
 
 	for _, tc := range testcases {
@@ -481,11 +609,65 @@ func TestTerraformDestroy(t *testing.T) {
 	k8sClient2 := fake.NewClientBuilder().WithScheme(s).WithObjects(provider1, configuration).Build()
 	r2.Client = k8sClient2
 
+	r4 := &ConfigurationReconciler{}
+	provider1.Status.State = types.ProviderIsReady
+	job4 := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "a",
+			Namespace: "default",
+		},
+		Status: batchv1.JobStatus{
+			Succeeded: int32(1),
+		},
+	}
+	data, _ := json.Marshal(map[string]interface{}{
+		"name": "abc",
+	})
+	variables := &runtime.RawExtension{Raw: data}
+	configuration4 := &v1beta1.Configuration{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "b",
+		},
+		Spec: v1beta1.ConfigurationSpec{
+			Variable: variables,
+		},
+	}
+	configuration4.Spec.WriteConnectionSecretToReference = &crossplane.SecretReference{
+		Name:      "b",
+		Namespace: "default",
+	}
+	secret4 := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "b",
+			Namespace: "default",
+		},
+		Type: corev1.SecretTypeOpaque,
+	}
+	variableSecret4 := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "c",
+			Namespace: "default",
+		},
+		Type: corev1.SecretTypeOpaque,
+	}
+	k8sClient4 := fake.NewClientBuilder().WithScheme(s).WithObjects(provider1, job4, secret4, variableSecret4, configuration4).Build()
+	r4.Client = k8sClient4
+	meta4 := &TFConfigurationMeta{
+		DestroyJobName: "a",
+		Namespace:      "default",
+		DeleteResource: true,
+		ProviderReference: &crossplane.Reference{
+			Name:      "b",
+			Namespace: "default",
+		},
+		VariableSecretName: "c",
+	}
+
 	type args struct {
 		r             *ConfigurationReconciler
 		namespace     string
 		configuration *v1beta1.Configuration
-		k8sClient     client.Client
 		meta          *TFConfigurationMeta
 	}
 	type want struct {
@@ -500,7 +682,6 @@ func TestTerraformDestroy(t *testing.T) {
 			name: "provider is not ready",
 			args: args{
 				r:             r1,
-				k8sClient:     k8sClient1,
 				configuration: &v1beta1.Configuration{},
 				meta: &TFConfigurationMeta{
 					ConfigurationCMName: "tf-abc",
@@ -508,14 +689,13 @@ func TestTerraformDestroy(t *testing.T) {
 				},
 			},
 			want: want{
-				errMsg: "The referenced provider could not be retrieved",
+				errMsg: "jobs.batch \"\" not found",
 			},
 		},
 		{
-			name: "provider is ready",
+			name: "referenced provider is not available",
 			args: args{
 				r:             r2,
-				k8sClient:     k8sClient2,
 				configuration: configuration,
 				meta: &TFConfigurationMeta{
 					ConfigurationCMName: "tf-abc",
@@ -527,11 +707,20 @@ func TestTerraformDestroy(t *testing.T) {
 				errMsg: "The referenced provider could not be retrieved",
 			},
 		},
+		{
+			name: "could not directly remove resources, and destroy job completes",
+			args: args{
+				r:             r4,
+				configuration: configuration4,
+				meta:          meta4,
+			},
+			want: want{},
+		},
 	}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.args.r.terraformDestroy(ctx, tc.args.namespace, *tc.args.configuration, tc.args.meta)
-			if err != nil {
+			if err != nil || tc.want.errMsg != "" {
 				if !strings.Contains(err.Error(), tc.want.errMsg) {
 					t.Errorf("terraformDestroy() error = %v, wantErr %v", err, tc.want.errMsg)
 					return
@@ -555,4 +744,128 @@ func TestAssembleTerraformJob(t *testing.T) {
 	containers := job.Spec.Template.Spec.InitContainers
 	assert.Equal(t, containers[0].Image, "c")
 	assert.Equal(t, containers[1].Image, "d")
+}
+
+func TestTfStatePropertyToToProperty(t *testing.T) {
+	testcases := []TfStateProperty{
+		{
+			Value: 123,
+			Type:  "integer",
+		},
+		{
+			Value: 123.1,
+			Type:  "float64",
+		},
+		{
+			Value: "123",
+			Type:  "string",
+		},
+		{
+			Value: true,
+			Type:  "bool",
+		},
+		{
+			Value: []interface{}{"21", "aaa", 12, true},
+			Type:  "slice",
+		},
+		{
+			Value: map[string]interface{}{
+				"test1": "abc",
+				"test2": 123,
+			},
+			Type: "map",
+		},
+	}
+	for _, testcase := range testcases {
+		property, err := testcase.ToProperty()
+		assert.Equal(t, err, nil)
+		if testcase.Type == "integer" {
+			assert.Equal(t, property.Value, "123")
+		}
+		if testcase.Type == "float64" {
+			assert.Equal(t, property.Value, "123.1")
+		}
+		if testcase.Type == "bool" {
+			assert.Equal(t, property.Value, "true")
+		}
+		if testcase.Type == "slice" {
+			assert.Equal(t, property.Value, `["21","aaa",12,true]`)
+		}
+		if testcase.Type == "map" {
+			assert.Equal(t, property.Value, `{"test1":"abc","test2":123}`)
+		}
+	}
+}
+
+func TestGetTFOutputs(t *testing.T) {
+	type args struct {
+		ctx           context.Context
+		k8sClient     client.Client
+		configuration v1beta1.Configuration
+		meta          *TFConfigurationMeta
+	}
+	type want struct {
+		property map[string]v1beta1.Property
+		errMsg   string
+	}
+
+	ctx := context.Background()
+	k8sClient1 := fake.NewClientBuilder().Build()
+	meta1 := &TFConfigurationMeta{}
+
+	//scheme := runtime.NewScheme()
+	//v1beta1.AddToScheme(scheme)
+	secret2 := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "a",
+			Namespace: "default",
+		},
+		Type: corev1.SecretTypeOpaque,
+	}
+	k8sClient2 := fake.NewClientBuilder().WithObjects(secret2).Build()
+	meta2 := &TFConfigurationMeta{
+		BackendSecretName:         "a",
+		TerraformBackendNamespace: "default",
+	}
+
+	testcases := map[string]struct {
+		args args
+		want want
+	}{
+		"could not find backend secret": {
+			args: args{
+				ctx:       ctx,
+				k8sClient: k8sClient1,
+				meta:      meta1,
+			},
+			want: want{
+				property: nil,
+				errMsg:   "terraform state file backend secret is not generated",
+			},
+		},
+		"no data in a backend secret": {
+			args: args{
+				ctx:       ctx,
+				k8sClient: k8sClient2,
+				meta:      meta2,
+			},
+			want: want{
+				property: nil,
+				errMsg:   "failed to get tfstate from Terraform State secret",
+			},
+		},
+	}
+
+	for name, tc := range testcases {
+		t.Run(name, func(t *testing.T) {
+			property, err := tc.args.meta.getTFOutputs(tc.args.ctx, tc.args.k8sClient, tc.args.configuration)
+			if tc.want.errMsg != "" {
+				if !strings.Contains(err.Error(), tc.want.errMsg) {
+					t.Errorf("getTFOutputs() error = %v, wantErr %v", err, tc.want.errMsg)
+				}
+			}
+			assert.Equal(t, tc.want.property, property)
+		})
+	}
+
 }

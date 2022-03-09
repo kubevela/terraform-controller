@@ -8,10 +8,10 @@ import (
 
 	. "github.com/agiledragon/gomonkey/v2"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/sts"
-	"github.com/go-yaml/yaml"
 	"github.com/google/go-cmp/cmp"
 	"github.com/jinzhu/copier"
 	"github.com/stretchr/testify/assert"
+	"gopkg.in/yaml.v2"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
