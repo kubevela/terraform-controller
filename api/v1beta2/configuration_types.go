@@ -73,6 +73,7 @@ type BaseConfigurationSpec struct {
 type ConfigurationStatus struct {
 	// observedGeneration is the most recent generation observed for this Configuration. It corresponds to the
 	// Configuration's generation, which is updated on mutation by the API Server.
+	// If ObservedGeneration equals Generation, and State is Available, the value of Outputs is latest
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 
