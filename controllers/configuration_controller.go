@@ -485,8 +485,8 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 			return err
 		}
 	case err == nil:
-		for k, v := range variableInSecret.Data {
-			if val, ok := meta.VariableSecretData[k]; !ok || !bytes.Equal(v, val) {
+		for k, v := range meta.VariableSecretData {
+			if val, ok := variableInSecret.Data[k]; !ok || !bytes.Equal(v, val) {
 				meta.EnvChanged = true
 				klog.Info("Job's env changed")
 				if err := meta.updateApplyStatus(ctx, k8sClient, types.ConfigurationReloading, types.ConfigurationReloadingAsVariableChanged); err != nil {
