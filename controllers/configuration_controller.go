@@ -469,7 +469,8 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 
 	var variableInSecret v1.Secret
 	err = k8sClient.Get(ctx, client.ObjectKey{Name: meta.VariableSecretName, Namespace: meta.Namespace}, &variableInSecret)
-	if kerrors.IsNotFound(err) {
+	switch {
+	case kerrors.IsNotFound(err):
 		var secret = v1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      meta.VariableSecretName,
@@ -482,7 +483,7 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 		if err := k8sClient.Create(ctx, &secret); err != nil {
 			return err
 		}
-	} else if err == nil {
+	case err == nil:
 		for k, v := range variableInSecret.Data {
 			if val, ok := meta.VariableSecretData[k]; !ok || !bytes.Equal(v, val) {
 				meta.EnvChanged = true
@@ -493,7 +494,7 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 				break
 			}
 		}
-	} else {
+	default:
 		return err
 	}
 
@@ -845,6 +846,10 @@ func (meta *TFConfigurationMeta) prepareTFVariables(configuration *v1beta1.Confi
 		valueFrom := &v1.EnvVarSource{SecretKeyRef: &v1.SecretKeySelector{Key: k}}
 		valueFrom.SecretKeyRef.Name = meta.VariableSecretName
 		envs = append(envs, v1.EnvVar{Name: k, ValueFrom: valueFrom})
+	}
+	// make sure the env of the Job is set
+	if envs == nil {
+		return errors.New(provider.ErrCredentialNotRetrieved)
 	}
 	meta.Envs = envs
 	meta.VariableSecretData = data
