@@ -28,6 +28,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	terraformv1beta1 "github.com/oam-dev/terraform-controller/api/v1beta1"
+	"github.com/oam-dev/terraform-controller/api/v1beta2"
 	"github.com/oam-dev/terraform-controller/controllers"
 	// +kubebuilder:scaffold:imports
 )
@@ -41,6 +42,7 @@ func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
 
 	_ = terraformv1beta1.AddToScheme(scheme)
+	_ = v1beta2.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
 

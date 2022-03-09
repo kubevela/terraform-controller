@@ -42,6 +42,7 @@ import (
 	"github.com/oam-dev/terraform-controller/api/types"
 	crossplane "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
+	"github.com/oam-dev/terraform-controller/api/v1beta2"
 	tfcfg "github.com/oam-dev/terraform-controller/controllers/configuration"
 	"github.com/oam-dev/terraform-controller/controllers/provider"
 	"github.com/oam-dev/terraform-controller/controllers/terraform"
@@ -219,7 +220,7 @@ type TFConfigurationMeta struct {
 	GitImage                  string
 }
 
-func initTFConfigurationMeta(req ctrl.Request, configuration v1beta1.Configuration) *TFConfigurationMeta {
+func initTFConfigurationMeta(req ctrl.Request, configuration v1beta2.Configuration) *TFConfigurationMeta {
 	var meta = &TFConfigurationMeta{
 		Namespace:           req.Namespace,
 		Name:                req.Name,
@@ -259,7 +260,7 @@ func initTFConfigurationMeta(req ctrl.Request, configuration v1beta1.Configurati
 	return meta
 }
 
-func (r *ConfigurationReconciler) terraformApply(ctx context.Context, namespace string, configuration v1beta1.Configuration, meta *TFConfigurationMeta) error {
+func (r *ConfigurationReconciler) terraformApply(ctx context.Context, namespace string, configuration v1beta2.Configuration, meta *TFConfigurationMeta) error {
 	klog.InfoS("terraform apply job", "Namespace", namespace, "Name", meta.ApplyJobName)
 
 	var (
@@ -295,7 +296,7 @@ func (r *ConfigurationReconciler) terraformApply(ctx context.Context, namespace 
 	return nil
 }
 
-func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, namespace string, configuration v1beta1.Configuration, meta *TFConfigurationMeta) error {
+func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, namespace string, configuration v1beta2.Configuration, meta *TFConfigurationMeta) error {
 	var (
 		destroyJob batchv1.Job
 		k8sClient  = r.Client
@@ -311,7 +312,7 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, namespac
 	if !deleteConfigurationDirectly {
 		if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.DestroyJobName, Namespace: meta.Namespace}, &destroyJob); err != nil {
 			if kerrors.IsNotFound(err) {
-				if err := r.Client.Get(ctx, client.ObjectKey{Name: configuration.Name, Namespace: configuration.Namespace}, &v1beta1.Configuration{}); err == nil {
+				if err := r.Client.Get(ctx, client.ObjectKey{Name: configuration.Name, Namespace: configuration.Namespace}, &v1beta2.Configuration{}); err == nil {
 					if err = meta.assembleAndTriggerJob(ctx, k8sClient, TerraformDestroy); err != nil {
 						return err
 					}
@@ -386,7 +387,7 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, namespac
 	return errors.New(types.MessageDestroyJobNotCompleted)
 }
 
-func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v1beta1.Configuration, meta *TFConfigurationMeta) error {
+func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v1beta2.Configuration, meta *TFConfigurationMeta) error {
 	var k8sClient = r.Client
 
 	meta.TerraformImage = os.Getenv("TERRAFORM_IMAGE")
@@ -484,8 +485,8 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 			return err
 		}
 	case err == nil:
-		for k, v := range variableInSecret.Data {
-			if val, ok := meta.VariableSecretData[k]; !ok || !bytes.Equal(v, val) {
+		for k, v := range meta.VariableSecretData {
+			if val, ok := variableInSecret.Data[k]; !ok || !bytes.Equal(v, val) {
 				meta.EnvChanged = true
 				klog.Info("Job's env changed")
 				if err := meta.updateApplyStatus(ctx, k8sClient, types.ConfigurationReloading, types.ConfigurationReloadingAsVariableChanged); err != nil {
@@ -503,9 +504,9 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 }
 
 func (meta *TFConfigurationMeta) updateApplyStatus(ctx context.Context, k8sClient client.Client, state types.ConfigurationState, message string) error {
-	var configuration v1beta1.Configuration
+	var configuration v1beta2.Configuration
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.Name, Namespace: meta.Namespace}, &configuration); err == nil {
-		configuration.Status.Apply = v1beta1.ConfigurationApplyStatus{
+		configuration.Status.Apply = v1beta2.ConfigurationApplyStatus{
 			State:   state,
 			Message: message,
 		}
@@ -513,7 +514,7 @@ func (meta *TFConfigurationMeta) updateApplyStatus(ctx context.Context, k8sClien
 		if state == types.Available {
 			outputs, err := meta.getTFOutputs(ctx, k8sClient, configuration)
 			if err != nil {
-				configuration.Status.Apply = v1beta1.ConfigurationApplyStatus{
+				configuration.Status.Apply = v1beta2.ConfigurationApplyStatus{
 					State:   types.GeneratingOutputs,
 					Message: types.ErrGenerateOutputs + ": " + err.Error(),
 				}
@@ -528,9 +529,9 @@ func (meta *TFConfigurationMeta) updateApplyStatus(ctx context.Context, k8sClien
 }
 
 func (meta *TFConfigurationMeta) updateDestroyStatus(ctx context.Context, k8sClient client.Client, state types.ConfigurationState, message string) error {
-	var configuration v1beta1.Configuration
+	var configuration v1beta2.Configuration
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.Name, Namespace: meta.Namespace}, &configuration); err == nil {
-		configuration.Status.Destroy = v1beta1.ConfigurationDestroyStatus{
+		configuration.Status.Destroy = v1beta2.ConfigurationDestroyStatus{
 			State:   state,
 			Message: message,
 		}
@@ -720,16 +721,16 @@ type TfStateProperty struct {
 }
 
 // ToProperty converts TfStateProperty type to Property
-func (tp *TfStateProperty) ToProperty() (v1beta1.Property, error) {
+func (tp *TfStateProperty) ToProperty() (v1beta2.Property, error) {
 	var (
-		property v1beta1.Property
+		property v1beta2.Property
 		err      error
 	)
 	sv, err := tfcfg.Interface2String(tp.Value)
 	if err != nil {
 		return property, errors.Wrap(err, "failed to get terraform state outputs")
 	}
-	property = v1beta1.Property{
+	property = v1beta2.Property{
 		Type:  tp.Type,
 		Value: sv,
 	}
@@ -742,7 +743,7 @@ type TFState struct {
 }
 
 //nolint:funlen
-func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient client.Client, configuration v1beta1.Configuration) (map[string]v1beta1.Property, error) {
+func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient client.Client, configuration v1beta2.Configuration) (map[string]v1beta2.Property, error) {
 	var s = v1.Secret{}
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.BackendSecretName, Namespace: meta.TerraformBackendNamespace}, &s); err != nil {
 		return nil, errors.Wrap(err, "terraform state file backend secret is not generated")
@@ -761,7 +762,7 @@ func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient cli
 	if err := json.Unmarshal(tfStateJSON, &tfState); err != nil {
 		return nil, err
 	}
-	outputs := make(map[string]v1beta1.Property)
+	outputs := make(map[string]v1beta2.Property)
 	for k, v := range tfState.Outputs {
 		property, err := v.ToProperty()
 		if err != nil {
@@ -810,7 +811,7 @@ func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient cli
 	return outputs, nil
 }
 
-func (meta *TFConfigurationMeta) prepareTFVariables(configuration *v1beta1.Configuration) error {
+func (meta *TFConfigurationMeta) prepareTFVariables(configuration *v1beta2.Configuration) error {
 	var (
 		envs []v1.EnvVar
 		data = map[string][]byte{}
@@ -860,7 +861,7 @@ func (meta *TFConfigurationMeta) prepareTFVariables(configuration *v1beta1.Confi
 // SetupWithManager setups with a manager
 func (r *ConfigurationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&v1beta1.Configuration{}).
+		For(&v1beta2.Configuration{}).
 		Complete(r)
 }
 
