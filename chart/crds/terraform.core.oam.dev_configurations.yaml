@@ -148,6 +148,12 @@ spec:
                     description: A ConfigurationState represents the status of a resource
                     type: string
                 type: object
+              observedGeneration:
+                description: observedGeneration is the most recent generation observed
+                  for this Configuration. It corresponds to the Configuration's generation,
+                  which is updated on mutation by the API Server.
+                format: int64
+                type: integer
             type: object
         type: object
     served: true
