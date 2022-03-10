@@ -808,10 +808,16 @@ func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient cli
 			}
 		}
 	} else {
-		if owner, ok := gotSecret.ObjectMeta.Labels["terraform-controller-owner"]; ok && owner != configurationName {
-			return nil, fmt.Errorf(
+		// check the owner of this secret
+		labels := gotSecret.ObjectMeta.Labels
+		if owner, ok := labels["terraform-controller-owner"]; ok && owner != configurationName {
+			errMsg := fmt.Sprintf(
 				"configuration(%s) cannot update secret(%s) which owner is configuration(%s)",
-				configurationName, name, owner)
+				configurationName,
+				name,
+				owner,
+			)
+			return nil, errors.New(errMsg)
 		}
 		gotSecret.Data = data
 		if err := k8sClient.Update(ctx, &gotSecret); err != nil {
