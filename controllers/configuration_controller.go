@@ -809,7 +809,9 @@ func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient cli
 		}
 	} else {
 		if owner, ok := gotSecret.ObjectMeta.Labels["terraform-controller-owner"]; ok && owner != configurationName {
-			return nil, fmt.Errorf("configuration(%s) cannot update secret(%s) which owner is configuration(%s)", configurationName, name, owner)
+			return nil, fmt.Errorf(
+				"configuration(%s) cannot update secret(%s) which owner is configuration(%s)",
+				configurationName, name, owner)
 		}
 		gotSecret.Data = data
 		if err := k8sClient.Update(ctx, &gotSecret); err != nil {
