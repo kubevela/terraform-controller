@@ -985,8 +985,8 @@ func TestGetTFOutputs(t *testing.T) {
 			Name:      "connection-secret-d",
 			Namespace: "default",
 			Labels: map[string]string{
-				"created-by":                 "terraform-controller",
-				"terraform-controller-owner": "configuration5",
+				"created-by": "terraform-controller",
+				"owned-by":   "configuration5",
 			},
 		},
 		TypeMeta: metav1.TypeMeta{Kind: "Secret"},
@@ -1028,8 +1028,8 @@ func TestGetTFOutputs(t *testing.T) {
 			Name:      "connection-secret-e",
 			Namespace: "default",
 			Labels: map[string]string{
-				"created-by":                 "terraform-controller",
-				"terraform-controller-owner": "configuration5",
+				"created-by": "terraform-controller",
+				"owned-by":   "configuration5",
 			},
 		},
 		TypeMeta: metav1.TypeMeta{Kind: "Secret"},
