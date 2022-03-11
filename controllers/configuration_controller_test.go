@@ -1028,8 +1028,9 @@ func TestGetTFOutputs(t *testing.T) {
 			Name:      "connection-secret-e",
 			Namespace: "default",
 			Labels: map[string]string{
-				"created-by": "terraform-controller",
-				"owned-by":   "configuration5",
+				"created-by":      "terraform-controller",
+				"owned-by":        "configuration5",
+				"owned-namespace": "default",
 			},
 		},
 		TypeMeta: metav1.TypeMeta{Kind: "Secret"},
@@ -1040,7 +1041,8 @@ func TestGetTFOutputs(t *testing.T) {
 	k8sClient6 := fake.NewClientBuilder().WithObjects(secret6, oldConnectionSecret6).Build()
 	configuration6 := v1beta2.Configuration{
 		ObjectMeta: v1.ObjectMeta{
-			Name: "configuration6",
+			Name:      "configuration6",
+			Namespace: "default",
 		},
 		Spec: v1beta2.ConfigurationSpec{
 			BaseConfigurationSpec: v1beta2.BaseConfigurationSpec{
@@ -1054,6 +1056,53 @@ func TestGetTFOutputs(t *testing.T) {
 	meta6 := &TFConfigurationMeta{
 		BackendSecretName:         "e",
 		TerraformBackendNamespace: "default",
+	}
+
+	namespaceA := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "a"}}
+	namespaceB := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "b"}}
+	secret7 := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "f",
+			Namespace: "a",
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: map[string][]byte{
+			TerraformStateNameInSecret: tfStateData,
+		},
+	}
+	oldConnectionSecret7 := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "connection-secret-e",
+			Namespace: "default",
+			Labels: map[string]string{
+				"created-by":      "terraform-controller",
+				"owned-by":        "configuration6",
+				"owned-namespace": "a",
+			},
+		},
+		TypeMeta: metav1.TypeMeta{Kind: "Secret"},
+		Data: map[string][]byte{
+			"container_id": []byte("something"),
+		},
+	}
+	k8sClient7 := fake.NewClientBuilder().WithObjects(namespaceA, namespaceB, secret7, oldConnectionSecret7).Build()
+	configuration7 := v1beta2.Configuration{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "configuration6",
+			Namespace: "b",
+		},
+		Spec: v1beta2.ConfigurationSpec{
+			BaseConfigurationSpec: v1beta2.BaseConfigurationSpec{
+				WriteConnectionSecretToReference: &runtimetypes.SecretReference{
+					Name:      "connection-secret-e",
+					Namespace: "default",
+				},
+			},
+		},
+	}
+	meta7 := &TFConfigurationMeta{
+		BackendSecretName:         "f",
+		TerraformBackendNamespace: "a",
 	}
 
 	testcases := map[string]struct {
@@ -1126,7 +1175,19 @@ func TestGetTFOutputs(t *testing.T) {
 			},
 			want: want{
 				property: nil,
-				errMsg:   "configuration(configuration6) cannot update secret(connection-secret-e) which owner is configuration(configuration5)",
+				errMsg:   "configuration(default-configuration6) cannot update secret(connection-secret-e) which owner is configuration(default-configuration5)",
+			},
+		},
+		"update a connectionSecret belong to another configuration(same name but different namespace": {
+			args: args{
+				ctx:           ctx,
+				k8sClient:     k8sClient7,
+				configuration: configuration7,
+				meta:          meta7,
+			},
+			want: want{
+				property: nil,
+				errMsg:   "configuration(b-configuration6) cannot update secret(connection-secret-e) which owner is configuration(a-configuration6)",
 			},
 		},
 	}

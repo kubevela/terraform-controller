@@ -793,8 +793,9 @@ func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient cli
 					Name:      name,
 					Namespace: ns,
 					Labels: map[string]string{
-						"created-by": "terraform-controller",
-						"owned-by":   configurationName,
+						"created-by":      "terraform-controller",
+						"owned-by":        configurationName,
+						"owned-namespace": configuration.Namespace,
 					},
 				},
 				TypeMeta: metav1.TypeMeta{Kind: "Secret"},
@@ -810,12 +811,14 @@ func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient cli
 	} else {
 		// check the owner of this secret
 		labels := gotSecret.ObjectMeta.Labels
-		if owner, ok := labels["owned-by"]; ok && owner != configurationName {
+		ownerName := labels["owned-by"]
+		ownerNamespace := labels["owned-namespace"]
+		if configurationName != ownerName || configuration.Namespace != ownerNamespace {
 			errMsg := fmt.Sprintf(
-				"configuration(%s) cannot update secret(%s) which owner is configuration(%s)",
-				configurationName,
+				"configuration(%s-%s) cannot update secret(%s) which owner is configuration(%s-%s)",
+				configuration.Namespace, configurationName,
 				name,
-				owner,
+				ownerNamespace, ownerName,
 			)
 			return nil, errors.New(errMsg)
 		}
