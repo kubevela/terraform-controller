@@ -1175,7 +1175,7 @@ func TestGetTFOutputs(t *testing.T) {
 			},
 			want: want{
 				property: nil,
-				errMsg:   "configuration(default-configuration6) cannot update secret(connection-secret-e) which owner is configuration(default-configuration5)",
+				errMsg:   "configuration(default-configuration6) cannot update secret(connection-secret-e) whose owner is configuration(default-configuration5)",
 			},
 		},
 		"update a connectionSecret belong to another configuration(same name but different namespace": {
@@ -1187,7 +1187,7 @@ func TestGetTFOutputs(t *testing.T) {
 			},
 			want: want{
 				property: nil,
-				errMsg:   "configuration(b-configuration6) cannot update secret(connection-secret-e) which owner is configuration(a-configuration6)",
+				errMsg:   "configuration(b-configuration6) cannot update secret(connection-secret-e) whose owner is configuration(a-configuration6)",
 			},
 		},
 	}

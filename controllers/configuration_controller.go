@@ -815,7 +815,7 @@ func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient cli
 		ownerNamespace := labels["owned-namespace"]
 		if configurationName != ownerName || configuration.Namespace != ownerNamespace {
 			errMsg := fmt.Sprintf(
-				"configuration(%s-%s) cannot update secret(%s) which owner is configuration(%s-%s)",
+				"configuration(%s-%s) cannot update secret(%s) whose owner is configuration(%s-%s)",
 				configuration.Namespace, configurationName,
 				name,
 				ownerNamespace, ownerName,
