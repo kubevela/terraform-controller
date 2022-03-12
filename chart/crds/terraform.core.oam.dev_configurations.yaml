@@ -272,8 +272,6 @@ spec:
                     additionalProperties:
                       description: Property is the property for an output
                       properties:
-                        type:
-                          type: string
                         value:
                           type: string
                       type: object

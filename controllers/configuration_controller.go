@@ -794,7 +794,7 @@ func (meta *TFConfigurationMeta) createTFBackendVolume() v1.Volume {
 // TfStateProperty is the tf state property for an output
 type TfStateProperty struct {
 	Value interface{} `json:"value,omitempty"`
-	Type  string      `json:"type,omitempty"`
+	Type  interface{} `json:"type,omitempty"`
 }
 
 // ToProperty converts TfStateProperty type to Property
@@ -805,10 +805,9 @@ func (tp *TfStateProperty) ToProperty() (v1beta2.Property, error) {
 	)
 	sv, err := tfcfg.Interface2String(tp.Value)
 	if err != nil {
-		return property, errors.Wrap(err, "failed to get terraform state outputs")
+		return property, errors.Wrapf(err, "failed to convert value %s of terraform state outputs to string", tp.Value)
 	}
 	property = v1beta2.Property{
-		Type:  tp.Type,
 		Value: sv,
 	}
 	return property, err
