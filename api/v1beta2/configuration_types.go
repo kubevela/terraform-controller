@@ -97,7 +97,6 @@ type ConfigurationDestroyStatus struct {
 // Property is the property for an output
 type Property struct {
 	Value string `json:"value,omitempty"`
-	Type  string `json:"type,omitempty"`
 }
 
 // Backend stores the state in a Kubernetes secret with locking done using a Lease resource.
