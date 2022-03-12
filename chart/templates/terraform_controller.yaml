@@ -35,4 +35,20 @@ spec:
               value: {{ .Values.gitImage}}
             - name: GITHUB_BLOCKED
               value: {{ .Values.githubBlocked }}
+            {{ if .Values.resourceLimitsCPU }}
+            - name: RESOURCES_LIMITS_CPU
+              value: {{ .Values.resourceLimitsCPU }}
+            {{ end }}
+            {{ if .Values.resourceLimitsMemory }}
+            - name: RESOURCES_LIMITS_MEMORY
+              value: {{ .Values.resourceLimitsMemory }}
+            {{ end }}
+            {{ if .Values.resourceRequestsCPU }}
+            - name: RESOURCES_REQUESTS_CPU
+              value: {{ .Values.resourceRequestsCPU }}
+            {{ end }}
+            {{ if .Values.resourceRequestsMemory }}
+            - name: RESOURCES_REQUESTS_MEMORY
+              value: {{ .Values.resourceRequestsMemory }}
+            {{ end }}
       serviceAccountName: tf-controller-service-account

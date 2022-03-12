@@ -709,17 +709,23 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 	if meta.ResourcesLimitsCPU != "" || meta.ResourcesLimitsMemory != "" ||
 		meta.ResourcesRequestsCPU != "" || meta.ResourcesRequestsMemory != "" {
 		resourceRequirements := v1.ResourceRequirements{}
-		if meta.ResourcesLimitsCPU != "" {
-			resourceRequirements.Limits["cpu"] = meta.ResourcesLimitsCPUQuantity
+		if meta.ResourcesLimitsCPU != "" || meta.ResourcesLimitsMemory != "" {
+			resourceRequirements.Limits = v1.ResourceList(map[v1.ResourceName]resource.Quantity{})
+			if meta.ResourcesLimitsCPU != "" {
+				resourceRequirements.Limits["cpu"] = meta.ResourcesLimitsCPUQuantity
+			}
+			if meta.ResourcesLimitsMemory != "" {
+				resourceRequirements.Limits["memory"] = meta.ResourcesLimitsMemoryQuantity
+			}
 		}
-		if meta.ResourcesLimitsMemory != "" {
-			resourceRequirements.Limits["memory"] = meta.ResourcesLimitsMemoryQuantity
-		}
-		if meta.ResourcesRequestsCPU != "" {
-			resourceRequirements.Requests["cpu"] = meta.ResourcesRequestsCPUQuantity
-		}
-		if meta.ResourcesLimitsMemory != "" {
-			resourceRequirements.Requests["memory"] = meta.ResourcesRequestsMemoryQuantity
+		if meta.ResourcesRequestsCPU != "" || meta.ResourcesLimitsMemory != "" {
+			resourceRequirements.Requests = v1.ResourceList(map[v1.ResourceName]resource.Quantity{})
+			if meta.ResourcesRequestsCPU != "" {
+				resourceRequirements.Requests["cpu"] = meta.ResourcesRequestsCPUQuantity
+			}
+			if meta.ResourcesLimitsMemory != "" {
+				resourceRequirements.Requests["memory"] = meta.ResourcesRequestsMemoryQuantity
+			}
 		}
 		container.Resources = resourceRequirements
 	}
