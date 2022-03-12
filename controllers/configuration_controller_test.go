@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/oam-dev/terraform-controller/api/v1beta1"
 	"reflect"
 	"strings"
 	"testing"
