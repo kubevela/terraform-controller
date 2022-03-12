@@ -398,27 +398,7 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, namespac
 	return errors.New(types.MessageDestroyJobNotCompleted)
 }
 
-func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v1beta2.Configuration, meta *TFConfigurationMeta) error {
-	var k8sClient = r.Client
-
-	meta.TerraformImage = os.Getenv("TERRAFORM_IMAGE")
-	if meta.TerraformImage == "" {
-		meta.TerraformImage = "oamdev/docker-terraform:1.1.2"
-	}
-
-	meta.TerraformBackendNamespace = os.Getenv("TERRAFORM_BACKEND_NAMESPACE")
-	if meta.TerraformBackendNamespace == "" {
-		meta.TerraformBackendNamespace = "vela-system"
-	}
-
-	meta.BusyboxImage = os.Getenv("BUSYBOX_IMAGE")
-	if meta.BusyboxImage == "" {
-		meta.BusyboxImage = "busybox:latest"
-	}
-	meta.GitImage = os.Getenv("GIT_IMAGE")
-	if meta.GitImage == "" {
-		meta.GitImage = "alpine/git:latest"
-	}
+func (r *ConfigurationReconciler) preCheckResourcesSetting(meta *TFConfigurationMeta) error {
 
 	meta.ResourcesLimitsCPU = os.Getenv("RESOURCES_LIMITS_CPU")
 	if meta.ResourcesLimitsCPU != "" {
@@ -459,6 +439,34 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 			return errors.Wrap(err, errMsg)
 		}
 		meta.ResourcesRequestsMemoryQuantity = requestsMemory
+	}
+	return nil
+}
+
+func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v1beta2.Configuration, meta *TFConfigurationMeta) error {
+	var k8sClient = r.Client
+
+	meta.TerraformImage = os.Getenv("TERRAFORM_IMAGE")
+	if meta.TerraformImage == "" {
+		meta.TerraformImage = "oamdev/docker-terraform:1.1.2"
+	}
+
+	meta.TerraformBackendNamespace = os.Getenv("TERRAFORM_BACKEND_NAMESPACE")
+	if meta.TerraformBackendNamespace == "" {
+		meta.TerraformBackendNamespace = "vela-system"
+	}
+
+	meta.BusyboxImage = os.Getenv("BUSYBOX_IMAGE")
+	if meta.BusyboxImage == "" {
+		meta.BusyboxImage = "busybox:latest"
+	}
+	meta.GitImage = os.Getenv("GIT_IMAGE")
+	if meta.GitImage == "" {
+		meta.GitImage = "alpine/git:latest"
+	}
+
+	if err := r.preCheckResourcesSetting(meta); err != nil {
+		return err
 	}
 
 	// Validation: 1) validate Configuration itself
