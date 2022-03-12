@@ -731,7 +731,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 			if meta.ResourcesRequestsCPU != "" {
 				resourceRequirements.Requests["cpu"] = meta.ResourcesRequestsCPUQuantity
 			}
-			if meta.ResourcesLimitsMemory != "" {
+			if meta.ResourcesRequestsMemory != "" {
 				resourceRequirements.Requests["memory"] = meta.ResourcesRequestsMemoryQuantity
 			}
 		}
