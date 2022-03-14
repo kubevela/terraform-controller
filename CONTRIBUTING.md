@@ -20,13 +20,17 @@ Refer to [Helm official Doc](https://helm.sh/docs/intro/install/) to install `he
 $ make install
 go: creating new go.mod: module tmp
 ...
-go get: added sigs.k8s.io/controller-tools v0.6.0
-go get: added sigs.k8s.io/structured-merge-diff/v4 v4.1.0
-go get: added sigs.k8s.io/yaml v1.2.0
+go: downloading sigs.k8s.io/controller-tools v0.6.0
+go: downloading k8s.io/apiextensions-apiserver v0.21.1
+go: downloading k8s.io/apimachinery v0.21.1
+go: downloading k8s.io/api v0.21.1
+go: downloading k8s.io/utils v0.0.0-20201110183641-67b214c5f920
+go: downloading k8s.io/klog/v2 v2.8.0
+go: downloading sigs.k8s.io/structured-merge-diff/v4 v4.1.0
 /Users/zhouzhengxi/go/bin/controller-gen "crd:trivialVersions=true" webhook paths="./..." output:crd:artifacts:config=chart/crds
 kubectl apply -f chart/crds
-customresourcedefinition.apiextensions.k8s.io/configurations.terraform.core.oam.dev configured
-customresourcedefinition.apiextensions.k8s.io/providers.terraform.core.oam.dev configured
+customresourcedefinition.apiextensions.k8s.io/configurations.terraform.core.oam.dev created
+customresourcedefinition.apiextensions.k8s.io/providers.terraform.core.oam.dev created
 ```
 
 - Run Terraform Controller
@@ -35,7 +39,7 @@ customresourcedefinition.apiextensions.k8s.io/providers.terraform.core.oam.dev c
 $ make run
 go: creating new go.mod: module tmp
 ...
-go get: added sigs.k8s.io/yaml v1.2.0
+go: downloading sigs.k8s.io/yaml v1.2.0
 /Users/zhouzhengxi/go/bin/controller-gen object:headerFile="hack/boilerplate.go.txt" paths="./..."
 go fmt ./...
 go vet ./...
