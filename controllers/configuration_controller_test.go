@@ -920,11 +920,9 @@ func TestGetTFOutputs(t *testing.T) {
 	tfStateOutputs := map[string]v1beta2.Property{
 		"container_id": {
 			Value: "e5fff27c62e26dc9504d21980543f21161225ab483a1e534a98311a677b9453a",
-			Type:  "string",
 		},
 		"image_id": {
 			Value: "sha256:d1a364dc548d5357f0da3268c888e1971bbdb957ee3f028fe7194f1d61c6fdeenginx:latest",
-			Type:  "string",
 		},
 	}
 
