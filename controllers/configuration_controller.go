@@ -784,6 +784,7 @@ func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient cli
 		data[k] = []byte(v.Value)
 	}
 	var gotSecret v1.Secret
+	configurationName := configuration.ObjectMeta.Name
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: name, Namespace: ns}, &gotSecret); err != nil {
 		if kerrors.IsNotFound(err) {
 			var secret = v1.Secret{
@@ -791,17 +792,35 @@ func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient cli
 					Name:      name,
 					Namespace: ns,
 					Labels: map[string]string{
-						"created-by": "terraform-controller",
+						"created-by":      "terraform-controller",
+						"owned-by":        configurationName,
+						"owned-namespace": configuration.Namespace,
 					},
 				},
 				TypeMeta: metav1.TypeMeta{Kind: "Secret"},
 				Data:     data,
 			}
-			if err := k8sClient.Create(ctx, &secret); err != nil {
+			err = k8sClient.Create(ctx, &secret)
+			if kerrors.IsAlreadyExists(err) {
+				return nil, fmt.Errorf("secret(%s) already exists", name)
+			} else if err != nil {
 				return nil, err
 			}
 		}
 	} else {
+		// check the owner of this secret
+		labels := gotSecret.ObjectMeta.Labels
+		ownerName := labels["owned-by"]
+		ownerNamespace := labels["owned-namespace"]
+		if configurationName != ownerName || configuration.Namespace != ownerNamespace {
+			errMsg := fmt.Sprintf(
+				"configuration(%s-%s) cannot update secret(%s) whose owner is configuration(%s-%s)",
+				configuration.Namespace, configurationName,
+				name,
+				ownerNamespace, ownerName,
+			)
+			return nil, errors.New(errMsg)
+		}
 		gotSecret.Data = data
 		if err := k8sClient.Update(ctx, &gotSecret); err != nil {
 			return nil, err
