@@ -120,7 +120,7 @@ func IsDeletable(ctx context.Context, k8sClient client.Client, configuration *v1
 	}
 	// allow Configuration to delete when the Provider doesn't exist or is not ready, which means external cloud resources are
 	// not provisioned at all
-	if providerObj == nil || providerObj.Status.State == types.ProviderIsNotReady {
+	if providerObj == nil || providerObj.Status.State == types.ProviderIsNotReady || configuration.Status.Apply.State == types.TerraformInitError {
 		return true, nil
 	}
 

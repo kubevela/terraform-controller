@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/oam-dev/terraform-controller/api/types"
 	"io"
 
 	v1 "k8s.io/api/core/v1"
@@ -12,23 +13,41 @@ import (
 	"k8s.io/klog/v2"
 )
 
-func getPodLog(ctx context.Context, client kubernetes.Interface, namespace, jobName, containerName string) (string, error) {
+func getPods(ctx context.Context, client kubernetes.Interface, namespace, jobName string) (*v1.PodList, error) {
 	label := fmt.Sprintf("job-name=%s", jobName)
 	pods, err := client.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: label})
-	if err != nil || pods == nil || len(pods.Items) == 0 {
+	if err != nil {
 		klog.InfoS("pods are not found", "Label", label, "Error", err)
-		return "", nil
+		return nil, err
+	}
+	return pods, nil
+}
+
+func getPodLog(ctx context.Context, client kubernetes.Interface, namespace, jobName, containerName, initContainerName string) (types.Stage, string, error) {
+	var (
+		targetContainer = containerName
+		stage           = types.TerraformApply
+	)
+	pods, err := getPods(ctx, client, namespace, jobName)
+	if err != nil || pods == nil || len(pods.Items) == 0 {
+		return stage, "", nil
 	}
 	pod := pods.Items[0]
 
+	// Here are two cases for Pending phase: 1) init container `terraform init` is not finished yet, 2) pod is not ready yet.
 	if pod.Status.Phase == v1.PodPending {
-		return "", nil
+		for _, c := range pod.Status.InitContainerStatuses {
+			if c.Name == initContainerName && !c.Ready {
+				targetContainer = initContainerName
+				stage = types.TerraformInit
+			}
+		}
 	}
 
-	req := client.CoreV1().Pods(namespace).GetLogs(pod.Name, &v1.PodLogOptions{Container: containerName})
+	req := client.CoreV1().Pods(namespace).GetLogs(pod.Name, &v1.PodLogOptions{Container: targetContainer})
 	logs, err := req.Stream(ctx)
 	if err != nil {
-		return "", err
+		return stage, "", err
 	}
 	defer func(logs io.ReadCloser) {
 		err := logs.Close()
@@ -37,7 +56,9 @@ func getPodLog(ctx context.Context, client kubernetes.Interface, namespace, jobN
 		}
 	}(logs)
 
-	return flushStream(logs, pod.Name)
+	log, err := flushStream(logs, pod.Name)
+
+	return stage, log, err
 }
 
 func flushStream(rc io.ReadCloser, podName string) (string, error) {
