@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/oam-dev/terraform-controller/api/types"
 	"io"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
+
+	"github.com/oam-dev/terraform-controller/api/types"
 )
 
 func getPods(ctx context.Context, client kubernetes.Interface, namespace, jobName string) (*v1.PodList, error) {

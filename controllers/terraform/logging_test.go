@@ -2,6 +2,7 @@ package terraform
 
 import (
 	"context"
+	"github.com/Azure/go-autorest/autorest"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -23,11 +24,15 @@ import (
 
 func TestGetPodLog(t *testing.T) {
 	ctx := context.Background()
+	func autorest.Prepare() {
+
+	}
 	type args struct {
 		client        kubernetes.Interface
 		namespace     string
 		name          string
 		containerName string
+		prepare func
 	}
 	type want struct {
 		log    string
@@ -90,7 +95,7 @@ func TestGetPodLog(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := getPodLog(ctx, tc.args.client, tc.args.namespace, tc.args.name, tc.args.containerName)
+			_, got, err := getPodLog(ctx, tc.args.client, tc.args.namespace, tc.args.name, tc.args.containerName, "")
 			if tc.want.errMsg != "" {
 				assert.EqualError(t, err, tc.want.errMsg)
 			} else {
