@@ -949,8 +949,6 @@ func (meta *TFConfigurationMeta) createOrUpdateConfigMap(ctx context.Context, k8
 func (meta *TFConfigurationMeta) prepareTFInputConfigurationData() map[string]string {
 	var dataName string
 	switch meta.ConfigurationType {
-	case types.ConfigurationJSON:
-		dataName = types.TerraformJSONConfigurationName
 	case types.ConfigurationHCL:
 		dataName = types.TerraformHCLConfigurationName
 	case types.ConfigurationRemote:
@@ -975,9 +973,6 @@ func (meta *TFConfigurationMeta) CheckWhetherConfigurationChanges(ctx context.Co
 
 	var configurationChanged bool
 	switch configurationType {
-	case types.ConfigurationJSON:
-		meta.ConfigurationChanged = true
-		return nil
 	case types.ConfigurationHCL:
 		configurationChanged = cm.Data[types.TerraformHCLConfigurationName] != meta.CompleteConfiguration
 		meta.ConfigurationChanged = configurationChanged

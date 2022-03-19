@@ -511,7 +511,7 @@ func TestPreCheck(t *testing.T) {
 				meta: &TFConfigurationMeta{},
 			},
 			want: want{
-				errMsg: "spec.JSON, spec.HCL and/or spec.Remote cloud not be set at the same time",
+				errMsg: "spec.HCL and spec.Remote cloud not be set at the same time",
 			},
 		},
 		{

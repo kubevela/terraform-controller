@@ -58,19 +58,6 @@ func TestValidConfigurationObject(t *testing.T) {
 			},
 		},
 		{
-			name: "json",
-			args: args{
-				configuration: &v1beta2.Configuration{
-					Spec: v1beta2.ConfigurationSpec{
-						JSON: "abc",
-					},
-				},
-			},
-			want: want{
-				configurationType: types.ConfigurationJSON,
-			},
-		},
-		{
 			name: "remote and hcl are set",
 			args: args{
 				configuration: &v1beta2.Configuration{
@@ -82,7 +69,7 @@ func TestValidConfigurationObject(t *testing.T) {
 			},
 			want: want{
 				configurationType: "",
-				errMsg:            "spec.JSON, spec.HCL and/or spec.Remote cloud not be set at the same time",
+				errMsg:            "spec.HCL and spec.Remote cloud not be set at the same time",
 			},
 		},
 		{
@@ -94,7 +81,7 @@ func TestValidConfigurationObject(t *testing.T) {
 			},
 			want: want{
 				configurationType: "",
-				errMsg:            "spec.JSON, spec.HCL or spec.Remote should be set",
+				errMsg:            "spec.HCL or spec.Remote should be set",
 			},
 		},
 	}
