@@ -2,77 +2,71 @@ package terraform
 
 import (
 	"context"
-	"github.com/Azure/go-autorest/autorest"
+	"github.com/agiledragon/gomonkey/v2"
+	"github.com/oam-dev/terraform-controller/api/types"
 	"io"
 	"io/ioutil"
+	"k8s.io/client-go/kubernetes/typed/core/v1/fake"
+	"k8s.io/client-go/rest"
 	"net/http"
 	"net/url"
 	"reflect"
 	"strings"
 	"testing"
 
-	"github.com/agiledragon/gomonkey/v2"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	fakeclient "k8s.io/client-go/kubernetes/fake"
-	"k8s.io/client-go/kubernetes/typed/core/v1/fake"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/util/flowcontrol"
 )
 
 func TestGetPodLog(t *testing.T) {
 	ctx := context.Background()
-	func autorest.Prepare() {
 
-	}
+	type prepare func(t *testing.T)
+	k8sClientSet := fakeclient.NewSimpleClientset()
+
 	type args struct {
-		client        kubernetes.Interface
-		namespace     string
-		name          string
-		containerName string
-		prepare func
+		client            kubernetes.Interface
+		namespace         string
+		name              string
+		containerName     string
+		initContainerName string
+		prepare
 	}
 	type want struct {
+		state  types.Stage
 		log    string
 		errMsg string
 	}
 
-	pod := &v1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "p1",
-			Namespace: "default",
-			Labels: map[string]string{
-				"job-name": "j1",
-			},
-		},
-		TypeMeta: metav1.TypeMeta{
-			Kind: "Pod",
-		},
-		Status: v1.PodStatus{
-			Phase: v1.PodRunning,
-		},
-	}
-
-	k8sClientSet := fakeclient.NewSimpleClientset(pod)
+	p := gomonkey.ApplyMethod(reflect.TypeOf(&http.Client{}), "Do",
+		func(_ *http.Client, req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: 200,
+				Body:       ioutil.NopCloser(strings.NewReader("xxx")),
+			}, nil
+		})
 
 	patches := gomonkey.ApplyMethod(reflect.TypeOf(&fake.FakePods{}), "GetLogs",
 		func(_ *fake.FakePods, _ string, _ *v1.PodLogOptions) *rest.Request {
-			rate := flowcontrol.NewFakeNeverRateLimiter()
+			// rate := flowcontrol.NewFakeNeverRateLimiter()
 			restClient, _ := rest.NewRESTClient(
 				&url.URL{
 					Scheme: "http",
-					Host:   "",
+					Host:   "127.0.0.1",
 				},
 				"",
 				rest.ClientContentConfig{},
-				rate,
+				nil,
 				http.DefaultClient)
 			r := rest.NewRequest(restClient)
 			r.Body([]byte("xxx"))
 			return r
 		})
+
+	defer p.Reset()
 	defer patches.Reset()
 
 	var testcases = []struct {
@@ -83,24 +77,51 @@ func TestGetPodLog(t *testing.T) {
 		{
 			name: "Pod is available, but no logs",
 			args: args{
-				client:        k8sClientSet,
-				namespace:     "default",
-				name:          "j1",
-				containerName: "terraform-executor",
+				client:            k8sClientSet,
+				namespace:         "default",
+				name:              "j1",
+				containerName:     "terraform-executor",
+				initContainerName: "terraform-init",
+				prepare: func(t *testing.T) {
+					pod := &v1.Pod{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "p1",
+							Namespace: "default",
+							Labels: map[string]string{
+								"job-name": "j1",
+							},
+						},
+						TypeMeta: metav1.TypeMeta{
+							Kind: "Pod",
+						},
+						Status: v1.PodStatus{
+							Phase: v1.PodPending,
+							InitContainerStatuses: []v1.ContainerStatus{
+								{
+									Name:  "terraform-init",
+									Ready: false,
+								},
+							},
+						},
+					}
+					k8sClientSet.CoreV1().Pods("default").Create(ctx, pod, metav1.CreateOptions{})
+				},
 			},
 			want: want{
-				errMsg: "can not be accept",
+				state: types.TerraformInit,
+				log:   "xxx",
 			},
 		},
 	}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, got, err := getPodLog(ctx, tc.args.client, tc.args.namespace, tc.args.name, tc.args.containerName, "")
-			if tc.want.errMsg != "" {
+			tc.args.prepare(t)
+			state, got, err := getPodLog(ctx, tc.args.client, tc.args.namespace, tc.args.name, tc.args.containerName, tc.args.initContainerName)
+			if tc.want.errMsg != "" || err != nil {
 				assert.EqualError(t, err, tc.want.errMsg)
 			} else {
-				assert.NoError(t, err)
 				assert.Equal(t, tc.want.log, got)
+				assert.Equal(t, tc.want.state, state)
 			}
 		})
 	}

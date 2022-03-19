@@ -41,6 +41,7 @@ func getPodLog(ctx context.Context, client kubernetes.Interface, namespace, jobN
 			if c.Name == initContainerName && !c.Ready {
 				targetContainer = initContainerName
 				stage = types.TerraformInit
+				break
 			}
 		}
 	}
