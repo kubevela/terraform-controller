@@ -28,7 +28,7 @@ Terraform Controller is a Kubernetes Controller for Terraform.
 ## Supported Terraform Configuration
 
 - HCL
-- JSON (Deprecated in v0.3.1, Removed in v0.4.6)
+- JSON (Deprecated in v0.3.1, removed in v0.4.6)
 
 # Get started
 
