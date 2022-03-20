@@ -31,6 +31,7 @@ func getPodLog(ctx context.Context, client kubernetes.Interface, namespace, jobN
 	)
 	pods, err := getPods(ctx, client, namespace, jobName)
 	if err != nil || pods == nil || len(pods.Items) == 0 {
+		klog.V(4).InfoS("pods are not found", "PodName", jobName, "Namepspace", namespace, "Error", err)
 		return stage, "", nil
 	}
 	pod := pods.Items[0]

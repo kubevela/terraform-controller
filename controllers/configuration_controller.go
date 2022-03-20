@@ -643,7 +643,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 		Command: []string{
 			"sh",
 			"-c",
-			fmt.Sprintf("terraform init"),
+			"terraform init",
 		},
 		VolumeMounts: initContainerVolumeMounts,
 	}
