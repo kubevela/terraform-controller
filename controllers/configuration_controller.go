@@ -541,7 +541,6 @@ func (meta *TFConfigurationMeta) updateDestroyStatus(ctx context.Context, k8sCli
 }
 
 func (meta *TFConfigurationMeta) assembleAndTriggerJob(ctx context.Context, k8sClient client.Client, executionType TerraformExecutionType) error {
-
 	// apply rbac
 	if err := createTerraformExecutorServiceAccount(ctx, k8sClient, meta.Namespace, ServiceAccountName); err != nil {
 		return err
@@ -985,9 +984,9 @@ func (meta *TFConfigurationMeta) CheckWhetherConfigurationChanges(ctx context.Co
 	case types.ConfigurationRemote:
 		meta.ConfigurationChanged = false
 		return nil
+	default:
+		return errors.New("unsupported configuration type, only HCL or Remote is supported")
 	}
-
-	return errors.New("unknown issue")
 }
 
 // getCredentials will get credentials from secret of the Provider
