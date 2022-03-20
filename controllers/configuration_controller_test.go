@@ -10,27 +10,28 @@ import (
 	"testing"
 	"time"
 
-	"github.com/oam-dev/terraform-controller/api/v1beta1"
-
 	"github.com/agiledragon/gomonkey/v2"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/sts"
 	"github.com/stretchr/testify/assert"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	runtimetypes "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
-
 	"github.com/oam-dev/terraform-controller/api/types"
 	crossplane "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
+	runtimetypes "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
+	"github.com/oam-dev/terraform-controller/api/v1beta1"
 	"github.com/oam-dev/terraform-controller/api/v1beta2"
 	"github.com/oam-dev/terraform-controller/controllers/provider"
 )
@@ -515,7 +516,7 @@ func TestPreCheck(t *testing.T) {
 			},
 		},
 		{
-			name: "configuration is valid",
+			name: "HCL configuration is valid",
 			args: args{
 				r: r,
 				configuration: &v1beta2.Configuration{
@@ -524,6 +525,28 @@ func TestPreCheck(t *testing.T) {
 					},
 					Spec: v1beta2.ConfigurationSpec{
 						HCL: "bbb",
+					},
+				},
+				meta: &TFConfigurationMeta{
+					ConfigurationCMName: "abc",
+					ProviderReference: &crossplane.Reference{
+						Namespace: "default",
+						Name:      "default",
+					},
+				},
+			},
+			want: want{},
+		},
+		{
+			name: "Remote configuration is valid",
+			args: args{
+				r: r,
+				configuration: &v1beta2.Configuration{
+					ObjectMeta: v1.ObjectMeta{
+						Name: "abc",
+					},
+					Spec: v1beta2.ConfigurationSpec{
+						Remote: "https://github.com/a/b",
 					},
 				},
 				meta: &TFConfigurationMeta{
@@ -564,9 +587,11 @@ func TestPreCheck(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := tc.args.r.preCheck(ctx, tc.args.configuration, tc.args.meta); (tc.want.errMsg != "") &&
-				!strings.Contains(err.Error(), tc.want.errMsg) {
-				t.Errorf("preCheck() error = %v, wantErr %v", err, tc.want.errMsg)
+			err := tc.args.r.preCheck(ctx, tc.args.configuration, tc.args.meta)
+			if tc.want.errMsg != "" || err != nil {
+				if !strings.Contains(err.Error(), tc.want.errMsg) {
+					t.Errorf("preCheck() error = %v, wantErr %v", err, tc.want.errMsg)
+				}
 			}
 		})
 	}
@@ -1256,4 +1281,180 @@ func TestGetTFOutputs(t *testing.T) {
 		})
 	}
 
+}
+
+func TestUpdateApplyStatus(t *testing.T) {
+	type args struct {
+		k8sClient client.Client
+		state     types.ConfigurationState
+		message   string
+		meta      *TFConfigurationMeta
+	}
+	type want struct {
+		errMsg string
+	}
+	ctx := context.Background()
+	s := runtime.NewScheme()
+	v1beta2.AddToScheme(s)
+
+	configuration := &v1beta2.Configuration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "a",
+			Namespace:  "b",
+			Generation: int64(1),
+		},
+		Spec: v1beta2.ConfigurationSpec{
+			HCL: "c",
+		},
+		Status: v1beta2.ConfigurationStatus{
+			Apply: v1beta2.ConfigurationApplyStatus{
+				State: types.Available,
+			},
+		},
+	}
+	k8sClient = fake.NewClientBuilder().WithScheme(s).WithObjects(configuration).Build()
+
+	testcases := map[string]struct {
+		args args
+		want want
+	}{
+		"configuration is available": {
+			args: args{
+				meta: &TFConfigurationMeta{
+					Name:      "a",
+					Namespace: "b",
+				},
+				state:   types.Available,
+				message: "xxx",
+			},
+		},
+		"configuration cloud not be found": {
+			args: args{
+				meta: &TFConfigurationMeta{
+					Name:      "z",
+					Namespace: "b",
+				},
+				state:   types.Available,
+				message: "xxx",
+			},
+		},
+	}
+	for name, tc := range testcases {
+		t.Run(name, func(t *testing.T) {
+			err := tc.args.meta.updateApplyStatus(ctx, k8sClient, tc.args.state, tc.args.message)
+			if tc.want.errMsg != "" || err != nil {
+				if !strings.Contains(err.Error(), tc.want.errMsg) {
+					t.Errorf("updateApplyStatus() error = %v, wantErr %v", err, tc.want.errMsg)
+				}
+			}
+		})
+	}
+}
+
+func TestAssembleAndTriggerJob(t *testing.T) {
+	type prepare func(t *testing.T)
+	type args struct {
+		k8sClient     client.Client
+		executionType TerraformExecutionType
+		prepare
+	}
+	type want struct {
+		errMsg string
+	}
+	ctx := context.Background()
+	k8sClient = fake.NewClientBuilder().Build()
+	meta := &TFConfigurationMeta{
+		Namespace: "b",
+	}
+
+	patches := gomonkey.ApplyFunc(apiutil.GVKForObject, func(obj runtime.Object, scheme *runtime.Scheme) (schema.GroupVersionKind, error) {
+		return schema.GroupVersionKind{}, kerrors.NewNotFound(schema.GroupResource{}, "")
+	})
+	defer patches.Reset()
+
+	testcases := map[string]struct {
+		args args
+		want want
+	}{
+		"failed to create ServiceAccount": {
+			args: args{
+				executionType: TerraformApply,
+			},
+			want: want{
+				errMsg: "failed to create ServiceAccount for Terraform executor",
+			},
+		},
+	}
+	for name, tc := range testcases {
+		t.Run(name, func(t *testing.T) {
+			err := meta.assembleAndTriggerJob(ctx, k8sClient, tc.args.executionType)
+			if tc.want.errMsg != "" || err != nil {
+				if !strings.Contains(err.Error(), tc.want.errMsg) {
+					t.Errorf("assembleAndTriggerJob() error = %v, wantErr %v", err, tc.want.errMsg)
+				}
+			}
+		})
+	}
+}
+
+func TestCheckWhetherConfigurationChanges(t *testing.T) {
+	type args struct {
+		k8sClient         client.Client
+		configurationType types.ConfigurationType
+		meta              *TFConfigurationMeta
+	}
+	type want struct {
+		errMsg string
+	}
+	ctx := context.Background()
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "a",
+			Namespace: "b",
+		},
+		Data: map[string]string{
+			"c": "d",
+		},
+	}
+	k8sClient = fake.NewClientBuilder().WithObjects(cm).Build()
+
+	testcases := map[string]struct {
+		args args
+		want want
+	}{
+		"unknown configuration type": {
+			args: args{
+				meta: &TFConfigurationMeta{
+					ConfigurationCMName: "a",
+					Namespace:           "b",
+				},
+				configurationType: "xxx",
+			},
+			want: want{
+				errMsg: "unsupported configuration type, only HCL or Remote is supported",
+			},
+		},
+		"configuration map is not found": {
+			args: args{
+				meta: &TFConfigurationMeta{
+					ConfigurationCMName: "aaa",
+					Namespace:           "b",
+				},
+				configurationType: "xxx",
+			},
+			want: want{
+				errMsg: "not found",
+			},
+		},
+	}
+	for name, tc := range testcases {
+		t.Run(name, func(t *testing.T) {
+			err := tc.args.meta.CheckWhetherConfigurationChanges(ctx, k8sClient, tc.args.configurationType)
+			if tc.want.errMsg != "" || err != nil {
+				if !strings.Contains(err.Error(), tc.want.errMsg) {
+					t.Errorf("CheckWhetherConfigurationChanges() error = %v, wantErr %v", err, tc.want.errMsg)
+				}
+			}
+		})
+	}
 }
