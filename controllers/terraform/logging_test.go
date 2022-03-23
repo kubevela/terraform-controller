@@ -19,17 +19,21 @@ import (
 	"k8s.io/client-go/kubernetes/typed/core/v1/fake"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/flowcontrol"
+
+	"github.com/oam-dev/terraform-controller/api/types"
 )
 
 func TestGetPodLog(t *testing.T) {
 	ctx := context.Background()
 	type args struct {
-		client        kubernetes.Interface
-		namespace     string
-		name          string
-		containerName string
+		client            kubernetes.Interface
+		namespace         string
+		name              string
+		containerName     string
+		initContainerName string
 	}
 	type want struct {
+		state  types.Stage
 		log    string
 		errMsg string
 	}
@@ -78,10 +82,11 @@ func TestGetPodLog(t *testing.T) {
 		{
 			name: "Pod is available, but no logs",
 			args: args{
-				client:        k8sClientSet,
-				namespace:     "default",
-				name:          "j1",
-				containerName: "terraform-executor",
+				client:            k8sClientSet,
+				namespace:         "default",
+				name:              "j1",
+				containerName:     "terraform-executor",
+				initContainerName: "terraform-init",
 			},
 			want: want{
 				errMsg: "can not be accept",
@@ -90,12 +95,12 @@ func TestGetPodLog(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := getPodLog(ctx, tc.args.client, tc.args.namespace, tc.args.name, tc.args.containerName)
-			if tc.want.errMsg != "" {
+			state, got, err := getPodLog(ctx, tc.args.client, tc.args.namespace, tc.args.name, tc.args.containerName, tc.args.initContainerName)
+			if tc.want.errMsg != "" || err != nil {
 				assert.EqualError(t, err, tc.want.errMsg)
 			} else {
-				assert.NoError(t, err)
 				assert.Equal(t, tc.want.log, got)
+				assert.Equal(t, tc.want.state, state)
 			}
 		})
 	}

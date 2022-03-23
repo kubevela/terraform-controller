@@ -33,6 +33,15 @@ const (
 	ConfigurationReloading               ConfigurationState = "ConfigurationReloading"
 	GeneratingOutputs                    ConfigurationState = "GeneratingTerraformOutputs"
 	InvalidRegion                        ConfigurationState = "InvalidRegion"
+	TerraformInitError                   ConfigurationState = "TerraformInitError"
+)
+
+// Stage is the Terraform stage
+type Stage string
+
+const (
+	TerraformInit  Stage = "TerraformInit"
+	TerraformApply Stage = "TerraformApply"
 )
 
 const (

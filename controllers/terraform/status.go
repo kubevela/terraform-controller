@@ -12,21 +12,23 @@ import (
 )
 
 // GetTerraformStatus will get Terraform execution status
-func GetTerraformStatus(ctx context.Context, namespace, jobName, containerName string) (types.ConfigurationState, error) {
-	klog.InfoS("checking Terraform execution status", "Namespace", namespace, "Job", jobName)
+func GetTerraformStatus(ctx context.Context, namespace, jobName, containerName, initContainerName string) (types.ConfigurationState, error) {
+	klog.InfoS("checking Terraform init and execution status", "Namespace", namespace, "Job", jobName)
 	clientSet, err := client.Init()
 	if err != nil {
 		klog.ErrorS(err, "failed to init clientSet")
 		return types.ConfigurationProvisioningAndChecking, err
 	}
 
-	logs, err := getPodLog(ctx, clientSet, namespace, jobName, containerName)
+	// check the stage of the pod
+
+	stage, logs, err := getPodLog(ctx, clientSet, namespace, jobName, containerName, initContainerName)
 	if err != nil {
 		klog.ErrorS(err, "failed to get pod logs")
 		return types.ConfigurationProvisioningAndChecking, err
 	}
 
-	success, state, errMsg := analyzeTerraformLog(logs)
+	success, state, errMsg := analyzeTerraformLog(logs, stage)
 	if success {
 		return state, nil
 	}
@@ -34,7 +36,7 @@ func GetTerraformStatus(ctx context.Context, namespace, jobName, containerName s
 	return state, errors.New(errMsg)
 }
 
-func analyzeTerraformLog(logs string) (bool, types.ConfigurationState, string) {
+func analyzeTerraformLog(logs string, stage types.Stage) (bool, types.ConfigurationState, string) {
 	lines := strings.Split(logs, "\n")
 	for i, line := range lines {
 		if strings.Contains(line, "31mError:") {
@@ -42,7 +44,12 @@ func analyzeTerraformLog(logs string) (bool, types.ConfigurationState, string) {
 			if strings.Contains(errMsg, "Invalid Alibaba Cloud region") {
 				return false, types.InvalidRegion, errMsg
 			}
-			return false, types.ConfigurationApplyFailed, errMsg
+			switch stage {
+			case types.TerraformInit:
+				return false, types.TerraformInitError, errMsg
+			case types.TerraformApply:
+				return false, types.ConfigurationApplyFailed, errMsg
+			}
 		}
 	}
 	return true, types.ConfigurationProvisioningAndChecking, ""
