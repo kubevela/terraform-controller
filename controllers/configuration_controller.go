@@ -63,7 +63,8 @@ const (
 	// BackendVolumeMountPath is the volume mount path for Terraform backend
 	BackendVolumeMountPath = "/opt/tf-backend"
 	// terraformContainerName is the name of the container that executes the terraform in the pod
-	terraformContainerName = "terraform-executor"
+	terraformContainerName     = "terraform-executor"
+	terraformInitContainerName = "terraform-init"
 )
 
 const (
@@ -146,7 +147,7 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		// terraform destroy
 		klog.InfoS("performing Configuration Destroy", "Namespace", req.Namespace, "Name", req.Name, "JobName", meta.DestroyJobName)
 
-		_, err := terraform.GetTerraformStatus(ctx, meta.Namespace, meta.DestroyJobName, terraformContainerName)
+		_, err := terraform.GetTerraformStatus(ctx, meta.Namespace, meta.DestroyJobName, terraformContainerName, terraformInitContainerName)
 		if err != nil {
 			klog.ErrorS(err, "Terraform destroy failed")
 			if updateErr := meta.updateDestroyStatus(ctx, r.Client, types.ConfigurationDestroyFailed, err.Error()); updateErr != nil {
@@ -182,7 +183,7 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		}
 		return ctrl.Result{RequeueAfter: 3 * time.Second}, errors.Wrap(err, "failed to create/update cloud resource")
 	}
-	state, err := terraform.GetTerraformStatus(ctx, meta.Namespace, meta.ApplyJobName, terraformContainerName)
+	state, err := terraform.GetTerraformStatus(ctx, meta.Namespace, meta.ApplyJobName, terraformContainerName, terraformInitContainerName)
 	if err != nil {
 		klog.ErrorS(err, "Terraform apply failed")
 		if updateErr := meta.updateApplyStatus(ctx, r.Client, state, err.Error()); updateErr != nil {
@@ -601,7 +602,6 @@ func (meta *TFConfigurationMeta) updateDestroyStatus(ctx context.Context, k8sCli
 }
 
 func (meta *TFConfigurationMeta) assembleAndTriggerJob(ctx context.Context, k8sClient client.Client, executionType TerraformExecutionType) error {
-
 	// apply rbac
 	if err := createTerraformExecutorServiceAccount(ctx, k8sClient, meta.Namespace, ServiceAccountName); err != nil {
 		return err
@@ -638,11 +638,12 @@ func (meta *TFConfigurationMeta) updateTerraformJobIfNeeded(ctx context.Context,
 
 func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExecutionType) *batchv1.Job {
 	var (
-		initContainer  v1.Container
-		initContainers []v1.Container
-		parallelism    int32 = 1
-		completions    int32 = 1
-		backoffLimit   int32 = math.MaxInt32
+		initContainer           v1.Container
+		tfPreApplyInitContainer v1.Container
+		initContainers          []v1.Container
+		parallelism             int32 = 1
+		completions             int32 = 1
+		backoffLimit            int32 = math.MaxInt32
 	)
 
 	executorVolumes := meta.assembleExecutorVolumes()
@@ -661,6 +662,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 		},
 	}
 
+	// prepare local Terraform .tf files
 	initContainer = v1.Container{
 		Name:            "prepare-input-terraform-configurations",
 		Image:           meta.BusyboxImage,
@@ -672,6 +674,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 		},
 		VolumeMounts: initContainerVolumeMounts,
 	}
+
 	initContainers = append(initContainers, initContainer)
 
 	hclPath := filepath.Join(BackendVolumeMountPath, meta.RemoteGitPath)
@@ -692,6 +695,20 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 			})
 	}
 
+	// run `terraform init`
+	tfPreApplyInitContainer = v1.Container{
+		Name:            terraformInitContainerName,
+		Image:           meta.TerraformImage,
+		ImagePullPolicy: v1.PullIfNotPresent,
+		Command: []string{
+			"sh",
+			"-c",
+			"terraform init",
+		},
+		VolumeMounts: initContainerVolumeMounts,
+	}
+	initContainers = append(initContainers, tfPreApplyInitContainer)
+
 	container := v1.Container{
 		Name:            terraformContainerName,
 		Image:           meta.TerraformImage,
@@ -699,7 +716,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 		Command: []string{
 			"bash",
 			"-c",
-			fmt.Sprintf("terraform init && terraform %s -lock=false -auto-approve", executionType),
+			fmt.Sprintf("terraform %s -lock=false -auto-approve", executionType),
 		},
 		VolumeMounts: []v1.VolumeMount{
 			{
@@ -765,6 +782,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 					// state file directory in advance
 					InitContainers: initContainers,
 					// Container terraform-executor will first copy predefined terraform.d to working directory, and
+<<<<<<< HEAD
 					// then run terraform init/apply.
 					Containers:         []v1.Container{container},
 					ServiceAccountName: ServiceAccountName,
@@ -869,6 +887,7 @@ func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient cli
 		data[k] = []byte(v.Value)
 	}
 	var gotSecret v1.Secret
+	configurationName := configuration.ObjectMeta.Name
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: name, Namespace: ns}, &gotSecret); err != nil {
 		if kerrors.IsNotFound(err) {
 			var secret = v1.Secret{
@@ -876,17 +895,36 @@ func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient cli
 					Name:      name,
 					Namespace: ns,
 					Labels: map[string]string{
-						"created-by": "terraform-controller",
+						"terraform.core.oam.dev/created-by":      "terraform-controller",
+						"terraform.core.oam.dev/owned-by":        configurationName,
+						"terraform.core.oam.dev/owned-namespace": configuration.Namespace,
 					},
 				},
 				TypeMeta: metav1.TypeMeta{Kind: "Secret"},
 				Data:     data,
 			}
-			if err := k8sClient.Create(ctx, &secret); err != nil {
+			err = k8sClient.Create(ctx, &secret)
+			if kerrors.IsAlreadyExists(err) {
+				return nil, fmt.Errorf("secret(%s) already exists", name)
+			} else if err != nil {
 				return nil, err
 			}
 		}
 	} else {
+		// check the owner of this secret
+		labels := gotSecret.ObjectMeta.Labels
+		ownerName := labels["terraform.core.oam.dev/owned-by"]
+		ownerNamespace := labels["terraform.core.oam.dev/owned-namespace"]
+		if (ownerName != "" && ownerName != configurationName) ||
+			(ownerNamespace != "" && ownerNamespace != configuration.Namespace) {
+			errMsg := fmt.Sprintf(
+				"configuration(namespace: %s ; name: %s) cannot update secret(namespace: %s ; name: %s) whose owner is configuration(namespace: %s ; name: %s)",
+				configuration.Namespace, configurationName,
+				gotSecret.Namespace, name,
+				ownerNamespace, ownerName,
+			)
+			return nil, errors.New(errMsg)
+		}
 		gotSecret.Data = data
 		if err := k8sClient.Update(ctx, &gotSecret); err != nil {
 			return nil, err
@@ -1014,8 +1052,6 @@ func (meta *TFConfigurationMeta) createOrUpdateConfigMap(ctx context.Context, k8
 func (meta *TFConfigurationMeta) prepareTFInputConfigurationData() map[string]string {
 	var dataName string
 	switch meta.ConfigurationType {
-	case types.ConfigurationJSON:
-		dataName = types.TerraformJSONConfigurationName
 	case types.ConfigurationHCL:
 		dataName = types.TerraformHCLConfigurationName
 	case types.ConfigurationRemote:
@@ -1040,9 +1076,6 @@ func (meta *TFConfigurationMeta) CheckWhetherConfigurationChanges(ctx context.Co
 
 	var configurationChanged bool
 	switch configurationType {
-	case types.ConfigurationJSON:
-		meta.ConfigurationChanged = true
-		return nil
 	case types.ConfigurationHCL:
 		configurationChanged = cm.Data[types.TerraformHCLConfigurationName] != meta.CompleteConfiguration
 		meta.ConfigurationChanged = configurationChanged
@@ -1055,9 +1088,9 @@ func (meta *TFConfigurationMeta) CheckWhetherConfigurationChanges(ctx context.Co
 	case types.ConfigurationRemote:
 		meta.ConfigurationChanged = false
 		return nil
+	default:
+		return errors.New("unsupported configuration type, only HCL or Remote is supported")
 	}
-
-	return errors.New("unknown issue")
 }
 
 // getCredentials will get credentials from secret of the Provider

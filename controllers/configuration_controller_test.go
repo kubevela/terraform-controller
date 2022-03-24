@@ -18,18 +18,26 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+<<<<<<< HEAD
 	"k8s.io/apimachinery/pkg/api/resource"
+=======
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
+>>>>>>> master
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/oam-dev/terraform-controller/api/types"
 	crossplane "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
+	runtimetypes "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
+	"github.com/oam-dev/terraform-controller/api/v1beta1"
 	"github.com/oam-dev/terraform-controller/api/v1beta2"
 	"github.com/oam-dev/terraform-controller/controllers/provider"
 )
@@ -700,11 +708,11 @@ func TestPreCheck(t *testing.T) {
 				meta: &TFConfigurationMeta{},
 			},
 			want: want{
-				errMsg: "spec.JSON, spec.HCL and/or spec.Remote cloud not be set at the same time",
+				errMsg: "spec.HCL and spec.Remote cloud not be set at the same time",
 			},
 		},
 		{
-			name: "configuration is valid",
+			name: "HCL configuration is valid",
 			args: args{
 				r: r,
 				configuration: &v1beta2.Configuration{
@@ -713,6 +721,28 @@ func TestPreCheck(t *testing.T) {
 					},
 					Spec: v1beta2.ConfigurationSpec{
 						HCL: "bbb",
+					},
+				},
+				meta: &TFConfigurationMeta{
+					ConfigurationCMName: "abc",
+					ProviderReference: &crossplane.Reference{
+						Namespace: "default",
+						Name:      "default",
+					},
+				},
+			},
+			want: want{},
+		},
+		{
+			name: "Remote configuration is valid",
+			args: args{
+				r: r,
+				configuration: &v1beta2.Configuration{
+					ObjectMeta: v1.ObjectMeta{
+						Name: "abc",
+					},
+					Spec: v1beta2.ConfigurationSpec{
+						Remote: "https://github.com/a/b",
 					},
 				},
 				meta: &TFConfigurationMeta{
@@ -889,12 +919,20 @@ func TestPreCheck(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
+<<<<<<< HEAD
 			if tc.prepare != nil {
 				tc.prepare(t)
 			}
 			if err := tc.args.r.preCheck(ctx, tc.args.configuration, tc.args.meta); (tc.want.errMsg != "") &&
 				!strings.Contains(err.Error(), tc.want.errMsg) {
 				t.Errorf("preCheck() error = %v, wantErr %v", err, tc.want.errMsg)
+=======
+			err := tc.args.r.preCheck(ctx, tc.args.configuration, tc.args.meta)
+			if tc.want.errMsg != "" || err != nil {
+				if !strings.Contains(err.Error(), tc.want.errMsg) {
+					t.Errorf("preCheck() error = %v, wantErr %v", err, tc.want.errMsg)
+				}
+>>>>>>> master
 			}
 		})
 	}
@@ -1284,6 +1322,235 @@ func TestGetTFOutputs(t *testing.T) {
 		TerraformBackendNamespace: "default",
 	}
 
+	tfStateData, _ := base64.StdEncoding.DecodeString("H4sIAAAAAAAA/4SQzarbMBCF934KoXUdPKNf+1VKCWNp5AocO8hyaSl592KlcBd3cZfnHPHpY/52QshfXI68b3IS+tuVK5dCaS+P+8ci4TbcULb94JJplZPAFte8MS18PQrKBO8Q+xk59SHa1AMA9M4YmoN3FGJ8M/azPs96yElcCkLIsG+V8sblnqOc3uXlRuvZ0GxSSuiCRUYbw2gGHRFGPxitEgJYQDQ0a68I2ChNo1cAZJ2bR20UtW8bsv55NuJRS94W2erXe5X5QQs3A/FZ4fhJaOwUgZTVMRjto1HGpSGSQuuD955hdDDPcR6NY1ZpQJ/YwagTRAvBpsi8LXn7Pa1U+ahfWHX/zWThYz9L4Otg3390r+5fAAAA//8hmcuNuQEAAA==")
+	tfStateOutputs := map[string]v1beta2.Property{
+		"container_id": {
+			Value: "e5fff27c62e26dc9504d21980543f21161225ab483a1e534a98311a677b9453a",
+		},
+		"image_id": {
+			Value: "sha256:d1a364dc548d5357f0da3268c888e1971bbdb957ee3f028fe7194f1d61c6fdeenginx:latest",
+		},
+	}
+
+	secret3 := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "b",
+			Namespace: "default",
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: map[string][]byte{
+			TerraformStateNameInSecret: tfStateData,
+		},
+	}
+	k8sClient3 := fake.NewClientBuilder().WithObjects(secret3).Build()
+	meta3 := &TFConfigurationMeta{
+		BackendSecretName:         "b",
+		TerraformBackendNamespace: "default",
+	}
+
+	secret4 := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "c",
+			Namespace: "default",
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: map[string][]byte{
+			TerraformStateNameInSecret: tfStateData,
+		},
+	}
+	k8sClient4 := fake.NewClientBuilder().WithObjects(secret4).Build()
+	configuration4 := v1beta2.Configuration{
+		Spec: v1beta2.ConfigurationSpec{
+			BaseConfigurationSpec: v1beta2.BaseConfigurationSpec{
+				WriteConnectionSecretToReference: &runtimetypes.SecretReference{
+					Name:      "connection-secret-c",
+					Namespace: "default",
+				},
+			},
+		},
+	}
+	meta4 := &TFConfigurationMeta{
+		BackendSecretName:         "c",
+		TerraformBackendNamespace: "default",
+	}
+
+	secret5 := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "d",
+			Namespace: "default",
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: map[string][]byte{
+			TerraformStateNameInSecret: tfStateData,
+		},
+	}
+	oldConnectionSecret5 := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "connection-secret-d",
+			Namespace: "default",
+			Labels: map[string]string{
+				"terraform.core.oam.dev/created-by": "terraform-controller",
+				"terraform.core.oam.dev/owned-by":   "configuration5",
+			},
+		},
+		TypeMeta: metav1.TypeMeta{Kind: "Secret"},
+		Data: map[string][]byte{
+			"container_id": []byte("something"),
+		},
+	}
+	k8sClient5 := fake.NewClientBuilder().WithObjects(secret5, oldConnectionSecret5).Build()
+	configuration5 := v1beta2.Configuration{
+		ObjectMeta: v1.ObjectMeta{
+			Name: "configuration5",
+		},
+		Spec: v1beta2.ConfigurationSpec{
+			BaseConfigurationSpec: v1beta2.BaseConfigurationSpec{
+				WriteConnectionSecretToReference: &runtimetypes.SecretReference{
+					Name:      "connection-secret-d",
+					Namespace: "default",
+				},
+			},
+		},
+	}
+	meta5 := &TFConfigurationMeta{
+		BackendSecretName:         "d",
+		TerraformBackendNamespace: "default",
+	}
+
+	secret6 := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "e",
+			Namespace: "default",
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: map[string][]byte{
+			TerraformStateNameInSecret: tfStateData,
+		},
+	}
+	oldConnectionSecret6 := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "connection-secret-e",
+			Namespace: "default",
+			Labels: map[string]string{
+				"terraform.core.oam.dev/created-by":      "terraform-controller",
+				"terraform.core.oam.dev/owned-by":        "configuration5",
+				"terraform.core.oam.dev/owned-namespace": "default",
+			},
+		},
+		TypeMeta: metav1.TypeMeta{Kind: "Secret"},
+		Data: map[string][]byte{
+			"container_id": []byte("something"),
+		},
+	}
+	k8sClient6 := fake.NewClientBuilder().WithObjects(secret6, oldConnectionSecret6).Build()
+	configuration6 := v1beta2.Configuration{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "configuration6",
+			Namespace: "default",
+		},
+		Spec: v1beta2.ConfigurationSpec{
+			BaseConfigurationSpec: v1beta2.BaseConfigurationSpec{
+				WriteConnectionSecretToReference: &runtimetypes.SecretReference{
+					Name:      "connection-secret-e",
+					Namespace: "default",
+				},
+			},
+		},
+	}
+	meta6 := &TFConfigurationMeta{
+		BackendSecretName:         "e",
+		TerraformBackendNamespace: "default",
+	}
+
+	namespaceA := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "a"}}
+	namespaceB := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "b"}}
+	secret7 := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "f",
+			Namespace: "a",
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: map[string][]byte{
+			TerraformStateNameInSecret: tfStateData,
+		},
+	}
+	oldConnectionSecret7 := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "connection-secret-e",
+			Namespace: "default",
+			Labels: map[string]string{
+				"terraform.core.oam.dev/created-by":      "terraform-controller",
+				"terraform.core.oam.dev/owned-by":        "configuration6",
+				"terraform.core.oam.dev/owned-namespace": "a",
+			},
+		},
+		TypeMeta: metav1.TypeMeta{Kind: "Secret"},
+		Data: map[string][]byte{
+			"container_id": []byte("something"),
+		},
+	}
+	k8sClient7 := fake.NewClientBuilder().WithObjects(namespaceA, namespaceB, secret7, oldConnectionSecret7).Build()
+	configuration7 := v1beta2.Configuration{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "configuration6",
+			Namespace: "b",
+		},
+		Spec: v1beta2.ConfigurationSpec{
+			BaseConfigurationSpec: v1beta2.BaseConfigurationSpec{
+				WriteConnectionSecretToReference: &runtimetypes.SecretReference{
+					Name:      "connection-secret-e",
+					Namespace: "default",
+				},
+			},
+		},
+	}
+	meta7 := &TFConfigurationMeta{
+		BackendSecretName:         "f",
+		TerraformBackendNamespace: "a",
+	}
+
+	secret8 := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "d",
+			Namespace: "default",
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: map[string][]byte{
+			TerraformStateNameInSecret: tfStateData,
+		},
+	}
+	oldConnectionSecret8 := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "connection-secret-d",
+			Namespace: "default",
+			Labels: map[string]string{
+				"terraform.core.oam.dev/created-by": "terraform-controller",
+			},
+		},
+		TypeMeta: metav1.TypeMeta{Kind: "Secret"},
+		Data: map[string][]byte{
+			"container_id": []byte("something"),
+		},
+	}
+	k8sClient8 := fake.NewClientBuilder().WithObjects(secret8, oldConnectionSecret8).Build()
+	configuration8 := v1beta2.Configuration{
+		ObjectMeta: v1.ObjectMeta{
+			Name: "configuration5",
+		},
+		Spec: v1beta2.ConfigurationSpec{
+			BaseConfigurationSpec: v1beta2.BaseConfigurationSpec{
+				WriteConnectionSecretToReference: &runtimetypes.SecretReference{
+					Name:      "connection-secret-d",
+					Namespace: "default",
+				},
+			},
+		},
+	}
+	meta8 := &TFConfigurationMeta{
+		BackendSecretName:         "d",
+		TerraformBackendNamespace: "default",
+	}
+
 	testcases := map[string]struct {
 		args args
 		want want
@@ -1310,6 +1577,77 @@ func TestGetTFOutputs(t *testing.T) {
 				errMsg:   "failed to get tfstate from Terraform State secret",
 			},
 		},
+		"some data in a backend secret": {
+			args: args{
+				ctx:       ctx,
+				k8sClient: k8sClient3,
+				meta:      meta3,
+			},
+			want: want{
+				property: tfStateOutputs,
+				errMsg:   "",
+			},
+		},
+		"some data in a backend secret and creates a connectionSecret": {
+			args: args{
+				ctx:           ctx,
+				k8sClient:     k8sClient4,
+				configuration: configuration4,
+				meta:          meta4,
+			},
+			want: want{
+				property: tfStateOutputs,
+				errMsg:   "",
+			},
+		},
+		"some data in a backend secret and update a connectionSecret belong to the same configuration": {
+			args: args{
+				ctx:           ctx,
+				k8sClient:     k8sClient5,
+				configuration: configuration5,
+				meta:          meta5,
+			},
+			want: want{
+				property: tfStateOutputs,
+				errMsg:   "",
+			},
+		},
+		"some data in a backend secret and update a connectionSecret belong to another configuration": {
+			args: args{
+				ctx:           ctx,
+				k8sClient:     k8sClient6,
+				configuration: configuration6,
+				meta:          meta6,
+			},
+			want: want{
+				property: nil,
+				errMsg:   "configuration(namespace: default ; name: configuration6) cannot update secret(namespace: default ; name: connection-secret-e) whose owner is configuration(namespace: default ; name: configuration5)",
+			},
+		},
+		"update a connectionSecret belong to another configuration(same name but different namespace": {
+			args: args{
+				ctx:           ctx,
+				k8sClient:     k8sClient7,
+				configuration: configuration7,
+				meta:          meta7,
+			},
+			want: want{
+				property: nil,
+				errMsg:   "configuration(namespace: b ; name: configuration6) cannot update secret(namespace: default ; name: connection-secret-e) whose owner is configuration(namespace: a ; name: configuration6)",
+			},
+		},
+		"update a connectionSecret without owner labels": {
+			args: args{
+				ctx:           ctx,
+				k8sClient:     k8sClient8,
+				configuration: configuration8,
+				meta:          meta8,
+			},
+			want: want{
+				property: tfStateOutputs,
+				errMsg:   "",
+			},
+		},
 	}
 
 	for name, tc := range testcases {
@@ -1324,4 +1662,180 @@ func TestGetTFOutputs(t *testing.T) {
 		})
 	}
 
+}
+
+func TestUpdateApplyStatus(t *testing.T) {
+	type args struct {
+		k8sClient client.Client
+		state     types.ConfigurationState
+		message   string
+		meta      *TFConfigurationMeta
+	}
+	type want struct {
+		errMsg string
+	}
+	ctx := context.Background()
+	s := runtime.NewScheme()
+	v1beta2.AddToScheme(s)
+
+	configuration := &v1beta2.Configuration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "a",
+			Namespace:  "b",
+			Generation: int64(1),
+		},
+		Spec: v1beta2.ConfigurationSpec{
+			HCL: "c",
+		},
+		Status: v1beta2.ConfigurationStatus{
+			Apply: v1beta2.ConfigurationApplyStatus{
+				State: types.Available,
+			},
+		},
+	}
+	k8sClient = fake.NewClientBuilder().WithScheme(s).WithObjects(configuration).Build()
+
+	testcases := map[string]struct {
+		args args
+		want want
+	}{
+		"configuration is available": {
+			args: args{
+				meta: &TFConfigurationMeta{
+					Name:      "a",
+					Namespace: "b",
+				},
+				state:   types.Available,
+				message: "xxx",
+			},
+		},
+		"configuration cloud not be found": {
+			args: args{
+				meta: &TFConfigurationMeta{
+					Name:      "z",
+					Namespace: "b",
+				},
+				state:   types.Available,
+				message: "xxx",
+			},
+		},
+	}
+	for name, tc := range testcases {
+		t.Run(name, func(t *testing.T) {
+			err := tc.args.meta.updateApplyStatus(ctx, k8sClient, tc.args.state, tc.args.message)
+			if tc.want.errMsg != "" || err != nil {
+				if !strings.Contains(err.Error(), tc.want.errMsg) {
+					t.Errorf("updateApplyStatus() error = %v, wantErr %v", err, tc.want.errMsg)
+				}
+			}
+		})
+	}
+}
+
+func TestAssembleAndTriggerJob(t *testing.T) {
+	type prepare func(t *testing.T)
+	type args struct {
+		k8sClient     client.Client
+		executionType TerraformExecutionType
+		prepare
+	}
+	type want struct {
+		errMsg string
+	}
+	ctx := context.Background()
+	k8sClient = fake.NewClientBuilder().Build()
+	meta := &TFConfigurationMeta{
+		Namespace: "b",
+	}
+
+	patches := gomonkey.ApplyFunc(apiutil.GVKForObject, func(obj runtime.Object, scheme *runtime.Scheme) (schema.GroupVersionKind, error) {
+		return schema.GroupVersionKind{}, kerrors.NewNotFound(schema.GroupResource{}, "")
+	})
+	defer patches.Reset()
+
+	testcases := map[string]struct {
+		args args
+		want want
+	}{
+		"failed to create ServiceAccount": {
+			args: args{
+				executionType: TerraformApply,
+			},
+			want: want{
+				errMsg: "failed to create ServiceAccount for Terraform executor",
+			},
+		},
+	}
+	for name, tc := range testcases {
+		t.Run(name, func(t *testing.T) {
+			err := meta.assembleAndTriggerJob(ctx, k8sClient, tc.args.executionType)
+			if tc.want.errMsg != "" || err != nil {
+				if !strings.Contains(err.Error(), tc.want.errMsg) {
+					t.Errorf("assembleAndTriggerJob() error = %v, wantErr %v", err, tc.want.errMsg)
+				}
+			}
+		})
+	}
+}
+
+func TestCheckWhetherConfigurationChanges(t *testing.T) {
+	type args struct {
+		k8sClient         client.Client
+		configurationType types.ConfigurationType
+		meta              *TFConfigurationMeta
+	}
+	type want struct {
+		errMsg string
+	}
+	ctx := context.Background()
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "a",
+			Namespace: "b",
+		},
+		Data: map[string]string{
+			"c": "d",
+		},
+	}
+	k8sClient = fake.NewClientBuilder().WithObjects(cm).Build()
+
+	testcases := map[string]struct {
+		args args
+		want want
+	}{
+		"unknown configuration type": {
+			args: args{
+				meta: &TFConfigurationMeta{
+					ConfigurationCMName: "a",
+					Namespace:           "b",
+				},
+				configurationType: "xxx",
+			},
+			want: want{
+				errMsg: "unsupported configuration type, only HCL or Remote is supported",
+			},
+		},
+		"configuration map is not found": {
+			args: args{
+				meta: &TFConfigurationMeta{
+					ConfigurationCMName: "aaa",
+					Namespace:           "b",
+				},
+				configurationType: "xxx",
+			},
+			want: want{
+				errMsg: "not found",
+			},
+		},
+	}
+	for name, tc := range testcases {
+		t.Run(name, func(t *testing.T) {
+			err := tc.args.meta.CheckWhetherConfigurationChanges(ctx, k8sClient, tc.args.configurationType)
+			if tc.want.errMsg != "" || err != nil {
+				if !strings.Contains(err.Error(), tc.want.errMsg) {
+					t.Errorf("CheckWhetherConfigurationChanges() error = %v, wantErr %v", err, tc.want.errMsg)
+				}
+			}
+		})
+	}
 }

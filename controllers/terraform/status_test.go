@@ -49,7 +49,7 @@ func TestGetTerraformStatus(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			state, err := GetTerraformStatus(ctx, tc.args.namespace, tc.args.name, tc.args.containerName)
+			state, err := GetTerraformStatus(ctx, tc.args.namespace, tc.args.name, tc.args.containerName, "")
 			if tc.want.errMsg != "" {
 				assert.EqualError(t, err, tc.want.errMsg)
 			} else {
@@ -92,7 +92,7 @@ func TestGetTerraformStatus2(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			state, err := GetTerraformStatus(ctx, tc.args.namespace, tc.args.name, tc.args.containerName)
+			state, err := GetTerraformStatus(ctx, tc.args.namespace, tc.args.name, tc.args.containerName, "")
 			if tc.want.errMsg != "" {
 				assert.Contains(t, err.Error(), tc.want.errMsg)
 			} else {
@@ -143,7 +143,7 @@ func TestAnalyzeTerraformLog(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			success, state, errMsg := analyzeTerraformLog(tc.args.logs)
+			success, state, errMsg := analyzeTerraformLog(tc.args.logs, types.TerraformApply)
 			if tc.want.errMsg != "" {
 				assert.Contains(t, errMsg, tc.want.errMsg)
 			} else {
