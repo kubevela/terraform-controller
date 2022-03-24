@@ -782,7 +782,6 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 					// state file directory in advance
 					InitContainers: initContainers,
 					// Container terraform-executor will first copy predefined terraform.d to working directory, and
-<<<<<<< HEAD
 					// then run terraform init/apply.
 					Containers:         []v1.Container{container},
 					ServiceAccountName: ServiceAccountName,

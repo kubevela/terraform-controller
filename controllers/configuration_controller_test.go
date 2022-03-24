@@ -10,19 +10,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/oam-dev/terraform-controller/api/v1beta1"
-
 	"github.com/agiledragon/gomonkey/v2"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/sts"
 	"github.com/stretchr/testify/assert"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-<<<<<<< HEAD
+
 	"k8s.io/apimachinery/pkg/api/resource"
-=======
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
->>>>>>> master
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -919,20 +916,15 @@ func TestPreCheck(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-<<<<<<< HEAD
 			if tc.prepare != nil {
 				tc.prepare(t)
 			}
-			if err := tc.args.r.preCheck(ctx, tc.args.configuration, tc.args.meta); (tc.want.errMsg != "") &&
-				!strings.Contains(err.Error(), tc.want.errMsg) {
-				t.Errorf("preCheck() error = %v, wantErr %v", err, tc.want.errMsg)
-=======
+
 			err := tc.args.r.preCheck(ctx, tc.args.configuration, tc.args.meta)
 			if tc.want.errMsg != "" || err != nil {
 				if !strings.Contains(err.Error(), tc.want.errMsg) {
 					t.Errorf("preCheck() error = %v, wantErr %v", err, tc.want.errMsg)
 				}
->>>>>>> master
 			}
 		})
 	}
