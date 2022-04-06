@@ -34,16 +34,13 @@ const errGitHubBlockedNotBoolean = "the value of githubBlocked is not a boolean"
 
 // ValidConfigurationObject will validate a Configuration
 func ValidConfigurationObject(configuration *v1beta2.Configuration) (types.ConfigurationType, error) {
-	json := configuration.Spec.JSON
 	hcl := configuration.Spec.HCL
 	remote := configuration.Spec.Remote
 	switch {
-	case json == "" && hcl == "" && remote == "":
-		return "", errors.New("spec.JSON, spec.HCL or spec.Remote should be set")
-	case json != "" && hcl != "", json != "" && remote != "", hcl != "" && remote != "":
-		return "", errors.New("spec.JSON, spec.HCL and/or spec.Remote cloud not be set at the same time")
-	case json != "":
-		return types.ConfigurationJSON, nil
+	case hcl == "" && remote == "":
+		return "", errors.New("spec.HCL or spec.Remote should be set")
+	case hcl != "" && remote != "":
+		return "", errors.New("spec.HCL and spec.Remote cloud not be set at the same time")
 	case hcl != "":
 		return types.ConfigurationHCL, nil
 	case remote != "":
@@ -71,8 +68,6 @@ func RenderConfiguration(configuration *v1beta2.Configuration, terraformBackendN
 	}
 
 	switch configurationType {
-	case types.ConfigurationJSON:
-		return configuration.Spec.JSON, nil
 	case types.ConfigurationHCL:
 		completedConfiguration := configuration.Spec.HCL
 		completedConfiguration += "\n" + backendTF
@@ -125,7 +120,7 @@ func IsDeletable(ctx context.Context, k8sClient client.Client, configuration *v1
 	}
 	// allow Configuration to delete when the Provider doesn't exist or is not ready, which means external cloud resources are
 	// not provisioned at all
-	if providerObj == nil || providerObj.Status.State == types.ProviderIsNotReady {
+	if providerObj == nil || providerObj.Status.State == types.ProviderIsNotReady || configuration.Status.Apply.State == types.TerraformInitError {
 		return true, nil
 	}
 

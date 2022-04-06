@@ -26,9 +26,6 @@ import (
 
 // ConfigurationSpec defines the desired state of Configuration
 type ConfigurationSpec struct {
-	// JSON is the Terraform JSON syntax configuration.
-	// Deprecated: after v0.3.1, use HCL instead.
-	JSON string `json:"JSON,omitempty"`
 	// HCL is the Terraform HCL type configuration
 	HCL string `json:"hcl,omitempty"`
 

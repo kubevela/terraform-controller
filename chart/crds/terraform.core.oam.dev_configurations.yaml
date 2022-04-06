@@ -187,10 +187,6 @@ spec:
           spec:
             description: ConfigurationSpec defines the desired state of Configuration
             properties:
-              JSON:
-                description: 'JSON is the Terraform JSON syntax configuration. Deprecated:
-                  after v0.3.1, use HCL instead.'
-                type: string
               backend:
                 description: Backend stores the state in a Kubernetes secret with
                   locking done using a Lease resource. TODO(zzxwill) If a backend
