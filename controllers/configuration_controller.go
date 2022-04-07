@@ -32,6 +32,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
@@ -219,6 +220,16 @@ type TFConfigurationMeta struct {
 	TerraformBackendNamespace string
 	BusyboxImage              string
 	GitImage                  string
+
+	// Resources series Variables are for Setting Compute Resources required by this container
+	ResourcesLimitsCPU              string
+	ResourcesLimitsCPUQuantity      resource.Quantity
+	ResourcesLimitsMemory           string
+	ResourcesLimitsMemoryQuantity   resource.Quantity
+	ResourcesRequestsCPU            string
+	ResourcesRequestsCPUQuantity    resource.Quantity
+	ResourcesRequestsMemory         string
+	ResourcesRequestsMemoryQuantity resource.Quantity
 }
 
 func initTFConfigurationMeta(req ctrl.Request, configuration v1beta2.Configuration) *TFConfigurationMeta {
@@ -388,6 +399,51 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, namespac
 	return errors.New(types.MessageDestroyJobNotCompleted)
 }
 
+func (r *ConfigurationReconciler) preCheckResourcesSetting(meta *TFConfigurationMeta) error {
+
+	meta.ResourcesLimitsCPU = os.Getenv("RESOURCES_LIMITS_CPU")
+	if meta.ResourcesLimitsCPU != "" {
+		limitsCPU, err := resource.ParseQuantity(meta.ResourcesLimitsCPU)
+		if err != nil {
+			errMsg := "failed to parse env variable RESOURCES_LIMITS_CPU into resource.Quantity"
+			klog.ErrorS(err, errMsg)
+			return errors.Wrap(err, errMsg)
+		}
+		meta.ResourcesLimitsCPUQuantity = limitsCPU
+	}
+	meta.ResourcesLimitsMemory = os.Getenv("RESOURCES_LIMITS_MEMORY")
+	if meta.ResourcesLimitsMemory != "" {
+		limitsMemory, err := resource.ParseQuantity(meta.ResourcesLimitsMemory)
+		if err != nil {
+			errMsg := "failed to parse env variable RESOURCES_LIMITS_MEMORY into resource.Quantity"
+			klog.ErrorS(err, errMsg)
+			return errors.Wrap(err, errMsg)
+		}
+		meta.ResourcesLimitsMemoryQuantity = limitsMemory
+	}
+	meta.ResourcesRequestsCPU = os.Getenv("RESOURCES_REQUESTS_CPU")
+	if meta.ResourcesRequestsCPU != "" {
+		requestsCPU, err := resource.ParseQuantity(meta.ResourcesRequestsCPU)
+		if err != nil {
+			errMsg := "failed to parse env variable RESOURCES_REQUESTS_CPU into resource.Quantity"
+			klog.ErrorS(err, errMsg)
+			return errors.Wrap(err, errMsg)
+		}
+		meta.ResourcesRequestsCPUQuantity = requestsCPU
+	}
+	meta.ResourcesRequestsMemory = os.Getenv("RESOURCES_REQUESTS_MEMORY")
+	if meta.ResourcesRequestsMemory != "" {
+		requestsMemory, err := resource.ParseQuantity(meta.ResourcesRequestsMemory)
+		if err != nil {
+			errMsg := "failed to parse env variable RESOURCES_REQUESTS_MEMORY into resource.Quantity"
+			klog.ErrorS(err, errMsg)
+			return errors.Wrap(err, errMsg)
+		}
+		meta.ResourcesRequestsMemoryQuantity = requestsMemory
+	}
+	return nil
+}
+
 func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v1beta2.Configuration, meta *TFConfigurationMeta) error {
 	var k8sClient = r.Client
 
@@ -408,6 +464,10 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	meta.GitImage = os.Getenv("GIT_IMAGE")
 	if meta.GitImage == "" {
 		meta.GitImage = "alpine/git:latest"
+	}
+
+	if err := r.preCheckResourcesSetting(meta); err != nil {
+		return err
 	}
 
 	// Validation: 1) validate Configuration itself
@@ -649,6 +709,52 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 	}
 	initContainers = append(initContainers, tfPreApplyInitContainer)
 
+	container := v1.Container{
+		Name:            terraformContainerName,
+		Image:           meta.TerraformImage,
+		ImagePullPolicy: v1.PullIfNotPresent,
+		Command: []string{
+			"bash",
+			"-c",
+			fmt.Sprintf("terraform %s -lock=false -auto-approve", executionType),
+		},
+		VolumeMounts: []v1.VolumeMount{
+			{
+				Name:      meta.Name,
+				MountPath: WorkingVolumeMountPath,
+			},
+			{
+				Name:      InputTFConfigurationVolumeName,
+				MountPath: InputTFConfigurationVolumeMountPath,
+			},
+		},
+		Env: meta.Envs,
+	}
+
+	if meta.ResourcesLimitsCPU != "" || meta.ResourcesLimitsMemory != "" ||
+		meta.ResourcesRequestsCPU != "" || meta.ResourcesRequestsMemory != "" {
+		resourceRequirements := v1.ResourceRequirements{}
+		if meta.ResourcesLimitsCPU != "" || meta.ResourcesLimitsMemory != "" {
+			resourceRequirements.Limits = v1.ResourceList(map[v1.ResourceName]resource.Quantity{})
+			if meta.ResourcesLimitsCPU != "" {
+				resourceRequirements.Limits["cpu"] = meta.ResourcesLimitsCPUQuantity
+			}
+			if meta.ResourcesLimitsMemory != "" {
+				resourceRequirements.Limits["memory"] = meta.ResourcesLimitsMemoryQuantity
+			}
+		}
+		if meta.ResourcesRequestsCPU != "" || meta.ResourcesLimitsMemory != "" {
+			resourceRequirements.Requests = v1.ResourceList(map[v1.ResourceName]resource.Quantity{})
+			if meta.ResourcesRequestsCPU != "" {
+				resourceRequirements.Requests["cpu"] = meta.ResourcesRequestsCPUQuantity
+			}
+			if meta.ResourcesRequestsMemory != "" {
+				resourceRequirements.Requests["memory"] = meta.ResourcesRequestsMemoryQuantity
+			}
+		}
+		container.Resources = resourceRequirements
+	}
+
 	return &batchv1.Job{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Job",
@@ -676,29 +782,8 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 					// state file directory in advance
 					InitContainers: initContainers,
 					// Container terraform-executor will first copy predefined terraform.d to working directory, and
-					// then run terraform apply/destroy.
-					Containers: []v1.Container{{
-						Name:            terraformContainerName,
-						Image:           meta.TerraformImage,
-						ImagePullPolicy: v1.PullIfNotPresent,
-						Command: []string{
-							"bash",
-							"-c",
-							fmt.Sprintf("terraform %s -lock=false -auto-approve", executionType),
-						},
-						VolumeMounts: []v1.VolumeMount{
-							{
-								Name:      meta.Name,
-								MountPath: WorkingVolumeMountPath,
-							},
-							{
-								Name:      InputTFConfigurationVolumeName,
-								MountPath: InputTFConfigurationVolumeMountPath,
-							},
-						},
-						Env: meta.Envs,
-					},
-					},
+					// then run terraform init/apply.
+					Containers:         []v1.Container{container},
 					ServiceAccountName: ServiceAccountName,
 					Volumes:            executorVolumes,
 					RestartPolicy:      v1.RestartPolicyOnFailure,
