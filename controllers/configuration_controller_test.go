@@ -76,6 +76,7 @@ func TestInitTFConfigurationMeta(t *testing.T) {
 			},
 			want: &TFConfigurationMeta{
 				Namespace:           "default",
+				JobNamespace:        "default",
 				Name:                "abc",
 				ConfigurationCMName: "tf-abc",
 				VariableSecretName:  "variable-abc",
@@ -94,6 +95,7 @@ func TestInitTFConfigurationMeta(t *testing.T) {
 			configuration: completeConfiguration,
 			want: &TFConfigurationMeta{
 				Namespace:           "default",
+				JobNamespace:        "default",
 				Name:                "abc",
 				ConfigurationCMName: "tf-abc",
 				VariableSecretName:  "variable-abc",

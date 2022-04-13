@@ -21,12 +21,14 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
+	crossplanetypes "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
 	"github.com/pkg/errors"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	"github.com/oam-dev/terraform-controller/api/types"
 	terraformv1beta1 "github.com/oam-dev/terraform-controller/api/v1beta1"
@@ -61,22 +63,33 @@ func (r *ProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
-	if _, err := providercred.GetProviderCredentials(ctx, r.Client, &provider, provider.Spec.Region); err != nil {
-		provider.Status.State = types.ProviderIsNotReady
-		provider.Status.Message = fmt.Sprintf("%s: %s", errGetCredentials, err.Error())
-		klog.ErrorS(err, errGetCredentials, "Provider", req.NamespacedName)
-		if updateErr := r.Status().Update(ctx, &provider); updateErr != nil {
-			klog.ErrorS(updateErr, errSettingStatus, "Provider", req.NamespacedName)
-			return ctrl.Result{}, errors.Wrap(updateErr, errSettingStatus)
+	err := func() error {
+		switch provider.Spec.Credentials.Source {
+		case crossplanetypes.CredentialsSourceSecret:
+			if _, err := providercred.GetProviderCredentials(ctx, r.Client, &provider, provider.Spec.Region); err != nil {
+				return err
+			}
+		case crossplanetypes.CredentialsSourceInjectedIdentity:
+			break
+		default:
+			return errors.Errorf("unsupported credentials source: %s", provider.Spec.Credentials.Source)
 		}
-		return ctrl.Result{}, errors.Wrap(err, errGetCredentials)
+
+		return nil
+	}()
+	if err != nil {
+		klog.ErrorS(err, errGetCredentials, "Provider", req.NamespacedName)
+
+		provider.Status.Message = fmt.Sprintf("%s: %s", errGetCredentials, err.Error())
+		provider.Status = terraformv1beta1.ProviderStatus{State: types.ProviderIsNotReady}
+	} else {
+		provider.Status.Message = "Provider ready"
+		provider.Status = terraformv1beta1.ProviderStatus{State: types.ProviderIsReady}
 	}
 
-	provider.Status = terraformv1beta1.ProviderStatus{
-		State: types.ProviderIsReady,
-	}
 	if updateErr := r.Status().Update(ctx, &provider); updateErr != nil {
 		klog.ErrorS(updateErr, errSettingStatus, "Provider", req.NamespacedName)
+
 		return ctrl.Result{}, errors.Wrap(updateErr, errSettingStatus)
 	}
 
@@ -87,5 +100,6 @@ func (r *ProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 func (r *ProviderReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&terraformv1beta1.Provider{}).
+		WithEventFilter(&predicate.GenerationChangedPredicate{}).
 		Complete(r)
 }
