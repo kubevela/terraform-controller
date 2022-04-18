@@ -78,7 +78,7 @@ func createTerraformExecutorClusterRoleBinding(ctx context.Context, k8sClient cl
 	return nil
 }
 
-func createTerraformExecutorServiceAccount(ctx context.Context, k8sClient client.Client, namespace, serviceAccountName string) error {
+func createTerraformExecutorServiceAccount(ctx context.Context, k8sClient client.Client, namespace, serviceAccountName string, ArnRoleName string) error {
 	var serviceAccount = v1.ServiceAccount{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
@@ -87,6 +87,10 @@ func createTerraformExecutorServiceAccount(ctx context.Context, k8sClient client
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      serviceAccountName,
 			Namespace: namespace,
+			Annotations: map[string]string{
+				// This annotation inject iam role for pod
+				"eks.amazonaws.com/role-arn": ArnRoleName,
+			},
 		},
 	}
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: serviceAccountName, Namespace: namespace}, &v1.ServiceAccount{}); err != nil {
