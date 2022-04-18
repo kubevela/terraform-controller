@@ -95,7 +95,7 @@ const (
 	// ServiceAccountName is the name of the ServiceAccount for Terraform Job
 	ServiceAccountName = "tf-executor-service-account"
 	// ArnRoleName is the name of the ARN annotated in ServiceAccount for Terraform Job
-	ArnRoleName = "arn:aws:iam::001122334455:role/terraform-controller-sa"
+	arnrolename = "arn:aws:iam::001122334455:role/terraform-controller-sa"
 )
 
 // ConfigurationReconciler reconciles a Configuration object.
