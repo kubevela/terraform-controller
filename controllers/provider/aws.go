@@ -12,7 +12,6 @@ const (
 	envAWSAccessKeyID          = "AWS_ACCESS_KEY_ID"
 	envAWSSecretAccessKey      = "AWS_SECRET_ACCESS_KEY"
 	envAWSDefaultRegion        = "AWS_DEFAULT_REGION"
-	envAWSProvider             = "AWS_PROVIDER"
 	envAWSSessionToken         = "AWS_SESSION_TOKEN"
 	envAWSRoleArn              = "AWS_ROLE_ARN"
 	envAWSWebIdentityTokenFile = "AWS_WEB_IDENTITY_TOKEN_FILE"
@@ -45,7 +44,7 @@ func getAWSCredentials(secretData []byte, name, namespace, region string) (map[s
 }
 
 func getAWSCredentialsInjectedIdentity(region string) (map[string]string, error) {
-	//var ak AWSCredentialsInjected
+	// var ak AWSCredentialsInjected
 	// opts := &ak.Options{Environment: map[string]string{
 	// 	"AWS_ROLE_ARN":                "arn:aws:iam::001122334455:role/terrafrom-controller-sa",
 	// 	"AWS_WEB_IDENTITY_TOKEN_FILE": "/var/run/secrets/eks.amazonaws.com/serviceaccount/token",

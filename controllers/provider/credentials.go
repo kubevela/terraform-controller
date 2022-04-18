@@ -113,8 +113,7 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, provid
 			return nil, errors.New(errMsg)
 		}
 	case "InjectedIdentity":
-		switch provider.Spec.Provider {
-		case string(aws):
+		if provider.Spec.Provider == "aws" {
 			return getAWSCredentialsInjectedIdentity(region)
 		}
 	default:
