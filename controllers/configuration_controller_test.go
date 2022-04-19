@@ -1236,6 +1236,20 @@ func TestTerraformDestroy(t *testing.T) {
 			want: want{},
 		},
 		{
+			name: "provider is not ready",
+			args: args{
+				r:             r1,
+				configuration: &v1beta2.Configuration{},
+				meta: &TFConfigurationMeta{
+					ConfigurationCMName: "tf-abc",
+					Namespace:           "default",
+				},
+			},
+			want: want{
+				errMsg: "jobs.batch \"\" not found",
+			},
+		},
+		{
 			name: "referenced provider is not available",
 			args: args{
 				r:             r2,
