@@ -169,7 +169,7 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			}
 		}
 
-		if err := r.terraformDestroy(ctx, req.Namespace, configuration, meta); err != nil {
+		if err := r.terraformDestroy(ctx, configuration, meta); err != nil {
 			if err.Error() == types.MessageDestroyJobNotCompleted {
 				return ctrl.Result{RequeueAfter: 3 * time.Second}, nil
 			}
@@ -333,7 +333,7 @@ func (r *ConfigurationReconciler) terraformApply(ctx context.Context, namespace 
 	return nil
 }
 
-func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, namespace string, configuration v1beta2.Configuration, meta *TFConfigurationMeta) error {
+func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, configuration v1beta2.Configuration, meta *TFConfigurationMeta) error {
 	var (
 		destroyJob batchv1.Job
 		k8sClient  = r.Client
@@ -349,8 +349,9 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, namespac
 	if !deleteConfigurationDirectly {
 		if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.DestroyJobName, Namespace: meta.JobNamespace}, &destroyJob); err != nil {
 			if kerrors.IsNotFound(err) {
-				if err := r.Client.Get(ctx, client.ObjectKey{Name: configuration.Name, Namespace: meta.Namespace}, &v1beta2.Configuration{}); err == nil {
+				if err := r.Client.Get(ctx, client.ObjectKey{Name: configuration.Name, Namespace: configuration.Namespace}, &v1beta2.Configuration{}); err == nil {
 					if err = meta.assembleAndTriggerJob(ctx, k8sClient, TerraformDestroy); err != nil {
+						fmt.Println("1")
 						return err
 					}
 				}

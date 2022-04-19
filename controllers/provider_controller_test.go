@@ -130,21 +130,21 @@ func TestReconcile(t *testing.T) {
 			want: want{},
 		},
 		{
-			name: "Provider is found, but the secret is not available",
+			name: "Provider is found but the secret is not available",
 			args: args{
 				req: req,
 				r:   r3,
 			},
 			want: want{
-				errMsg: errGetCredentials,
+				errMsg: `failed to get the Secret from Provider: secrets "abc" not found`,
 			},
 		},
 	}
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := tc.args.r.Reconcile(ctx, tc.args.req); (tc.want.errMsg != "") &&
-				!strings.Contains(err.Error(), tc.want.errMsg) {
+			_, err := tc.args.r.Reconcile(ctx, tc.args.req)
+			if tc.want.errMsg != "" && !strings.Contains(err.Error(), tc.want.errMsg) {
 				t.Errorf("Reconcile() error = %v, wantErr %v", err, tc.want.errMsg)
 			}
 		})

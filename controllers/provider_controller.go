@@ -65,12 +65,11 @@ func (r *ProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	err := func() error {
 		switch provider.Spec.Credentials.Source {
-		case crossplanetypes.CredentialsSourceSecret:
-			if _, err := providercred.GetProviderCredentials(ctx, r.Client, &provider, provider.Spec.Region); err != nil {
-				return err
-			}
 		case crossplanetypes.CredentialsSourceInjectedIdentity:
 			break
+		case crossplanetypes.CredentialsSourceSecret:
+			_, err := providercred.GetProviderCredentials(ctx, r.Client, &provider, provider.Spec.Region)
+			return err
 		default:
 			return errors.Errorf("unsupported credentials source: %s", provider.Spec.Credentials.Source)
 		}
@@ -93,7 +92,7 @@ func (r *ProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, errors.Wrap(updateErr, errSettingStatus)
 	}
 
-	return ctrl.Result{}, nil
+	return ctrl.Result{}, err
 }
 
 // SetupWithManager setups with a manager
