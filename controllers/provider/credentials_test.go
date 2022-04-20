@@ -374,6 +374,21 @@ func TestGetProviderCredentials(t *testing.T) {
 			},
 			errMsg: "unsupported provider",
 		},
+		{
+			name: "credentials injected as source, should return an error",
+			args: args{
+				k8sClient: k8sClient1,
+				provider: v1beta1.Provider{
+					Spec: v1beta1.ProviderSpec{
+						Credentials: v1beta1.ProviderCredentials{
+							Source: "InjectedIdentity",
+						},
+						Provider: "aws",
+					},
+				},
+			},
+			errMsg: ErrCredentialNotRetrieved,
+		},
 	}
 
 	for _, tt := range tests {

@@ -113,6 +113,8 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	fmt.Println("HELLO", configuration)
+
 	meta := initTFConfigurationMeta(req, configuration)
 	if r.JobNamespace != "" {
 		uid := string(configuration.GetUID())

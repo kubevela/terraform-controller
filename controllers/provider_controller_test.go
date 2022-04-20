@@ -94,6 +94,32 @@ func TestReconcile(t *testing.T) {
 
 	r3.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(provider3).Build()
 
+	r4 := &ProviderReconciler{}
+	provider4 := &v1beta1.Provider{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "aws",
+			Namespace: "default",
+		},
+		Spec: v1beta1.ProviderSpec{
+			Credentials: v1beta1.ProviderCredentials{Source: "InjectedIdentity"},
+			Provider:    "aws",
+		},
+	}
+	r4.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(provider4).Build()
+
+	r5 := &ProviderReconciler{}
+	provider5 := &v1beta1.Provider{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "aws",
+			Namespace: "default",
+		},
+		Spec: v1beta1.ProviderSpec{
+			Credentials: v1beta1.ProviderCredentials{Source: "Invalid"},
+			Provider:    "aws",
+		},
+	}
+	r5.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(provider5).Build()
+
 	type args struct {
 		req reconcile.Request
 		r   *ProviderReconciler
@@ -137,6 +163,24 @@ func TestReconcile(t *testing.T) {
 			},
 			want: want{
 				errMsg: `failed to get the Secret from Provider: secrets "abc" not found`,
+			},
+		},
+		{
+			name: "Provider is using source injected identity",
+			args: args{
+				req: req,
+				r:   r4,
+			},
+			want: want{},
+		},
+		{
+			name: "Provider source is invalid",
+			args: args{
+				req: req,
+				r:   r5,
+			},
+			want: want{
+				errMsg: `unsupported credentials source: Invalid`,
 			},
 		},
 	}

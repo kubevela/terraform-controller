@@ -480,6 +480,25 @@ func TestConfigurationReconcile(t *testing.T) {
 	r5 := &ConfigurationReconciler{}
 	r5.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(secret, provider, configuration5, destroyJob5).Build()
 
+	// @step: create the setup for the job namespace tests
+	configuration6 := &v1beta2.Configuration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "a",
+			Namespace:  "b",
+			Finalizers: []string{configurationFinalizer},
+			UID:        "12345",
+		},
+		Spec: v1beta2.ConfigurationSpec{
+			HCL: "c",
+		},
+	}
+	namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "builds"}}
+	r6 := &ConfigurationReconciler{JobNamespace: "builds"}
+	r6.Client = fake.NewClientBuilder().
+		WithScheme(s).
+		WithObjects(namespace, secret, provider, configuration6).
+		Build()
+
 	type args struct {
 		req reconcile.Request
 		r   *ConfigurationReconciler
@@ -490,11 +509,12 @@ func TestConfigurationReconcile(t *testing.T) {
 	}
 
 	testcases := []struct {
-		name string
-		args args
-		want want
+		name  string
+		args  args
+		want  want
+		check func(t *testing.T, cc client.Client)
 	}{
-		{
+		/*{
 			name: "Configuration is not found",
 			args: args{
 				req: req,
@@ -531,6 +551,20 @@ func TestConfigurationReconcile(t *testing.T) {
 				req: req,
 				r:   r5,
 			},
+		},*/
+		{
+			name: "Builds should be run in job namespace",
+			args: args{
+				req: req,
+				r:   r6,
+			},
+			check: func(t *testing.T, cc client.Client) {
+				job := &batchv1.Job{}
+				err := cc.Get(context.TODO(), k8stypes.NamespacedName{Name: "12345-apply", Namespace: "builds"}, job)
+				if err != nil {
+					t.Error("Failed to retrieve jobs from builds namespace")
+				}
+			},
 		},
 	}
 
@@ -541,6 +575,9 @@ func TestConfigurationReconcile(t *testing.T) {
 					!strings.Contains(err.Error(), tc.want.errMsg) {
 					t.Errorf("Reconcile() error = %v, wantErr %v", err, tc.want.errMsg)
 				}
+			}
+			if tc.check != nil {
+				tc.check(t, tc.args.r.Client)
 			}
 		})
 	}
