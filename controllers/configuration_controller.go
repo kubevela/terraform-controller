@@ -27,6 +27,7 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/go-logr/logr"
 	"github.com/oam-dev/terraform-controller/controllers/configuration/backend"
 	"github.com/pkg/errors"
@@ -656,6 +657,8 @@ func (meta *TFConfigurationMeta) assembleAndTriggerJob(ctx context.Context, k8sC
 
 	job := meta.assembleTerraformJob(executionType)
 
+	fmt.Println("NAME", spew.Sdump(job.Name))
+
 	return k8sClient.Create(ctx, job)
 }
 
@@ -803,6 +806,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 
 	name := meta.ApplyJobName
 	if executionType == TerraformDestroy {
+		fmt.Println("HERE")
 		name = meta.DestroyJobName
 	}
 

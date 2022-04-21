@@ -1169,6 +1169,14 @@ func TestTerraformDestroy(t *testing.T) {
 			Namespace: "default",
 			Name:      "b",
 		},
+		Spec: v1beta2.ConfigurationSpec{
+			BaseConfigurationSpec: v1beta2.BaseConfigurationSpec{
+				ProviderReference: &runtimetypes.Reference{
+					Name:      "not_there",
+					Namespace: "not_there",
+				},
+			},
+		},
 	}
 	k8sClient2 := fake.NewClientBuilder().WithScheme(s).WithObjects(provider1, configuration).Build()
 	r2.Client = k8sClient2
@@ -1295,9 +1303,9 @@ func TestTerraformDestroy(t *testing.T) {
 				configuration: configuration,
 				meta: &TFConfigurationMeta{
 					ConfigurationCMName: "tf-abc",
-					Namespace:           "default",
 					ControllerNamespace: "default",
 					DeleteResource:      true,
+					Namespace:           "default",
 				},
 			},
 			want: want{

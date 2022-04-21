@@ -28,7 +28,6 @@ import (
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	"github.com/oam-dev/terraform-controller/api/types"
 	terraformv1beta1 "github.com/oam-dev/terraform-controller/api/v1beta1"
@@ -99,6 +98,5 @@ func (r *ProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 func (r *ProviderReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&terraformv1beta1.Provider{}).
-		WithEventFilter(&predicate.GenerationChangedPredicate{}).
 		Complete(r)
 }
