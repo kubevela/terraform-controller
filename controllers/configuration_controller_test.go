@@ -553,7 +553,7 @@ func TestConfigurationReconcile(t *testing.T) {
 			},
 		},
 		{
-			name: "Builds should be run in job namespace",
+			name: "Builds should be run in the controller namespace when defined",
 			args: args{
 				req: req,
 				r:   r6,
@@ -1288,7 +1288,7 @@ func TestTerraformDestroy(t *testing.T) {
 				errMsg: "jobs.batch \"\" not found",
 			},
 		},
-		/*{
+		{
 			name: "referenced provider is not available",
 			args: args{
 				r:             r2,
@@ -1296,14 +1296,14 @@ func TestTerraformDestroy(t *testing.T) {
 				meta: &TFConfigurationMeta{
 					ConfigurationCMName: "tf-abc",
 					Namespace:           "default",
-					JobNamespace:        "default",
+					ControllerNamespace: "default",
 					DeleteResource:      true,
 				},
 			},
 			want: want{
 				errMsg: "jobs.batch \"\" not found",
 			},
-		},*/
+		},
 		{
 			name: "could not directly remove resources, and destroy job completes",
 			args: args{

@@ -355,7 +355,6 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, configur
 			if kerrors.IsNotFound(err) {
 				if err := r.Client.Get(ctx, client.ObjectKey{Name: configuration.Name, Namespace: configuration.Namespace}, &v1beta2.Configuration{}); err == nil {
 					if err = meta.assembleAndTriggerJob(ctx, k8sClient, TerraformDestroy); err != nil {
-						fmt.Println("1")
 						return err
 					}
 				}
