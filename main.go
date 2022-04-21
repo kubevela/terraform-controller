@@ -50,13 +50,13 @@ func main() {
 	var enableLeaderElection bool
 	var syncPeriod time.Duration
 	var namespace string
-	var jobNamespace string
+	var controllerNamespace string
 
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false, "Enable leader election for controller manager, this will ensure there is only one active controller manager.")
 	flag.DurationVar(&syncPeriod, "informer-re-sync-interval", 10*time.Second, "controller shared informer lister full re-sync period")
 	flag.StringVar(&metricsAddr, "metrics-addr", ":38080", "The address the metric endpoint binds to.")
 	flag.StringVar(&namespace, "namespace", "", "Namespace to watch for resources, defaults to all namespaces")
-	flag.StringVar(&jobNamespace, "job-namespace", "", "Namespace to watch run the terraform jobs, defaults to resource namespace")
+	flag.StringVar(&controllerNamespace, "controller-namespace", "vela-system", "Namespace to run the terraform jobs")
 
 	// embed klog
 	klog.InitFlags(nil)
@@ -79,10 +79,10 @@ func main() {
 	}
 
 	if err = (&controllers.ConfigurationReconciler{
-		Client:       mgr.GetClient(),
-		JobNamespace: jobNamespace,
-		Log:          ctrl.Log.WithName("controllers").WithName("Configuration"),
-		Scheme:       mgr.GetScheme(),
+		Client:              mgr.GetClient(),
+		ControllerNamespace: controllerNamespace,
+		Log:                 ctrl.Log.WithName("controllers").WithName("Configuration"),
+		Scheme:              mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Configuration")
 		os.Exit(1)

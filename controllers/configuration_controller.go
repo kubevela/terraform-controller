@@ -68,10 +68,14 @@ const (
 )
 
 const (
+	// TerraformStateNameInSecret is the key name to store Terraform state
+	TerraformStateNameInSecret = "tfstate"
 	// TFInputConfigMapName is the CM name for Terraform Input Configuration
 	TFInputConfigMapName = "tf-%s"
 	// TFVariableSecret is the Secret name for variables, including credentials from Provider
 	TFVariableSecret = "variable-%s"
+	// TFBackendSecret is the Secret name for Kubernetes backend
+	TFBackendSecret = "tfstate-%s-%s"
 )
 
 // TerraformExecutionType is the type for Terraform execution
@@ -95,10 +99,10 @@ const (
 // ConfigurationReconciler reconciles a Configuration object.
 type ConfigurationReconciler struct {
 	client.Client
-	Log          logr.Logger
-	JobNamespace string
-	ProviderName string
-	Scheme       *runtime.Scheme
+	Log                 logr.Logger
+	ControllerNamespace string
+	ProviderName        string
+	Scheme              *runtime.Scheme
 }
 
 // +kubebuilder:rbac:groups=terraform.core.oam.dev,resources=configurations,verbs=get;list;watch;create;update;patch;delete
@@ -113,10 +117,8 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	fmt.Println("HELLO", configuration)
-
 	meta := initTFConfigurationMeta(req, configuration)
-	if r.JobNamespace != "" {
+	if r.ControllerNamespace != "" {
 		uid := string(configuration.GetUID())
 		// @step: since we are using a single namespace to run these, we must ensure the names
 		// are unique across the namespace
@@ -124,8 +126,8 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		meta.BackendSecretName = fmt.Sprintf(TFBackendSecret, terraformWorkspace, uid)
 		meta.ConfigurationCMName = fmt.Sprintf(TFInputConfigMapName, uid)
 		meta.DestroyJobName = uid + "-" + string(TerraformDestroy)
-		meta.JobNamespace = r.JobNamespace
-		meta.TerraformBackendNamespace = r.JobNamespace
+		meta.ControllerNamespace = r.ControllerNamespace
+		meta.TerraformBackendNamespace = r.ControllerNamespace
 		meta.VariableSecretName = fmt.Sprintf(TFVariableSecret, uid)
 
 		configuration.Spec.Backend = &v1beta2.Backend{
@@ -151,7 +153,7 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	var tfExecutionJob = &batchv1.Job{}
-	if err := r.Client.Get(ctx, client.ObjectKey{Name: meta.ApplyJobName, Namespace: meta.JobNamespace}, tfExecutionJob); err == nil {
+	if err := r.Client.Get(ctx, client.ObjectKey{Name: meta.ApplyJobName, Namespace: meta.ControllerNamespace}, tfExecutionJob); err == nil {
 		if !meta.EnvChanged && tfExecutionJob.Status.Succeeded == int32(1) {
 			if err := meta.updateApplyStatus(ctx, r.Client, types.Available, types.MessageCloudResourceDeployed); err != nil {
 				return ctrl.Result{}, err
@@ -163,7 +165,7 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		// terraform destroy
 		klog.InfoS("performing Configuration Destroy", "Namespace", req.Namespace, "Name", req.Name, "JobName", meta.DestroyJobName)
 
-		_, err := terraform.GetTerraformStatus(ctx, meta.Namespace, meta.DestroyJobName, meta.JobNamespace, terraformContainerName, terraformInitContainerName)
+		_, err := terraform.GetTerraformStatus(ctx, meta.Namespace, meta.DestroyJobName, meta.ControllerNamespace, terraformContainerName, terraformInitContainerName)
 		if err != nil {
 			klog.ErrorS(err, "Terraform destroy failed")
 			if updateErr := meta.updateDestroyStatus(ctx, r.Client, types.ConfigurationDestroyFailed, err.Error()); updateErr != nil {
@@ -199,7 +201,7 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		}
 		return ctrl.Result{RequeueAfter: 3 * time.Second}, errors.Wrap(err, "failed to create/update cloud resource")
 	}
-	state, err := terraform.GetTerraformStatus(ctx, meta.Namespace, meta.ApplyJobName, meta.JobNamespace, terraformContainerName, terraformInitContainerName)
+	state, err := terraform.GetTerraformStatus(ctx, meta.Namespace, meta.ApplyJobName, meta.ControllerNamespace, terraformContainerName, terraformInitContainerName)
 	if err != nil {
 		klog.ErrorS(err, "Terraform apply failed")
 		if updateErr := meta.updateApplyStatus(ctx, r.Client, state, err.Error()); updateErr != nil {
@@ -216,7 +218,7 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 type TFConfigurationMeta struct {
 	Name                    string
 	Namespace               string
-	JobNamespace            string
+	ControllerNamespace     string
 	ConfigurationType       types.ConfigurationType
 	CompleteConfiguration   string
 	RemoteGit               string
@@ -257,7 +259,7 @@ type TFConfigurationMeta struct {
 
 func initTFConfigurationMeta(req ctrl.Request, configuration v1beta2.Configuration) *TFConfigurationMeta {
 	var meta = &TFConfigurationMeta{
-		JobNamespace:        req.Namespace,
+		ControllerNamespace: req.Namespace,
 		Namespace:           req.Namespace,
 		Name:                req.Name,
 		ConfigurationCMName: fmt.Sprintf(TFInputConfigMapName, req.Name),
@@ -307,7 +309,7 @@ func (r *ConfigurationReconciler) terraformApply(ctx context.Context, namespace 
 		tfExecutionJob batchv1.Job
 	)
 
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.ApplyJobName, Namespace: meta.JobNamespace}, &tfExecutionJob); err != nil {
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.ApplyJobName, Namespace: meta.ControllerNamespace}, &tfExecutionJob); err != nil {
 		if kerrors.IsNotFound(err) {
 			return meta.assembleAndTriggerJob(ctx, k8sClient, TerraformApply)
 		}
@@ -349,7 +351,7 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, configur
 	deleteConfigurationDirectly := deletable || !meta.DeleteResource
 
 	if !deleteConfigurationDirectly {
-		if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.DestroyJobName, Namespace: meta.JobNamespace}, &destroyJob); err != nil {
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.DestroyJobName, Namespace: meta.ControllerNamespace}, &destroyJob); err != nil {
 			if kerrors.IsNotFound(err) {
 				if err := r.Client.Get(ctx, client.ObjectKey{Name: configuration.Name, Namespace: configuration.Namespace}, &v1beta2.Configuration{}); err == nil {
 					if err = meta.assembleAndTriggerJob(ctx, k8sClient, TerraformDestroy); err != nil {
@@ -379,7 +381,7 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, configur
 	}
 	// When the deletion Job process succeeded, clean up work is starting.
 	if !deleteConfigurationDirectly {
-		if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.DestroyJobName, Namespace: meta.JobNamespace}, &destroyJob); err != nil {
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.DestroyJobName, Namespace: meta.ControllerNamespace}, &destroyJob); err != nil {
 			return err
 		}
 		if destroyJob.Status.Succeeded == int32(1) {
@@ -573,13 +575,13 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	}
 
 	var variableInSecret v1.Secret
-	err = k8sClient.Get(ctx, client.ObjectKey{Name: meta.VariableSecretName, Namespace: meta.JobNamespace}, &variableInSecret)
+	err = k8sClient.Get(ctx, client.ObjectKey{Name: meta.VariableSecretName, Namespace: meta.ControllerNamespace}, &variableInSecret)
 	switch {
 	case kerrors.IsNotFound(err):
 		var secret = v1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      meta.VariableSecretName,
-				Namespace: meta.JobNamespace,
+				Namespace: meta.ControllerNamespace,
 			},
 			TypeMeta: metav1.TypeMeta{Kind: "Secret"},
 			Data:     meta.VariableSecretData,
@@ -603,7 +605,7 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 		return err
 	}
 
-	return createTerraformExecutorClusterRole(ctx, k8sClient, fmt.Sprintf("%s-%s", meta.JobNamespace, ClusterRoleName))
+	return createTerraformExecutorClusterRole(ctx, k8sClient, fmt.Sprintf("%s-%s", meta.ControllerNamespace, ClusterRoleName))
 }
 
 func (meta *TFConfigurationMeta) updateApplyStatus(ctx context.Context, k8sClient client.Client, state types.ConfigurationState, message string) error {
@@ -646,10 +648,10 @@ func (meta *TFConfigurationMeta) updateDestroyStatus(ctx context.Context, k8sCli
 
 func (meta *TFConfigurationMeta) assembleAndTriggerJob(ctx context.Context, k8sClient client.Client, executionType TerraformExecutionType) error {
 	// apply rbac
-	if err := createTerraformExecutorServiceAccount(ctx, k8sClient, meta.JobNamespace, ServiceAccountName); err != nil {
+	if err := createTerraformExecutorServiceAccount(ctx, k8sClient, meta.ControllerNamespace, ServiceAccountName); err != nil {
 		return err
 	}
-	if err := createTerraformExecutorClusterRoleBinding(ctx, k8sClient, meta.JobNamespace, fmt.Sprintf("%s-%s", meta.JobNamespace, ClusterRoleName), ServiceAccountName); err != nil {
+	if err := createTerraformExecutorClusterRoleBinding(ctx, k8sClient, meta.ControllerNamespace, fmt.Sprintf("%s-%s", meta.ControllerNamespace, ClusterRoleName), ServiceAccountName); err != nil {
 		return err
 	}
 
@@ -671,7 +673,7 @@ func (meta *TFConfigurationMeta) updateTerraformJobIfNeeded(ctx context.Context,
 			}
 		}
 		var s v1.Secret
-		if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.VariableSecretName, Namespace: meta.JobNamespace}, &s); err == nil {
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.VariableSecretName, Namespace: meta.ControllerNamespace}, &s); err == nil {
 			if deleteErr := k8sClient.Delete(ctx, &s); deleteErr != nil {
 				return deleteErr
 			}
@@ -812,7 +814,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: meta.JobNamespace,
+			Namespace: meta.ControllerNamespace,
 		},
 		Spec: batchv1.JobSpec{
 			Parallelism:  &parallelism,
@@ -1043,7 +1045,7 @@ func getTerraformJSONVariable(tfVariables *runtime.RawExtension) (map[string]int
 
 func (meta *TFConfigurationMeta) deleteConfigMap(ctx context.Context, k8sClient client.Client) error {
 	var cm v1.ConfigMap
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.ConfigurationCMName, Namespace: meta.JobNamespace}, &cm); err == nil {
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.ConfigurationCMName, Namespace: meta.ControllerNamespace}, &cm); err == nil {
 		if err := k8sClient.Delete(ctx, &cm); err != nil {
 			return err
 		}
@@ -1068,13 +1070,13 @@ func deleteConnectionSecret(ctx context.Context, k8sClient client.Client, name, 
 
 func (meta *TFConfigurationMeta) createOrUpdateConfigMap(ctx context.Context, k8sClient client.Client, data map[string]string) error {
 	var gotCM v1.ConfigMap
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.ConfigurationCMName, Namespace: meta.JobNamespace}, &gotCM); err != nil {
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.ConfigurationCMName, Namespace: meta.ControllerNamespace}, &gotCM); err != nil {
 		if kerrors.IsNotFound(err) {
 			cm := v1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      meta.ConfigurationCMName,
-					Namespace: meta.JobNamespace,
+					Namespace: meta.ControllerNamespace,
 				},
 				Data: data,
 			}
@@ -1113,7 +1115,7 @@ func (meta *TFConfigurationMeta) storeTFConfiguration(ctx context.Context, k8sCl
 // CheckWhetherConfigurationChanges will check whether configuration is changed
 func (meta *TFConfigurationMeta) CheckWhetherConfigurationChanges(ctx context.Context, k8sClient client.Client, configurationType types.ConfigurationType) error {
 	var cm v1.ConfigMap
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.ConfigurationCMName, Namespace: meta.JobNamespace}, &cm); err != nil {
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.ConfigurationCMName, Namespace: meta.ControllerNamespace}, &cm); err != nil {
 		return err
 	}
 

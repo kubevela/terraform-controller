@@ -21,8 +21,8 @@ spec:
           image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args:
-            {{- if .Values.jobNamespace }}
-            - --jobNamespace={{ .Values.jobNamespace }}
+            {{- if .Values.controllerNamespace }}
+            - --controller-namespace={{ .Values.controllerNamespace }}
             {{- end }}
           env:
             - name: CONTROLLER_NAMESPACE
