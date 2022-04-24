@@ -188,40 +188,32 @@ spec:
             description: ConfigurationSpec defines the desired state of Configuration
             properties:
               backend:
-                description: 'Backend describes the Terraform backend configuration.
-                  This field is needed if the users use a git repo to provide the
-                  hcl files and want to use their custom Terraform backend (instead
-                  of the default kubernetes backend type). Notice: the content in
-                  this field will **override** the backend configuration in the inline
-                  hcl code or in the hcl files in the git repo.'
+                description: Backend is used to provide the configuration for the
+                  official kubernetes backend. This field is used only if you choose
+                  to use the official kubernetes backend in the same kubernetes cluster
+                  as the Configuration.
                 properties:
-                  config:
-                    description: Config is the detail configurations of the Terraform
-                      backend, and it represents the key-value pairs inside the terraform
-                      backend block in the hcl files
-                    type: object
-                  hcl:
-                    description: HCL allows users to use raw hcl code to specify their
-                      Terraform backend configuration
-                    type: string
                   inClusterConfig:
-                    description: 'InClusterConfig Used to authenticate to the cluster
-                      from inside a pod. Only `true` is allowed Deprecated: use the
-                      `type` and `config` instead'
+                    description: InClusterConfig Used to authenticate to the cluster
+                      from inside a pod. Only `true` is allowed
                     type: boolean
                   secretSuffix:
                     description: 'SecretSuffix used when creating secrets. Secrets
-                      will be named in the format: tfstate-{workspace}-{secretSuffix}
-                      Deprecated: use the `type` and `config` instead'
+                      will be named in the format: tfstate-{workspace}-{secretSuffix}'
                     type: string
-                  type:
-                    description: Type specifies the Terraform backend type, for example,
-                      "kubernetes", "s3", etc
+                type: object
+              backendRef:
+                description: BackendReference specifies the reference to Backend
+                properties:
+                  name:
+                    description: Name of the referenced object.
                     type: string
-                  workspace:
-                    description: Workspace is used only when the users use the "remote"
-                      backend type
-                    type: object
+                  namespace:
+                    default: default
+                    description: Namespace of the referenced object.
+                    type: string
+                required:
+                - name
                 type: object
               customRegion:
                 description: Region is cloud provider's region. It will override the

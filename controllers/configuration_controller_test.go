@@ -50,7 +50,7 @@ func TestInitTFConfigurationMeta(t *testing.T) {
 		},
 		Spec: v1beta2.ConfigurationSpec{
 			Path: "alibaba/rds",
-			Backend: &v1beta2.Backend{
+			Backend: &v1beta2.BackendK8SConf{
 				SecretSuffix: "s1",
 			},
 		},

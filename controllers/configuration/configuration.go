@@ -57,7 +57,7 @@ func RenderConfiguration(configuration *v1beta2.Configuration, terraformBackendN
 		}
 		configuration.Spec.Backend.InClusterConfig = true
 	} else {
-		configuration.Spec.Backend = &v1beta2.Backend{
+		configuration.Spec.Backend = &v1beta2.BackendK8SConf{
 			SecretSuffix:    configuration.Name,
 			InClusterConfig: true,
 		}

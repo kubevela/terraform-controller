@@ -1,0 +1,642 @@
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.6.0
+  creationTimestamp: null
+  name: backends.terraform.core.oam.dev
+spec:
+  group: terraform.core.oam.dev
+  names:
+    kind: Backend
+    listKind: BackendList
+    plural: backends
+    singular: backend
+  scope: Namespaced
+  versions:
+  - name: v1beta1
+    schema:
+      openAPIV3Schema:
+        description: Backend stores the state in a Kubernetes secret with locking
+          done using a Lease resource.
+        properties:
+          inClusterConfig:
+            description: InClusterConfig Used to authenticate to the cluster from
+              inside a pod. Only `true` is allowed
+            type: boolean
+          secretSuffix:
+            description: 'SecretSuffix used when creating secrets. Secrets will be
+              named in the format: tfstate-{workspace}-{secretSuffix}'
+            type: string
+        type: object
+    served: true
+    storage: false
+  - additionalPrinterColumns:
+    - jsonPath: .status.state
+      name: STATE
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: AGE
+      type: date
+    name: v1beta2
+    schema:
+      openAPIV3Schema:
+        description: Backend is the Schema for the backend API.
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: BackendSpec defines the desired state of Backend
+            properties:
+              backend:
+                description: Backend contains all options supported by the Terraform
+                  backend configuration.
+                properties:
+                  artifactory:
+                    description: Artifactory is needed for the Terraform `artifactory`
+                      backend type.
+                    properties:
+                      password:
+                        type: string
+                      repo:
+                        type: string
+                      subpath:
+                        type: string
+                      url:
+                        type: string
+                      username:
+                        type: string
+                    type: object
+                  azurerm:
+                    description: Azurerm is needed for the Terraform `azurerm` backend
+                      type.
+                    properties:
+                      access_key:
+                        type: string
+                      client_certificate_password:
+                        type: string
+                      client_certificate_secret:
+                        description: ClientCertificateSecret is a reference to a secret
+                          containing the client certificate It's used to replace the
+                          `client_certificate_path` in native hcl backend configuration
+                          as we cannot use local file paths in the kubernetes cluster.
+                        type: string
+                      client_id:
+                        type: string
+                      client_secret:
+                        type: string
+                      container_name:
+                        type: string
+                      endpoint:
+                        type: string
+                      environment:
+                        type: string
+                      key:
+                        type: string
+                      msi_endpoint:
+                        type: string
+                      resource_group_name:
+                        type: string
+                      sas_token:
+                        type: string
+                      snapshot:
+                        type: boolean
+                      storage_account_name:
+                        type: string
+                      subscription_id:
+                        type: string
+                      tenant_id:
+                        type: string
+                      use_azuread_auth:
+                        type: string
+                      use_microsoft_graph:
+                        type: boolean
+                      use_msi:
+                        type: boolean
+                    type: object
+                  consul:
+                    description: Consul is needed for the Terraform `consul` backend
+                      type.
+                    properties:
+                      access_token:
+                        type: string
+                      address:
+                        type: string
+                      ca_file_secret:
+                        description: CAFileSecret is a reference to a secret containing
+                          the CA certificate It's used to replace the `ca_file` in
+                          native hcl backend configuration as we cannot use local
+                          file paths in the kubernetes cluster.
+                        type: string
+                      cert_file_secret:
+                        description: CertFileSecret is a reference to a secret containing
+                          the client certificate It's used to replace the `cert_file`
+                          in native hcl backend configuration as we cannot use local
+                          file paths in the kubernetes cluster.
+                        type: string
+                      datacenter:
+                        type: string
+                      gzip:
+                        type: boolean
+                      http_auth:
+                        type: string
+                      key_file_secret:
+                        description: KeyFileSecret is a reference to a secret containing
+                          the client key It's used to replace the `key_file` in native
+                          hcl backend configuration as we cannot use local file paths
+                          in the kubernetes cluster.
+                        type: string
+                      lock:
+                        type: boolean
+                      path:
+                        type: string
+                      schema:
+                        type: string
+                    type: object
+                  cos:
+                    description: Consul is needed for the Terraform `consul` backend
+                      type.
+                    properties:
+                      acl:
+                        type: string
+                      bucket:
+                        type: string
+                      encrypt:
+                        type: string
+                      key:
+                        type: string
+                      prefix:
+                        type: string
+                      region:
+                        type: string
+                      secret_id:
+                        type: string
+                      secret_key:
+                        type: string
+                    type: object
+                  etcd:
+                    description: ETCD is needed for the Terraform `etcd` backend type.
+                    properties:
+                      endpoints:
+                        type: string
+                      password:
+                        type: string
+                      path:
+                        type: string
+                      username:
+                        type: string
+                    type: object
+                  etcdv3:
+                    description: ETCDV3 is needed for the Terraform `etcdv3` backend
+                      type.
+                    properties:
+                      cacert_secret:
+                        description: CacertSecret is a reference to a secret containing
+                          the PEM-encoded CA bundle with which to verify certificates
+                          of TLS-enabled etcd servers. It's used to replace the `cacert_path`
+                          in native hcl backend configuration as we cannot use local
+                          file paths in the kubernetes cluster.
+                        type: string
+                      cert_secret:
+                        description: CertSecret is a reference to a secret containing
+                          the PEM-encoded certificate to provide to etcd for secure
+                          client identification. It's used to replace the `cert_path`
+                          in native hcl backend configuration as we cannot use local
+                          file paths in the kubernetes cluster.
+                        type: string
+                      endpoints:
+                        type: string
+                      key_secret:
+                        description: KeySecret is a reference to a secret containing
+                          the PEM-encoded key to provide to etcd for secure client
+                          identification. It's used to replace the `key_path` in native
+                          hcl backend configuration as we cannot use local file paths
+                          in the kubernetes cluster.
+                        type: string
+                      lock:
+                        type: boolean
+                      max_request_bytes:
+                        format: int64
+                        type: integer
+                      password:
+                        type: string
+                      prefix:
+                        type: string
+                      username:
+                        type: string
+                    type: object
+                  gcs:
+                    description: GCS is needed for the Terraform `gcs` backend type.
+                    properties:
+                      access_token:
+                        type: string
+                      bucket:
+                        type: string
+                      credentials_secret:
+                        description: CredentialsSecret is a reference to a secret
+                          containing Google Cloud Platform account credentials in
+                          JSON format. It's used to replace the `credentials` in native
+                          hcl backend configuration as we cannot use local file paths
+                          in the kubernetes cluster.
+                        type: string
+                      encryption_key:
+                        type: string
+                      impersonate_service_account:
+                        type: string
+                      impersonate_service_account_delegates:
+                        type: string
+                      prefix:
+                        type: string
+                    type: object
+                  http:
+                    description: HTTP is needed for the Terraform `http` backend type.
+                    properties:
+                      address:
+                        type: string
+                      lock_address:
+                        type: string
+                      lock_method:
+                        type: string
+                      password:
+                        type: string
+                      retry_max:
+                        type: integer
+                      retry_wait_max:
+                        type: integer
+                      retry_wait_min:
+                        type: integer
+                      skip_cert_verification:
+                        type: boolean
+                      unlock_address:
+                        type: string
+                      unlock_method:
+                        type: string
+                      update_method:
+                        type: string
+                      username:
+                        type: string
+                    type: object
+                  kubernetes:
+                    description: Kubernetes is needed for the Terraform `kubernetes`
+                      backend type.
+                    properties:
+                      client_certificate:
+                        type: string
+                      client_key:
+                        type: string
+                      cluster_ca_certificate:
+                        type: string
+                      config_context:
+                        type: string
+                      config_context_auth_info:
+                        type: string
+                      config_context_cluster:
+                        type: string
+                      config_secret:
+                        description: ConfigSecret is a reference to a secret containing
+                          the kubeconfig file. It's used to replace the `config_path`
+                          in native hcl backend configuration as we cannot use local
+                          file paths in the kubernetes cluster.
+                        type: string
+                      config_secrets:
+                        description: ConfigSecrets is a list of references to secrets
+                          containing the kubeconfig file. It's used to replace the
+                          `config_paths` in native hcl backend configuration as we
+                          cannot use local file paths in the kubernetes cluster.
+                        items:
+                          description: A CredentialsSource is a source from which
+                            provider credentials may be acquired.
+                          type: string
+                        type: array
+                      exec:
+                        properties:
+                          api_version:
+                            type: string
+                          args:
+                            items:
+                              type: string
+                            type: array
+                          command:
+                            type: string
+                          env:
+                            additionalProperties:
+                              type: string
+                            type: object
+                        type: object
+                      host:
+                        type: string
+                      in_cluster_config:
+                        type: boolean
+                      insecure:
+                        type: string
+                      labels:
+                        additionalProperties:
+                          type: string
+                        type: object
+                      load_config_file:
+                        type: boolean
+                      namespace:
+                        type: string
+                      password:
+                        type: string
+                      secret_suffix:
+                        type: string
+                      token:
+                        type: string
+                      username:
+                        type: string
+                    type: object
+                  manta:
+                    description: Manta is needed for the Terraform `manta` backend
+                      type.
+                    properties:
+                      account:
+                        type: string
+                      insecure_skip_tls_verify:
+                        type: boolean
+                      key_id:
+                        type: string
+                      key_material:
+                        type: string
+                      object_name:
+                        type: string
+                      path:
+                        type: string
+                      url:
+                        type: string
+                      user:
+                        type: string
+                    type: object
+                  oss:
+                    description: OSS is needed for the Terraform `oss` backend type.
+                    properties:
+                      access_key:
+                        type: string
+                      acl:
+                        type: string
+                      assume_role:
+                        properties:
+                          policy:
+                            type: string
+                          role_arn:
+                            type: string
+                          session_expiration:
+                            type: integer
+                          session_name:
+                            type: string
+                        type: object
+                      bucket:
+                        type: string
+                      ecs_role_name:
+                        type: string
+                      encrypt:
+                        type: boolean
+                      endpoint:
+                        type: string
+                      key:
+                        type: string
+                      prefix:
+                        type: string
+                      profile:
+                        type: string
+                      region:
+                        type: string
+                      secret_key:
+                        type: string
+                      security_token:
+                        type: string
+                      shared_credentials_secret:
+                        description: SharedCredentialsSecret is a reference to a secret
+                          that contains the shared credentials file. It's used to
+                          replace the `shared_credentials_file` in native hcl backend
+                          configuration as we cannot use local file paths in the kubernetes
+                          cluster.
+                        type: string
+                      tablestore_endpoint:
+                        type: string
+                      tablestore_table:
+                        type: string
+                    type: object
+                  pg:
+                    description: PG is needed for the Terraform `pg` backend type.
+                    properties:
+                      conn_str:
+                        type: string
+                      schema_name:
+                        type: string
+                      skip_index_creation:
+                        type: boolean
+                      skip_schema_creation:
+                        type: boolean
+                      skip_table_creation:
+                        type: boolean
+                    type: object
+                  remote:
+                    description: Remote is needed for the Terraform `remote` backend
+                      type.
+                    properties:
+                      hostname:
+                        type: string
+                      organization:
+                        type: string
+                      token:
+                        type: string
+                      workspaces:
+                        properties:
+                          name:
+                            type: string
+                          prefix:
+                            type: string
+                        type: object
+                    type: object
+                  s3:
+                    description: s3 is needed for the Terraform `s3` backend type.
+                    properties:
+                      access_key:
+                        type: string
+                      acl:
+                        type: string
+                      assume_role_duration_seconds:
+                        type: integer
+                      assume_role_policy:
+                        type: string
+                      assume_role_policy_arns:
+                        items:
+                          type: string
+                        type: array
+                      assume_role_tags:
+                        additionalProperties:
+                          type: string
+                        type: object
+                      assume_role_transitive_tag_keys:
+                        items:
+                          type: string
+                        type: array
+                      bucket:
+                        type: string
+                      dynamodb_endpoint:
+                        type: string
+                      dynamodb_table:
+                        type: string
+                      encrypt:
+                        type: boolean
+                      endpoint:
+                        type: string
+                      external_id:
+                        type: string
+                      force_path_style:
+                        type: string
+                      iam_endpoint:
+                        type: string
+                      key:
+                        type: string
+                      kms_key_id:
+                        type: string
+                      max_retries:
+                        type: integer
+                      profile:
+                        type: string
+                      region:
+                        type: string
+                      role_arn:
+                        type: string
+                      secret_key:
+                        type: string
+                      session_name:
+                        type: string
+                      shared_credentials_secret:
+                        description: SharedCredentialsSecret is a reference to a secret
+                          that contains the AWS shared credentials file. It's used
+                          to replace the `shared_credentials_file` in native hcl backend
+                          configuration as we cannot use local file paths in the kubernetes
+                          cluster.
+                        type: string
+                      skip_credentials_validation:
+                        type: boolean
+                      skip_metadata_api_check:
+                        type: boolean
+                      skip_region_validation:
+                        type: boolean
+                      sse_customer_key:
+                        type: string
+                      sts_endpoint:
+                        type: string
+                      token:
+                        type: string
+                      workspace_key_prefix:
+                        type: string
+                    type: object
+                  swift:
+                    description: Swift is needed for the Terraform `swift` backend
+                      type.
+                    properties:
+                      allow_reauth:
+                        type: boolean
+                      application_credential_id:
+                        type: string
+                      application_credential_name:
+                        type: string
+                      application_credential_secret:
+                        type: string
+                      archive_container:
+                        type: string
+                      archive_path:
+                        type: string
+                      auth_url:
+                        type: string
+                      cacert_file_secret:
+                        description: CacertSecret is a reference to a secret that
+                          contains a custom CA certificate when communicating over
+                          SSL. It's used to replace the `cacert_file` in native hcl
+                          backend configuration as we cannot use local file paths
+                          in the kubernetes cluster.
+                        type: string
+                      cert_file_secret:
+                        description: CertSecret is a reference to a secret that contains
+                          certificate file for SSL client authentication. It's used
+                          to replace the `cert` in native hcl backend configuration
+                          as we cannot use local file paths in the kubernetes cluster.
+                        type: string
+                      cloud:
+                        type: string
+                      container:
+                        type: string
+                      default_domain:
+                        type: string
+                      disable_no_cache_header:
+                        type: boolean
+                      domain_id:
+                        type: string
+                      domain_name:
+                        type: string
+                      endpoint_type:
+                        type: string
+                      expire_after:
+                        type: string
+                      insecure:
+                        type: boolean
+                      key_file_secret:
+                        description: KeySecret is a reference to a secret that contains
+                          client private key file for SSL client authentication. It's
+                          used to replace the `key` in native hcl backend configuration
+                          as we cannot use local file paths in the kubernetes cluster.
+                        type: string
+                      lock:
+                        type: boolean
+                      max_retries:
+                        type: integer
+                      password:
+                        type: string
+                      path:
+                        description: 'Deprecated: Use `container` instead.'
+                        type: string
+                      project_domain_id:
+                        type: string
+                      project_domain_name:
+                        type: string
+                      region_name:
+                        type: string
+                      state_name:
+                        type: string
+                      swauth:
+                        type: boolean
+                      tenant_id:
+                        type: string
+                      tenant_name:
+                        type: string
+                      token:
+                        type: string
+                      user_domain_id:
+                        type: string
+                      user_domain_name:
+                        type: string
+                      user_id:
+                        type: string
+                      user_name:
+                        type: string
+                    type: object
+                type: object
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []

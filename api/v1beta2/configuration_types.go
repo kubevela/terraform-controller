@@ -35,12 +35,9 @@ type ConfigurationSpec struct {
 	// +kubebuilder:pruning:PreserveUnknownFields
 	Variable *runtime.RawExtension `json:"variable,omitempty"`
 
-	// Backend describes the Terraform backend configuration.
-	// This field is needed if the users use a git repo to provide the hcl files and
-	// want to use their custom Terraform backend (instead of the default kubernetes backend type).
-	// Notice: the content in this field will **override** the backend configuration in the inline hcl code or
-	// in the hcl files in the git repo.
-	Backend *Backend `json:"backend,omitempty"`
+	// Backend is used to provide the configuration for the official kubernetes backend.
+	// This field is used only if you choose to use the official kubernetes backend in the same kubernetes cluster as the Configuration.
+	Backend *BackendK8SConf `json:"backend,omitempty"`
 
 	// Path is the sub-directory of remote git repository.
 	Path string `json:"path,omitempty"`
@@ -63,6 +60,9 @@ type ConfigurationSpec struct {
 	//	}
 	// Or indicates a Terraform module or configuration don't need credentials at all, like provider `random`
 	InlineCredentials bool `json:"inlineCredentials,omitempty"`
+
+	// BackendReference specifies the reference to Backend
+	BackendReference *types.Reference `json:"backendRef,omitempty"`
 
 	// DeleteResource will determine whether provisioned cloud resources will be deleted when CR is deleted
 	// +kubebuilder:default:=true
@@ -106,25 +106,12 @@ type Property struct {
 	Value string `json:"value,omitempty"`
 }
 
-// Backend describes the Terraform backend configuration
-type Backend struct {
+// BackendK8SConf describes the Terraform k8s backend configuration
+type BackendK8SConf struct {
 	// SecretSuffix used when creating secrets. Secrets will be named in the format: tfstate-{workspace}-{secretSuffix}
-	// Deprecated: use the `type` and `config` instead
 	SecretSuffix string `json:"secretSuffix,omitempty"`
 	// InClusterConfig Used to authenticate to the cluster from inside a pod. Only `true` is allowed
-	// Deprecated: use the `type` and `config` instead
 	InClusterConfig bool `json:"inClusterConfig,omitempty"`
-
-	// HCL allows users to use raw hcl code to specify their Terraform backend configuration
-	HCL string `json:"hcl,omitempty"`
-
-	// Type specifies the Terraform backend type, for example, "kubernetes", "s3", etc
-	Type string `json:"type,omitempty"`
-	// Config is the detail configurations of the Terraform backend,
-	// and it represents the key-value pairs inside the terraform backend block in the hcl files
-	Config *runtime.RawExtension `json:"config,omitempty"`
-	// Workspace is used only when the users use the "remote" backend type
-	Workspace *runtime.RawExtension `json:"workspace,omitempty"`
 }
 
 // +kubebuilder:object:root=true
