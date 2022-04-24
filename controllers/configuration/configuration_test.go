@@ -122,7 +122,7 @@ func TestRenderConfiguration(t *testing.T) {
 			args: args{
 				configuration: &v1beta2.Configuration{
 					Spec: v1beta2.ConfigurationSpec{
-						Backend: &v1beta2.BackendK8SConf{},
+						Backend: &v1beta2.Backend{},
 						HCL:     "abc",
 					},
 				},

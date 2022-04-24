@@ -64,7 +64,7 @@ type backendVars struct {
 }
 
 // RenderTemplate renders Backend template
-func RenderTemplate(backend *v1beta2.BackendK8SConf, namespace string) (string, error) {
+func RenderTemplate(backend *v1beta2.Backend, namespace string) (string, error) {
 	tmpl, err := template.New("backend").Funcs(template.FuncMap(sprig.FuncMap())).Parse(backendTF)
 	if err != nil {
 		return "", err
