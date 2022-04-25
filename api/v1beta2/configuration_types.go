@@ -120,49 +120,49 @@ type Backend struct {
 	Inline string `json:"inline,omitempty"`
 
 	// Remote is needed for the Terraform `remote` backend type.
-	Remote RemoteBackendConf `json:"remote,omitempty"`
+	Remote *RemoteBackendConf `json:"remote,omitempty"`
 
 	// Artifactory is needed for the Terraform `artifactory` backend type.
-	Artifactory ArtifactoryBackendConf `json:"artifactory,omitempty"`
+	Artifactory *ArtifactoryBackendConf `json:"artifactory,omitempty"`
 
 	// Azurerm is needed for the Terraform `azurerm` backend type.
-	Azurerm AzurermBackendConf `json:"azurerm,omitempty"`
+	Azurerm *AzurermBackendConf `json:"azurerm,omitempty"`
 
 	// Consul is needed for the Terraform `consul` backend type.
-	Consul ConsulBackendConf `json:"consul,omitempty"`
+	Consul *ConsulBackendConf `json:"consul,omitempty"`
 
 	// Consul is needed for the Terraform `consul` backend type.
-	COS COSBackendConf `json:"cos,omitempty"`
+	COS *COSBackendConf `json:"cos,omitempty"`
 
 	// ETCD is needed for the Terraform `etcd` backend type.
-	ETCD ETCDBackendConf `json:"etcd,omitempty"`
+	ETCD *ETCDBackendConf `json:"etcd,omitempty"`
 
 	// ETCDV3 is needed for the Terraform `etcdv3` backend type.
-	ETCDV3 ETCDV3BackendConf `json:"etcdv3,omitempty"`
+	ETCDV3 *ETCDV3BackendConf `json:"etcdv3,omitempty"`
 
 	// GCS is needed for the Terraform `gcs` backend type.
-	GCS GCSBackendConf `json:"gcs,omitempty"`
+	GCS *GCSBackendConf `json:"gcs,omitempty"`
 
 	// HTTP is needed for the Terraform `http` backend type.
-	HTTP HTTPBackendConf `json:"http,omitempty"`
+	HTTP *HTTPBackendConf `json:"http,omitempty"`
 
 	// Kubernetes is needed for the Terraform `kubernetes` backend type.
-	Kubernetes KubernetesBackendConf `json:"kubernetes,omitempty"`
+	Kubernetes *KubernetesBackendConf `json:"kubernetes,omitempty"`
 
 	// Manta is needed for the Terraform `manta` backend type.
-	Manta MantaBackendConf `json:"manta,omitempty"`
+	Manta *MantaBackendConf `json:"manta,omitempty"`
 
 	// OSS is needed for the Terraform `oss` backend type.
-	OSS OSSBackendConf `json:"oss,omitempty"`
+	OSS *OSSBackendConf `json:"oss,omitempty"`
 
 	// PG is needed for the Terraform `pg` backend type.
-	PG PGBackendConf `json:"pg,omitempty"`
+	PG *PGBackendConf `json:"pg,omitempty"`
 
 	// s3 is needed for the Terraform `s3` backend type.
-	S3 S3BackendConf `json:"s3,omitempty"`
+	S3 *S3BackendConf `json:"s3,omitempty"`
 
 	// Swift is needed for the Terraform `swift` backend type.
-	Swift SwiftBackendConf `json:"swift,omitempty"`
+	Swift *SwiftBackendConf `json:"swift,omitempty"`
 }
 
 // RemoteBackendConf defines all options supported by the Terraform `remote` backend type.
@@ -192,32 +192,27 @@ type ArtifactoryBackendConf struct {
 // AzurermBackendConf defines all options supported by the Terraform `azurerm` backend type.
 // You can refer to [the Terraform documentation](https://www.terraform.io/language/settings/backends/remote) for the usage of each option.
 type AzurermBackendConf struct {
-	StorageAccountName string `json:"storage_account_name,omitempty" hcl:"storage_account_name"`
-	ContainerName      string `json:"container_name,omitempty" hcl:"container_name"`
-	Key                string `json:"key,omitempty" hcl:"key"`
-	Environment        string `json:"environment,omitempty" hcl:"environment"`
-	Endpoint           string `json:"endpoint,omitempty" hcl:"endpoint"`
-	Snapshot           bool   `json:"snapshot,omitempty" hcl:"snapshot"`
-
-	ResourceGroupName string `json:"resource_group_name,omitempty" hcl:"resource_group_name"`
-	MSIEndpoint       string `json:"msi_endpoint,omitempty" hcl:"msi_endpoint"`
-	SubscriptionID    string `json:"subscription_id,omitempty" hcl:"subscription_id"`
-	TenantID          string `json:"tenant_id,omitempty" hcl:"tenant_id"`
-	UseMicrosoftGraph bool   `json:"use_microsoft_graph,omitempty" hcl:"use_microsoft_graph"`
-	UseMSI            bool   `json:"use_msi,omitempty" hcl:"use_msi"`
-
-	SASToken string `json:"sas_token,omitempty" hcl:"sas_token"`
-
-	AccessKey string `json:"access_key,omitempty" hcl:"access_key"`
-
-	UseAzureadAuth string `json:"use_azuread_auth,omitempty" hcl:"use_azuread_auth"`
-
+	StorageAccountName        string `json:"storage_account_name,omitempty" hcl:"storage_account_name"`
+	ContainerName             string `json:"container_name,omitempty" hcl:"container_name"`
+	Key                       string `json:"key,omitempty" hcl:"key"`
+	Environment               string `json:"environment,omitempty" hcl:"environment"`
+	Endpoint                  string `json:"endpoint,omitempty" hcl:"endpoint"`
+	Snapshot                  bool   `json:"snapshot,omitempty" hcl:"snapshot"`
+	ResourceGroupName         string `json:"resource_group_name,omitempty" hcl:"resource_group_name"`
+	MSIEndpoint               string `json:"msi_endpoint,omitempty" hcl:"msi_endpoint"`
+	SubscriptionID            string `json:"subscription_id,omitempty" hcl:"subscription_id"`
+	TenantID                  string `json:"tenant_id,omitempty" hcl:"tenant_id"`
+	UseMicrosoftGraph         bool   `json:"use_microsoft_graph,omitempty" hcl:"use_microsoft_graph"`
+	UseMSI                    bool   `json:"use_msi,omitempty" hcl:"use_msi"`
+	SASToken                  string `json:"sas_token,omitempty" hcl:"sas_token"`
+	AccessKey                 string `json:"access_key,omitempty" hcl:"access_key"`
+	UseAzureadAuth            bool   `json:"use_azuread_auth,omitempty" hcl:"use_azuread_auth"`
 	ClientID                  string `json:"client_id,omitempty" hcl:"client_id"`
 	ClientCertificatePassword string `json:"client_certificate_password,omitempty" hcl:"client_certificate_password"`
 	// ClientCertificateSecret is a reference to a secret containing the client certificate
 	// It's used to replace the `client_certificate_path` in native hcl backend configuration as we cannot use local file paths in the kubernetes cluster.
-	ClientCertificateSecret types.CredentialsSource `json:"client_certificate_secret,omitempty" hcl:"client_certificate_secret"`
-	ClientSecret            string                  `json:"client_secret,omitempty" hcl:"client_secret"`
+	ClientCertificateSecret *types.SecretKeySelector `json:"client_certificate_secret,omitempty" hcl:"ClientCertificateSecret"`
+	ClientSecret            string                   `json:"client_secret,omitempty" hcl:"client_secret"`
 }
 
 // ConsulBackendConf defines all options supported by the Terraform `consul` backend type.
@@ -233,13 +228,13 @@ type ConsulBackendConf struct {
 	Lock        bool   `json:"lock,omitempty" hcl:"lock"`
 	// CAFileSecret is a reference to a secret containing the CA certificate
 	// It's used to replace the `ca_file` in native hcl backend configuration as we cannot use local file paths in the kubernetes cluster.
-	CAFileSecret types.CredentialsSource `json:"ca_file_secret,omitempty" hcl:"ca_file_secret"`
+	CAFileSecret *types.SecretKeySelector `json:"ca_file_secret,omitempty" hcl:"CAFileSecret"`
 	// CertFileSecret is a reference to a secret containing the client certificate
 	// It's used to replace the `cert_file` in native hcl backend configuration as we cannot use local file paths in the kubernetes cluster.
-	CertFileSecret types.CredentialsSource `json:"cert_file_secret,omitempty" hcl:"cert_file_secret"`
+	CertFileSecret *types.SecretKeySelector `json:"cert_file_secret,omitempty" hcl:"CertFileSecret"`
 	// KeyFileSecret is a reference to a secret containing the client key
 	// It's used to replace the `key_file` in native hcl backend configuration as we cannot use local file paths in the kubernetes cluster.
-	KeyFileSecret types.CredentialsSource `json:"key_file_secret,omitempty" hcl:"key_file_secret"`
+	KeyFileSecret *types.SecretKeySelector `json:"key_file_secret,omitempty" hcl:"KeyFileSecret"`
 }
 
 // COSBackendConf defines all options supported by the Terraform `cos` backend type.
@@ -274,14 +269,14 @@ type ETCDV3BackendConf struct {
 	Lock      bool   `json:"lock,omitempty" hcl:"lock"`
 	// CacertSecret is a reference to a secret containing the PEM-encoded CA bundle with which to verify certificates of TLS-enabled etcd servers.
 	// It's used to replace the `cacert_path` in native hcl backend configuration as we cannot use local file paths in the kubernetes cluster.
-	CacertSecret types.CredentialsSource `json:"cacert_secret,omitempty" hcl:"cacert_secret"`
+	CacertSecret *types.SecretKeySelector `json:"cacert_secret,omitempty" hcl:"CacertSecret"`
 	// CertSecret is a reference to a secret containing the PEM-encoded certificate to provide to etcd for secure client identification.
 	// It's used to replace the `cert_path` in native hcl backend configuration as we cannot use local file paths in the kubernetes cluster.
-	CertSecret types.CredentialsSource `json:"cert_secret,omitempty" hcl:"cert_secret"`
+	CertSecret *types.SecretKeySelector `json:"cert_secret,omitempty" hcl:"CertSecret"`
 	// KeySecret is a reference to a secret containing the PEM-encoded key to provide to etcd for secure client identification.
 	// It's used to replace the `key_path` in native hcl backend configuration as we cannot use local file paths in the kubernetes cluster.
-	KeySecret       types.CredentialsSource `json:"key_secret,omitempty" hcl:"key_secret"`
-	MAXRequestBytes int64                   `json:"max_request_bytes,omitempty" hcl:"max_request_bytes"`
+	KeySecret       *types.SecretKeySelector `json:"key_secret,omitempty" hcl:"KeySecret"`
+	MAXRequestBytes int64                    `json:"max_request_bytes,omitempty" hcl:"max_request_bytes"`
 }
 
 // GCSBackendConf defines all options supported by the Terraform `gcs` backend type.
@@ -290,12 +285,12 @@ type GCSBackendConf struct {
 	Bucket string `json:"bucket,omitempty"`
 	// CredentialsSecret is a reference to a secret containing Google Cloud Platform account credentials in JSON format.
 	// It's used to replace the `credentials` in native hcl backend configuration as we cannot use local file paths in the kubernetes cluster.
-	CredentialsSecret                  types.CredentialsSource `json:"credentials_secret,omitempty" hcl:"credentials_secret"`
-	ImpersonateServiceAccount          string                  `json:"impersonate_service_account,omitempty" hcl:"impersonate_service_account"`
-	ImpersonateServiceAccountDelegates string                  `json:"impersonate_service_account_delegates,omitempty" hcl:"impersonate_service_account_delegates"`
-	AccessToken                        string                  `json:"access_token,omitempty" hcl:"access_token"`
-	Prefix                             string                  `json:"prefix,omitempty" hcl:"prefix"`
-	EncryptionKey                      string                  `json:"encryption_key,omitempty" hcl:"encryption_key"`
+	CredentialsSecret                  *types.SecretKeySelector `json:"credentials_secret,omitempty" hcl:"CredentialsSecret"`
+	ImpersonateServiceAccount          string                   `json:"impersonate_service_account,omitempty" hcl:"impersonate_service_account"`
+	ImpersonateServiceAccountDelegates string                   `json:"impersonate_service_account_delegates,omitempty" hcl:"impersonate_service_account_delegates"`
+	AccessToken                        string                   `json:"access_token,omitempty" hcl:"access_token"`
+	Prefix                             string                   `json:"prefix,omitempty" hcl:"prefix"`
+	EncryptionKey                      string                   `json:"encryption_key,omitempty" hcl:"encryption_key"`
 }
 
 // HTTPBackendConf defines all options supported by the Terraform `http` backend type.
@@ -332,10 +327,7 @@ type KubernetesBackendConf struct {
 	ClusterCACertificate string            `json:"cluster_ca_certificate,omitempty" hcl:"cluster_ca_certificate"`
 	// ConfigSecret is a reference to a secret containing the kubeconfig file.
 	// It's used to replace the `config_path` in native hcl backend configuration as we cannot use local file paths in the kubernetes cluster.
-	ConfigSecret types.CredentialsSource `json:"config_secret,omitempty" hcl:"config_secret"`
-	// ConfigSecrets is a list of references to secrets containing the kubeconfig file.
-	// It's used to replace the `config_paths` in native hcl backend configuration as we cannot use local file paths in the kubernetes cluster.
-	ConfigSecrets         []types.CredentialsSource `json:"config_secrets,omitempty" hcl:"config_secrets"`
+	ConfigSecret          *types.SecretKeySelector  `json:"config_secret,omitempty" hcl:"ConfigSecret"`
 	ConfigContext         string                    `json:"config_context,omitempty" hcl:"config_context"`
 	ConfigContextAuthInfo string                    `json:"config_context_auth_info,omitempty" hcl:"config_context_auth_info"`
 	ConfigContextCluster  string                    `json:"config_context_cluster,omitempty" hcl:"config_context_cluster"`
@@ -382,8 +374,8 @@ type OSSBackendConf struct {
 	AssumeRole         OSSBackendConfAssumeRole `json:"assume_role,omitempty" hcl:"assume_role"`
 	// SharedCredentialsSecret is a reference to a secret that contains the shared credentials file.
 	// It's used to replace the `shared_credentials_file` in native hcl backend configuration as we cannot use local file paths in the kubernetes cluster.
-	SharedCredentialsSecret types.CredentialsSource `json:"shared_credentials_secret,omitempty" hcl:"shared_credentials_secret"`
-	Profile                 string                  `json:"profile,omitempty" hcl:"profile"`
+	SharedCredentialsSecret *types.SecretKeySelector `json:"shared_credentials_secret,omitempty" hcl:"SharedCredentialsSecret"`
+	Profile                 string                   `json:"profile,omitempty" hcl:"profile"`
 }
 
 type OSSBackendConfAssumeRole struct {
@@ -421,24 +413,24 @@ type S3BackendConf struct {
 	KMSKeyID         string `json:"kms_key_id,omitempty" hcl:"kms_key_id"`
 	// SharedCredentialsSecret is a reference to a secret that contains the AWS shared credentials file.
 	// It's used to replace the `shared_credentials_file` in native hcl backend configuration as we cannot use local file paths in the kubernetes cluster.
-	SharedCredentialsSecret     types.CredentialsSource `json:"shared_credentials_secret,omitempty" hcl:"shared_credentials_secret"`
-	Profile                     string                  `json:"profile,omitempty" hcl:"profile"`
-	Token                       string                  `json:"token,omitempty" hcl:"token"`
-	SkipCredentialsValidation   bool                    `json:"skip_credentials_validation,omitempty" hcl:"skip_credentials_validation"`
-	SkipRegionValidation        bool                    `json:"skip_region_validation,omitempty" hcl:"skip_region_validation"`
-	SkipMetadataAPICheck        bool                    `json:"skip_metadata_api_check,omitempty" hcl:"skip_metadata_api_check"`
-	SSECustomerKey              string                  `json:"sse_customer_key,omitempty" hcl:"sse_customer_key"`
-	RoleARN                     string                  `json:"role_arn,omitempty" hcl:"role_arn"`
-	SessionName                 string                  `json:"session_name,omitempty" hcl:"session_name"`
-	ExternalID                  string                  `json:"external_id,omitempty" hcl:"external_id"`
-	AssumeRoleDurationSeconds   int                     `json:"assume_role_duration_seconds,omitempty" hcl:"assume_role_duration_seconds"`
-	AssumeRolePolicy            string                  `json:"assume_role_policy,omitempty" hcl:"assume_role_policy"`
-	AssumeRolePolicyArns        []string                `json:"assume_role_policy_arns,omitempty" hcl:"assume_role_policy_arns"`
-	AssumeRoleTags              map[string]string       `json:"assume_role_tags,omitempty" hcl:"assume_role_tags"`
-	AssumeRoleTransitiveTagKeys []string                `json:"assume_role_transitive_tag_keys,omitempty" hcl:"assume_role_transitive_tag_keys"`
-	WorkspaceKeyPrefix          string                  `json:"workspace_key_prefix,omitempty" hcl:"workspace_key_prefix"`
-	ForcePathStyle              string                  `json:"force_path_style,omitempty" hcl:"force_path_style"`
-	MAXRetries                  int                     `json:"max_retries,omitempty" hcl:"max_retries"`
+	SharedCredentialsSecret     *types.SecretKeySelector `json:"shared_credentials_secret,omitempty" hcl:"SharedCredentialsSecret"`
+	Profile                     string                   `json:"profile,omitempty" hcl:"profile"`
+	Token                       string                   `json:"token,omitempty" hcl:"token"`
+	SkipCredentialsValidation   bool                     `json:"skip_credentials_validation,omitempty" hcl:"skip_credentials_validation"`
+	SkipRegionValidation        bool                     `json:"skip_region_validation,omitempty" hcl:"skip_region_validation"`
+	SkipMetadataAPICheck        bool                     `json:"skip_metadata_api_check,omitempty" hcl:"skip_metadata_api_check"`
+	SSECustomerKey              string                   `json:"sse_customer_key,omitempty" hcl:"sse_customer_key"`
+	RoleARN                     string                   `json:"role_arn,omitempty" hcl:"role_arn"`
+	SessionName                 string                   `json:"session_name,omitempty" hcl:"session_name"`
+	ExternalID                  string                   `json:"external_id,omitempty" hcl:"external_id"`
+	AssumeRoleDurationSeconds   int                      `json:"assume_role_duration_seconds,omitempty" hcl:"assume_role_duration_seconds"`
+	AssumeRolePolicy            string                   `json:"assume_role_policy,omitempty" hcl:"assume_role_policy"`
+	AssumeRolePolicyArns        []string                 `json:"assume_role_policy_arns,omitempty" hcl:"assume_role_policy_arns"`
+	AssumeRoleTags              map[string]string        `json:"assume_role_tags,omitempty" hcl:"assume_role_tags"`
+	AssumeRoleTransitiveTagKeys []string                 `json:"assume_role_transitive_tag_keys,omitempty" hcl:"assume_role_transitive_tag_keys"`
+	WorkspaceKeyPrefix          string                   `json:"workspace_key_prefix,omitempty" hcl:"workspace_key_prefix"`
+	ForcePathStyle              string                   `json:"force_path_style,omitempty" hcl:"force_path_style"`
+	MAXRetries                  int                      `json:"max_retries,omitempty" hcl:"max_retries"`
 }
 
 // SwiftBackendConf defines all options supported by the Terraform `swift` backedn type.
@@ -466,18 +458,18 @@ type SwiftBackendConf struct {
 	EndpointType                string `json:"endpoint_type,omitempty" hcl:"endpoint_type"`
 	// CacertSecret is a reference to a secret that contains a custom CA certificate when communicating over SSL.
 	// It's used to replace the `cacert_file` in native hcl backend configuration as we cannot use local file paths in the kubernetes cluster.
-	CacertSecret types.CredentialsSource `json:"cacert_file_secret,omitempty" hcl:"cacert_file_secret"`
+	CacertSecret *types.SecretKeySelector `json:"cacert_file_secret,omitempty" hcl:"CacertSecret"`
 	// CertSecret is a reference to a secret that contains certificate file for SSL client authentication.
 	// It's used to replace the `cert` in native hcl backend configuration as we cannot use local file paths in the kubernetes cluster.
-	CertSecret types.CredentialsSource `json:"cert_file_secret,omitempty" hcl:"cert_file_secret"`
+	CertSecret *types.SecretKeySelector `json:"cert_file_secret,omitempty" hcl:"CertSecret"`
 	// KeySecret is a reference to a secret that contains client private key file for SSL client authentication.
 	// It's used to replace the `key` in native hcl backend configuration as we cannot use local file paths in the kubernetes cluster.
-	Key                  types.CredentialsSource `json:"key_file_secret,omitempty" hcl:"key_file_secret"`
-	Swauth               bool                    `json:"swauth,omitempty" hcl:"swauth"`
-	AllowReauth          bool                    `json:"allow_reauth,omitempty" hcl:"allow_reauth"`
-	Cloud                string                  `json:"cloud,omitempty" hcl:"cloud"`
-	MAXRetries           int                     `json:"max_retries,omitempty" hcl:"max_retries"`
-	DisableNoCacheHeader bool                    `json:"disable_no_cache_header,omitempty" hcl:"disable_no_cache_header"`
+	KeySecret            *types.SecretKeySelector `json:"key_file_secret,omitempty" hcl:"KeySecret"`
+	Swauth               bool                     `json:"swauth,omitempty" hcl:"swauth"`
+	AllowReauth          bool                     `json:"allow_reauth,omitempty" hcl:"allow_reauth"`
+	Cloud                string                   `json:"cloud,omitempty" hcl:"cloud"`
+	MAXRetries           int                      `json:"max_retries,omitempty" hcl:"max_retries"`
+	DisableNoCacheHeader bool                     `json:"disable_no_cache_header,omitempty" hcl:"disable_no_cache_header"`
 	// Deprecated: Use `container` instead.
 	Path             string `json:"path,omitempty" hcl:"path"`
 	Container        string `json:"container,omitempty" hcl:"container"`

@@ -223,7 +223,20 @@ spec:
                           containing the client certificate It's used to replace the
                           `client_certificate_path` in native hcl backend configuration
                           as we cannot use local file paths in the kubernetes cluster.
-                        type: string
+                        properties:
+                          key:
+                            description: The key to select.
+                            type: string
+                          name:
+                            description: Name of the secret.
+                            type: string
+                          namespace:
+                            description: Namespace of the secret.
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
                       client_id:
                         type: string
                       client_secret:
@@ -251,7 +264,7 @@ spec:
                       tenant_id:
                         type: string
                       use_azuread_auth:
-                        type: string
+                        type: boolean
                       use_microsoft_graph:
                         type: boolean
                       use_msi:
@@ -270,13 +283,39 @@ spec:
                           the CA certificate It's used to replace the `ca_file` in
                           native hcl backend configuration as we cannot use local
                           file paths in the kubernetes cluster.
-                        type: string
+                        properties:
+                          key:
+                            description: The key to select.
+                            type: string
+                          name:
+                            description: Name of the secret.
+                            type: string
+                          namespace:
+                            description: Namespace of the secret.
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
                       cert_file_secret:
                         description: CertFileSecret is a reference to a secret containing
                           the client certificate It's used to replace the `cert_file`
                           in native hcl backend configuration as we cannot use local
                           file paths in the kubernetes cluster.
-                        type: string
+                        properties:
+                          key:
+                            description: The key to select.
+                            type: string
+                          name:
+                            description: Name of the secret.
+                            type: string
+                          namespace:
+                            description: Namespace of the secret.
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
                       datacenter:
                         type: string
                       gzip:
@@ -288,7 +327,20 @@ spec:
                           the client key It's used to replace the `key_file` in native
                           hcl backend configuration as we cannot use local file paths
                           in the kubernetes cluster.
-                        type: string
+                        properties:
+                          key:
+                            description: The key to select.
+                            type: string
+                          name:
+                            description: Name of the secret.
+                            type: string
+                          namespace:
+                            description: Namespace of the secret.
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
                       lock:
                         type: boolean
                       path:
@@ -339,14 +391,40 @@ spec:
                           of TLS-enabled etcd servers. It's used to replace the `cacert_path`
                           in native hcl backend configuration as we cannot use local
                           file paths in the kubernetes cluster.
-                        type: string
+                        properties:
+                          key:
+                            description: The key to select.
+                            type: string
+                          name:
+                            description: Name of the secret.
+                            type: string
+                          namespace:
+                            description: Namespace of the secret.
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
                       cert_secret:
                         description: CertSecret is a reference to a secret containing
                           the PEM-encoded certificate to provide to etcd for secure
                           client identification. It's used to replace the `cert_path`
                           in native hcl backend configuration as we cannot use local
                           file paths in the kubernetes cluster.
-                        type: string
+                        properties:
+                          key:
+                            description: The key to select.
+                            type: string
+                          name:
+                            description: Name of the secret.
+                            type: string
+                          namespace:
+                            description: Namespace of the secret.
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
                       endpoints:
                         type: string
                       key_secret:
@@ -355,7 +433,20 @@ spec:
                           identification. It's used to replace the `key_path` in native
                           hcl backend configuration as we cannot use local file paths
                           in the kubernetes cluster.
-                        type: string
+                        properties:
+                          key:
+                            description: The key to select.
+                            type: string
+                          name:
+                            description: Name of the secret.
+                            type: string
+                          namespace:
+                            description: Namespace of the secret.
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
                       lock:
                         type: boolean
                       max_request_bytes:
@@ -381,7 +472,20 @@ spec:
                           JSON format. It's used to replace the `credentials` in native
                           hcl backend configuration as we cannot use local file paths
                           in the kubernetes cluster.
-                        type: string
+                        properties:
+                          key:
+                            description: The key to select.
+                            type: string
+                          name:
+                            description: Name of the secret.
+                            type: string
+                          namespace:
+                            description: Namespace of the secret.
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
                       encryption_key:
                         type: string
                       impersonate_service_account:
@@ -448,17 +552,20 @@ spec:
                           the kubeconfig file. It's used to replace the `config_path`
                           in native hcl backend configuration as we cannot use local
                           file paths in the kubernetes cluster.
-                        type: string
-                      config_secrets:
-                        description: ConfigSecrets is a list of references to secrets
-                          containing the kubeconfig file. It's used to replace the
-                          `config_paths` in native hcl backend configuration as we
-                          cannot use local file paths in the kubernetes cluster.
-                        items:
-                          description: A CredentialsSource is a source from which
-                            provider credentials may be acquired.
-                          type: string
-                        type: array
+                        properties:
+                          key:
+                            description: The key to select.
+                            type: string
+                          name:
+                            description: Name of the secret.
+                            type: string
+                          namespace:
+                            description: Namespace of the secret.
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
                       exec:
                         properties:
                           api_version:
@@ -562,7 +669,20 @@ spec:
                           replace the `shared_credentials_file` in native hcl backend
                           configuration as we cannot use local file paths in the kubernetes
                           cluster.
-                        type: string
+                        properties:
+                          key:
+                            description: The key to select.
+                            type: string
+                          name:
+                            description: Name of the secret.
+                            type: string
+                          namespace:
+                            description: Namespace of the secret.
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
                       tablestore_endpoint:
                         type: string
                       tablestore_table:
@@ -661,7 +781,20 @@ spec:
                           to replace the `shared_credentials_file` in native hcl backend
                           configuration as we cannot use local file paths in the kubernetes
                           cluster.
-                        type: string
+                        properties:
+                          key:
+                            description: The key to select.
+                            type: string
+                          name:
+                            description: Name of the secret.
+                            type: string
+                          namespace:
+                            description: Namespace of the secret.
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
                       skip_credentials_validation:
                         type: boolean
                       skip_metadata_api_check:
@@ -705,13 +838,39 @@ spec:
                           SSL. It's used to replace the `cacert_file` in native hcl
                           backend configuration as we cannot use local file paths
                           in the kubernetes cluster.
-                        type: string
+                        properties:
+                          key:
+                            description: The key to select.
+                            type: string
+                          name:
+                            description: Name of the secret.
+                            type: string
+                          namespace:
+                            description: Namespace of the secret.
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
                       cert_file_secret:
                         description: CertSecret is a reference to a secret that contains
                           certificate file for SSL client authentication. It's used
                           to replace the `cert` in native hcl backend configuration
                           as we cannot use local file paths in the kubernetes cluster.
-                        type: string
+                        properties:
+                          key:
+                            description: The key to select.
+                            type: string
+                          name:
+                            description: Name of the secret.
+                            type: string
+                          namespace:
+                            description: Namespace of the secret.
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
                       cloud:
                         type: string
                       container:
@@ -735,7 +894,20 @@ spec:
                           client private key file for SSL client authentication. It's
                           used to replace the `key` in native hcl backend configuration
                           as we cannot use local file paths in the kubernetes cluster.
-                        type: string
+                        properties:
+                          key:
+                            description: The key to select.
+                            type: string
+                          name:
+                            description: Name of the secret.
+                            type: string
+                          namespace:
+                            description: Namespace of the secret.
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
                       lock:
                         type: boolean
                       max_retries:

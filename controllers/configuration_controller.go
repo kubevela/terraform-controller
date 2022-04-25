@@ -216,6 +216,9 @@ type TFConfigurationMeta struct {
 	DeleteResource        bool
 	Credentials           map[string]string
 
+	// BackendSecretMap describes which secret and which key in the secret should be mounted to the executor pod
+	BackendSecretMap map[string][]string
+
 	// JobNodeSelector Expose the node selector of job to the controller level
 	JobNodeSelector map[string]string
 
@@ -515,12 +518,20 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	// TODO(zzxwill) Need to find an alternative to check whether there is an state backend in the Configuration
 
 	// Render configuration with backend
-	completeConfiguration, err := tfcfg.RenderConfiguration(configuration, meta.TerraformBackendNamespace, configurationType)
+	completeConfiguration, backendSecretList, err := tfcfg.RenderConfiguration(configuration, meta.TerraformBackendNamespace, configurationType)
 	if err != nil {
 		return err
 	}
 	meta.CompleteConfiguration = completeConfiguration
 
+	// prepare the secrets used by backend configuration
+	if err := meta.prepareBackendSecretList(backendSecretList, ctx, k8sClient); err != nil {
+		return err
+	}
+
+	if err := meta.storeTFConfiguration(ctx, k8sClient); err != nil {
+		return err
+	}
 	if configuration.ObjectMeta.DeletionTimestamp.IsZero() {
 		if err := meta.storeTFConfiguration(ctx, k8sClient); err != nil {
 			return err
@@ -745,6 +756,22 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 	}
 	initContainers = append(initContainers, tfPreApplyInitContainer)
 
+	containerMountPointList := []v1.VolumeMount{
+		{
+			Name:      meta.Name,
+			MountPath: WorkingVolumeMountPath,
+		},
+		{
+			Name:      InputTFConfigurationVolumeName,
+			MountPath: InputTFConfigurationVolumeMountPath,
+		},
+	}
+	for secretName := range meta.BackendSecretMap {
+		containerMountPointList = append(containerMountPointList, v1.VolumeMount{
+			Name:      secretName,
+			MountPath: "/var/" + secretName,
+		})
+	}
 	container := v1.Container{
 		Name:            terraformContainerName,
 		Image:           meta.TerraformImage,
@@ -754,17 +781,8 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 			"-c",
 			fmt.Sprintf("terraform %s -lock=false -auto-approve", executionType),
 		},
-		VolumeMounts: []v1.VolumeMount{
-			{
-				Name:      meta.Name,
-				MountPath: WorkingVolumeMountPath,
-			},
-			{
-				Name:      InputTFConfigurationVolumeName,
-				MountPath: InputTFConfigurationVolumeMountPath,
-			},
-		},
-		Env: meta.Envs,
+		VolumeMounts: containerMountPointList,
+		Env:          meta.Envs,
 	}
 
 	if meta.ResourcesLimitsCPU != "" || meta.ResourcesLimitsMemory != "" ||
@@ -835,7 +853,8 @@ func (meta *TFConfigurationMeta) assembleExecutorVolumes() []v1.Volume {
 	workingVolume.EmptyDir = &v1.EmptyDirVolumeSource{}
 	inputTFConfigurationVolume := meta.createConfigurationVolume()
 	tfBackendVolume := meta.createTFBackendVolume()
-	return []v1.Volume{workingVolume, inputTFConfigurationVolume, tfBackendVolume}
+	tfBackendSecretVolumes := meta.createTFBackendSecretVolumes()
+	return append([]v1.Volume{workingVolume, inputTFConfigurationVolume, tfBackendVolume}, tfBackendSecretVolumes...)
 }
 
 func (meta *TFConfigurationMeta) createConfigurationVolume() v1.Volume {
@@ -1079,6 +1098,55 @@ func (meta *TFConfigurationMeta) createOrUpdateConfigMap(ctx context.Context, k8
 		return errors.Wrap(k8sClient.Update(ctx, &gotCM), "failed to update TF configuration ConfigMap")
 	}
 	return nil
+}
+
+func (meta *TFConfigurationMeta) prepareBackendSecretList(backendSecretList []*tfcfg.BackendSecretRef, ctx context.Context, k8sClient client.Client) error {
+	secretMap := make(map[string][]string)
+	for _, secretRef := range backendSecretList {
+		secretMap[secretRef.Name] = append(secretMap[secretRef.Name], secretRef.SecretRef.Key)
+
+		if secretRef.SecretRef.Namespace == meta.Namespace {
+			continue
+		}
+		// if the secret isn't in the same namespace, create a new secret and copy the data
+		secret := v1.Secret{}
+		if err := k8sClient.Get(
+			ctx,
+			client.ObjectKey{
+				Name:      secretRef.SecretRef.Name,
+				Namespace: secretRef.SecretRef.Namespace,
+			},
+			&secret,
+		); err != nil {
+			return err
+		}
+		secret.ObjectMeta = metav1.ObjectMeta{Name: secretRef.Name, Namespace: meta.Namespace}
+		if err := k8sClient.Create(ctx, &secret); err != nil {
+			return err
+		}
+	}
+	meta.BackendSecretMap = secretMap
+	return nil
+}
+
+func (meta *TFConfigurationMeta) createTFBackendSecretVolumes() []v1.Volume {
+	volumes := make([]v1.Volume, 0)
+	for secretName, keyList := range meta.BackendSecretMap {
+		items := make([]v1.KeyToPath, 0, len(keyList))
+		for _, key := range keyList {
+			items = append(items, v1.KeyToPath{Key: key, Path: key})
+		}
+		volumes = append(volumes, v1.Volume{
+			Name: secretName,
+			VolumeSource: v1.VolumeSource{
+				Secret: &v1.SecretVolumeSource{
+					SecretName: secretName,
+					Items:      items,
+				},
+			},
+		})
+	}
+	return volumes
 }
 
 func (meta *TFConfigurationMeta) prepareTFInputConfigurationData() map[string]string {
