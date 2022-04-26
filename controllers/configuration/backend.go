@@ -98,11 +98,12 @@ func parseConfigurationBackend(configuration *v1beta2.Configuration, terraformBa
 			backendStructValue = backendStructValue.Elem()
 		}
 		for _, typeName := range backendTypes {
+			tName := typeName
 			field := backendStructValue.FieldByNameFunc(func(name string) bool {
-				return strings.EqualFold(name, typeName)
+				return strings.EqualFold(name, tName)
 			})
 			if !field.IsNil() {
-				backendConf, backendType = field.Interface(), typeName
+				backendConf, backendType = field.Interface(), tName
 				break
 			}
 		}
