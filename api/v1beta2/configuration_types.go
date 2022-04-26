@@ -171,10 +171,10 @@ type RemoteBackendConf struct {
 	Hostname     *string                     `json:"hostname,omitempty" hcl:"hostname"`
 	Organization *string                     `json:"organization,omitempty" hcl:"organization"`
 	Token        *string                     `json:"token,omitempty" hcl:"token"`
-	Workspaces   RemoteBackendConfWorkspaces `json:"workspaces" hcl:"workspaces,block"`
+	Workspaces   remoteBackendConfWorkspaces `json:"workspaces" hcl:"workspaces,block"`
 }
 
-type RemoteBackendConfWorkspaces struct {
+type remoteBackendConfWorkspaces struct {
 	Name   *string `json:"name,omitempty" hcl:"name"`
 	Prefix *string `json:"prefix,omitempty" hcl:"prefix"`
 }
@@ -332,10 +332,10 @@ type KubernetesBackendConf struct {
 	ConfigContextAuthInfo *string                    `json:"config_context_auth_info,omitempty" hcl:"config_context_auth_info"`
 	ConfigContextCluster  *string                    `json:"config_context_cluster,omitempty" hcl:"config_context_cluster"`
 	Token                 *string                    `json:"token,omitempty" hcl:"token"`
-	Exec                  *KubernetesBackendConfExec `json:"exec,omitempty" hcl:"exec,block"`
+	Exec                  *kubernetesBackendConfExec `json:"exec,omitempty" hcl:"exec,block"`
 }
 
-type KubernetesBackendConfExec struct {
+type kubernetesBackendConfExec struct {
 	APIVersion string            `json:"api_version,omitempty" hcl:"api_version"`
 	Command    string            `json:"command,omitempty" hcl:"command"`
 	ENV        map[string]string `json:"env,omitempty" hcl:"env"`
@@ -371,14 +371,14 @@ type OSSBackendConf struct {
 	TablestoreTable    *string                   `json:"tablestore_table,omitempty" hcl:"tablestore_table"`
 	Encrypt            *bool                     `json:"encrypt,omitempty" hcl:"encrypt"`
 	ACL                *string                   `json:"acl,omitempty" hcl:"acl"`
-	AssumeRole         *OSSBackendConfAssumeRole `json:"assume_role,omitempty" hcl:"assume_role,block"`
+	AssumeRole         *ossBackendConfAssumeRole `json:"assume_role,omitempty" hcl:"assume_role,block"`
 	// SharedCredentialsSecret is a reference to a secret that contains the shared credentials file.
 	// It's used to replace the `shared_credentials_file` in native hcl backend configuration as we cannot use local file paths in the kubernetes cluster.
 	SharedCredentialsSecret *types.SecretKeySelector `json:"shared_credentials_secret,omitempty" hcl:"SharedCredentialsSecret"`
 	Profile                 *string                  `json:"profile,omitempty" hcl:"profile"`
 }
 
-type OSSBackendConfAssumeRole struct {
+type ossBackendConfAssumeRole struct {
 	RoleArn           *string `json:"role_arn,omitempty" hcl:"role_arn"`
 	SessionName       *string `json:"session_name,omitempty" hcl:"session_name"`
 	Policy            *string `json:"policy,omitempty" hcl:"policy"`

@@ -70,6 +70,7 @@ var backendTypes = []string{
 	"manta", "oss", "pg", "s3", "swift",
 }
 
+// BackendSecretRef describes which secret should be mounted to the executor pod
 type BackendSecretRef struct {
 	// Name is the name of the secret which will be mounted to a pod when running the job
 	// If the secret referred by the SecretRef is in the same namespace as the Configuration(and the job)
@@ -82,7 +83,7 @@ type BackendSecretRef struct {
 func parseConfigurationBackend(configuration *v1beta2.Configuration, terraformBackendNamespace string) (string, []*BackendSecretRef, error) {
 	backend := configuration.Spec.Backend
 
-	var backendConf interface{} = nil
+	var backendConf interface{}
 	var backendType string
 
 	if backend != nil {
@@ -98,7 +99,7 @@ func parseConfigurationBackend(configuration *v1beta2.Configuration, terraformBa
 		}
 		for _, typeName := range backendTypes {
 			field := backendStructValue.FieldByNameFunc(func(name string) bool {
-				return strings.ToLower(name) == typeName
+				return strings.EqualFold(name, typeName)
 			})
 			if !field.IsNil() {
 				backendConf, backendType = field.Interface(), typeName
@@ -113,12 +114,12 @@ func parseConfigurationBackend(configuration *v1beta2.Configuration, terraformBa
 		if backend != nil {
 			secretSuffix = backend.SecretSuffix
 		}
-		if len(secretSuffix) <= 0 {
+		if len(secretSuffix) == 0 {
 			secretSuffix = configuration.Name
 		}
 		backendConf = &v1beta2.KubernetesBackendConf{
 			SecretSuffix:    secretSuffix,
-			InClusterConfig: BoolToPtr(true),
+			InClusterConfig: bool2Ptr(true),
 			Namespace:       &terraformBackendNamespace,
 		}
 		backendType = "kubernetes"
@@ -227,6 +228,6 @@ terraform {
 `, backendType, hclFile.Bytes()), secretList, nil
 }
 
-func BoolToPtr(x bool) *bool {
+func bool2Ptr(x bool) *bool {
 	return &x
 }
