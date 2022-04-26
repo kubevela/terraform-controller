@@ -116,7 +116,7 @@ type Backend struct {
 	// InClusterConfig Used to authenticate to the cluster from inside a pod. Only `true` is allowed
 	InClusterConfig bool `json:"inClusterConfig,omitempty"`
 
-	// Inline allows users to use raw hcl code to specify their Terraform backend configuration
+	// Inline allows users to use raw hcl code to specify their Terraform backend
 	Inline string `json:"inline,omitempty"`
 
 	// Remote is needed for the Terraform `remote` backend type.
@@ -166,7 +166,7 @@ type Backend struct {
 }
 
 // RemoteBackendConf defines all options supported by the Terraform `remote` backend type.
-// You can refer to [the Terraform documentation](https://www.terraform.io/language/settings/backends/remote) for the usage of each option.
+// You can refer to https://www.terraform.io/language/settings/backends/remote for the usage of each option.
 type RemoteBackendConf struct {
 	Hostname     *string                     `json:"hostname,omitempty" hcl:"hostname"`
 	Organization *string                     `json:"organization,omitempty" hcl:"organization"`
@@ -181,7 +181,7 @@ type RemoteBackendConfWorkspaces struct {
 }
 
 // ArtifactoryBackendConf defines all options supported by the Terraform `artifactory` backend type.
-// You can refer to [the Terraform documentation](https://www.terraform.io/language/settings/backends/remote) for the usage of each option.
+// You can refer to https://www.terraform.io/language/settings/backends/artifactory for the usage of each option.
 type ArtifactoryBackendConf struct {
 	Username string `json:"username" hcl:"username"`
 	Password string `json:"password" hcl:"password"`
@@ -191,7 +191,7 @@ type ArtifactoryBackendConf struct {
 }
 
 // AzurermBackendConf defines all options supported by the Terraform `azurerm` backend type.
-// You can refer to [the Terraform documentation](https://www.terraform.io/language/settings/backends/remote) for the usage of each option.
+// You can refer to https://www.terraform.io/language/settings/backends/azurerm for the usage of each option.
 type AzurermBackendConf struct {
 	StorageAccountName        string  `json:"storage_account_name" hcl:"storage_account_name"`
 	ContainerName             string  `json:"container_name" hcl:"container_name"`
@@ -217,7 +217,7 @@ type AzurermBackendConf struct {
 }
 
 // ConsulBackendConf defines all options supported by the Terraform `consul` backend type.
-// You can refer to [the Terraform documentation](https://www.terraform.io/language/settings/backends/consul) for the usage of each option.
+// You can refer to https://www.terraform.io/language/settings/backends/consul for the usage of each option.
 type ConsulBackendConf struct {
 	Path        string  `json:"path" hcl:"path"`
 	AccessToken string  `json:"access_token" hcl:"access_token"`
@@ -239,7 +239,7 @@ type ConsulBackendConf struct {
 }
 
 // COSBackendConf defines all options supported by the Terraform `cos` backend type.
-// You can refer to [the Terraform documentation](https://www.terraform.io/language/settings/backends/cos) for the usage of each option.
+// You can refer to https://www.terraform.io/language/settings/backends/cos for the usage of each option.
 type COSBackendConf struct {
 	SecretID  *string `json:"secret_id,omitempty" hcl:"secret_id"`
 	SecretKey *string `json:"secret_key,omitempty" hcl:"secret_key"`
@@ -252,7 +252,7 @@ type COSBackendConf struct {
 }
 
 // ETCDBackendConf defines all options supported by the Terraform `etcd` backend type.
-// You can refer to [the Terraform documentation](https://www.terraform.io/language/settings/backends/etcd) for the usage of each option.
+// You can refer to https://www.terraform.io/language/settings/backends/etcd for the usage of each option.
 type ETCDBackendConf struct {
 	Path      string  `json:"path" hcl:"path"`
 	Endpoints string  `json:"endpoints" hcl:"endpoints"`
@@ -261,7 +261,7 @@ type ETCDBackendConf struct {
 }
 
 // ETCDV3BackendConf defines all options supported by the Terraform `etcdv3` backend type.
-// You can refer to [the Terraform documentation](https://www.terraform.io/language/settings/backends/etcdv3) for the usage of each option.
+// You can refer to https://www.terraform.io/language/settings/backends/etcdv3 for the usage of each option.
 type ETCDV3BackendConf struct {
 	Endpoints string  `json:"endpoints" hcl:"endpoints"`
 	Username  *string `json:"username,omitempty" hcl:"username"`
@@ -281,7 +281,7 @@ type ETCDV3BackendConf struct {
 }
 
 // GCSBackendConf defines all options supported by the Terraform `gcs` backend type.
-// You can refer to [the Terraform documentation](https://www.terraform.io/language/settings/backends/gcs) for the usage of each option.
+// You can refer to https://www.terraform.io/language/settings/backends/gcs for the usage of each option.
 type GCSBackendConf struct {
 	Bucket string `json:"bucket"`
 	// CredentialsSecret is a reference to a secret containing Google Cloud Platform account credentials in JSON format.
@@ -295,7 +295,7 @@ type GCSBackendConf struct {
 }
 
 // HTTPBackendConf defines all options supported by the Terraform `http` backend type.
-// You can refer to [the Terraform documentation](https://www.terraform.io/language/settings/backends/http) for the usage of each option.
+// You can refer to https://www.terraform.io/language/settings/backends/http for the usage of each option.
 type HTTPBackendConf struct {
 	Address              string  `json:"address" hcl:"address"`
 	UpdateMethod         *string `json:"update_method,omitempty" hcl:"update_method"`
@@ -312,7 +312,7 @@ type HTTPBackendConf struct {
 }
 
 // KubernetesBackendConf defines all options supported by the Terraform `kubernetes` backend type.
-// You can refer to [the Terraform documentation](https://www.terraform.io/language/settings/backends/kubernetes) for the usage of each option.
+// You can refer to https://www.terraform.io/language/settings/backends/kubernetes for the usage of each option.
 type KubernetesBackendConf struct {
 	SecretSuffix         string             `json:"secret_suffix" hcl:"secret_suffix"`
 	Labels               *map[string]string `json:"labels,omitempty" hcl:"labels"`
@@ -345,7 +345,7 @@ type KubernetesBackendConfExec struct {
 }
 
 // MantaBackendConf defines all options supported by the Terraform `manta` backend type.
-// You can refer to [the Terraform documentation](https://www.terraform.io/docs/backends/types/manta) for the usage of each option.
+// You can refer to https://www.terraform.io/language/settings/backends/manta for the usage of each option.
 type MantaBackendConf struct {
 	Account               string  `json:"account" hcl:"account"`
 	User                  *string `json:"user,omitempty" hcl:"user"`
@@ -358,7 +358,7 @@ type MantaBackendConf struct {
 }
 
 // OSSBackendConf defines all options supported by the Terraform `oss` backend type.
-// You can refer to [the Terraform documentation](https://www.terraform.io/docs/backends/types/oss) for the usage of each option.
+// You can refer to https://www.terraform.io/language/settings/backends/oss for the usage of each option.
 type OSSBackendConf struct {
 	AccessKey          *string                   `json:"access_key,omitempty" hcl:"access_key"`
 	SecretKey          *string                   `json:"secret_key,omitempty" hcl:"secret_key"`
@@ -389,7 +389,7 @@ type OSSBackendConfAssumeRole struct {
 }
 
 // PGBackendConf defines all options supported by the Terraform `pg` backend type.
-// You can refer to [the Terraform documentation](https://www.terraform.io/docs/backends/types/pg) for the usage of each option.
+// You can refer to https://www.terraform.io/language/settings/backends/pg for the usage of each option.
 type PGBackendConf struct {
 	ConnStr            string  `json:"conn_str" hcl:"conn_str"`
 	SchemaNam          *string `json:"schema_name,omitempty" hcl:"schema_name"`
@@ -399,7 +399,7 @@ type PGBackendConf struct {
 }
 
 // S3BackendConf defines all options supported by the Terraform `s3` backend type.
-// You can refer to [the Terraform documentation](https://www.terraform.io/docs/backends/types/s3) for the usage of each option.
+// You can refer to https://www.terraform.io/language/settings/backends/s3 for the usage of each option.
 type S3BackendConf struct {
 	Bucket           string  `json:"bucket" hcl:"bucket"`
 	Key              string  `json:"key" hcl:"key"`
@@ -436,8 +436,8 @@ type S3BackendConf struct {
 	MAXRetries                  *int                     `json:"max_retries,omitempty" hcl:"max_retries"`
 }
 
-// SwiftBackendConf defines all options supported by the Terraform `swift` backedn type.
-// You can refer to [the Terraform documentation](https://www.terraform.io/docs/backends/types/swift) for the usage of each option.
+// SwiftBackendConf defines all options supported by the Terraform `swift` backend type.
+// You can refer to https://www.terraform.io/language/settings/backends/swift for the usage of each option.
 type SwiftBackendConf struct {
 	AuthURL                     *string `json:"auth_url,omitempty" hcl:"auth_url"`
 	RegionName                  *string `json:"region_name,omitempty" hcl:"region_name"`
