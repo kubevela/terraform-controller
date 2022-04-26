@@ -525,7 +525,7 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	meta.CompleteConfiguration = completeConfiguration
 
 	// prepare the secrets used by backend configuration
-	if err := meta.prepareBackendSecretList(backendSecretList, ctx, k8sClient); err != nil {
+	if err := meta.prepareBackendSecretList(ctx, k8sClient, backendSecretList); err != nil {
 		return err
 	}
 
@@ -1100,7 +1100,7 @@ func (meta *TFConfigurationMeta) createOrUpdateConfigMap(ctx context.Context, k8
 	return nil
 }
 
-func (meta *TFConfigurationMeta) prepareBackendSecretList(backendSecretList []*tfcfg.BackendSecretRef, ctx context.Context, k8sClient client.Client) error {
+func (meta *TFConfigurationMeta) prepareBackendSecretList(ctx context.Context, k8sClient client.Client, backendSecretList []*tfcfg.BackendSecretRef) error {
 	secretMap := make(map[string][]string)
 	for _, secretRef := range backendSecretList {
 		secretMap[secretRef.Name] = append(secretMap[secretRef.Name], secretRef.SecretRef.Key)
