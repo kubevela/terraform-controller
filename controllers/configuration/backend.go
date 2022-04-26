@@ -93,6 +93,9 @@ func parseConfigurationBackend(configuration *v1beta2.Configuration, terraformBa
 
 		// check if is custom backend
 		backendStructValue := reflect.ValueOf(backend)
+		if backendStructValue.Kind() == reflect.Ptr {
+			backendStructValue = backendStructValue.Elem()
+		}
 		for _, typeName := range backendTypes {
 			field := backendStructValue.FieldByNameFunc(func(name string) bool {
 				return strings.ToLower(name) == typeName
@@ -106,14 +109,17 @@ func parseConfigurationBackend(configuration *v1beta2.Configuration, terraformBa
 
 	if backendConf == nil {
 		// use the default kubernetes backend
-		secretSuffix := backend.SecretSuffix
+		var secretSuffix string
+		if backend != nil {
+			secretSuffix = backend.SecretSuffix
+		}
 		if len(secretSuffix) <= 0 {
 			secretSuffix = configuration.Name
 		}
 		backendConf = &v1beta2.KubernetesBackendConf{
 			SecretSuffix:    secretSuffix,
-			InClusterConfig: true,
-			Namespace:       terraformBackendNamespace,
+			InClusterConfig: BoolToPtr(true),
+			Namespace:       &terraformBackendNamespace,
 		}
 		backendType = "kubernetes"
 	}
@@ -172,7 +178,7 @@ func handleInlineBackendHCL(code string) (string, error) {
 	if shouldWrap {
 		return fmt.Sprintf(`
 terraform {
-	%s
+%s
 }
 `, code), nil
 	}
@@ -187,9 +193,16 @@ func handleExplicitBackend(backendConf interface{}, backendType string, namespac
 	secretList := make([]*BackendSecretRef, 0)
 	secretMap := backendSecretMap[backendType]
 	backendConfValue := reflect.ValueOf(backendConf)
+	if backendConfValue.Kind() == reflect.Ptr {
+		backendConfValue = backendConfValue.Elem()
+	}
 	for dest, src := range secretMap {
 		// get the src value (secret ref)
-		secretRef := backendConfValue.FieldByName(src).Interface().(*crossplane.SecretKeySelector)
+		secretField := backendConfValue.FieldByName(src)
+		if !secretField.IsValid() || secretField.IsNil() {
+			continue
+		}
+		secretRef := secretField.Interface().(*crossplane.SecretKeySelector)
 		backendSecret := &BackendSecretRef{SecretRef: secretRef}
 		if secretRef.Namespace == namespace {
 			backendSecret.Name = secretRef.Name
@@ -208,8 +221,12 @@ func handleExplicitBackend(backendConf interface{}, backendType string, namespac
 	return fmt.Sprintf(`
 terraform {
 	backend "%s" {
-		%s
+%s
 	}
 }
 `, backendType, hclFile.Bytes()), secretList, nil
+}
+
+func BoolToPtr(x bool) *bool {
+	return &x
 }

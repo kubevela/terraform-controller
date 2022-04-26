@@ -2,6 +2,7 @@ package configuration
 
 import (
 	"context"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -108,8 +109,9 @@ func TestRenderConfiguration(t *testing.T) {
 		configurationType types.ConfigurationType
 	}
 	type want struct {
-		cfg    string
-		errMsg string
+		cfg               string
+		backendSecretList []*BackendSecretRef
+		errMsg            string
 	}
 
 	testcases := []struct {
@@ -123,23 +125,25 @@ func TestRenderConfiguration(t *testing.T) {
 				configuration: &v1beta2.Configuration{
 					Spec: v1beta2.ConfigurationSpec{
 						Backend: &v1beta2.Backend{},
-						HCL:     "abc",
+						HCL:     "image_id=123",
 					},
 				},
 				ns:                "vela-system",
 				configurationType: types.ConfigurationHCL,
 			},
 			want: want{
-				cfg: `abc
+				cfg: `image_id=123
 
 terraform {
-  backend "kubernetes" {
-    secret_suffix     = ""
-    in_cluster_config = true
-    namespace         = "vela-system"
-  }
+	backend "kubernetes" {
+secret_suffix     = ""
+namespace         = "vela-system"
+in_cluster_config = true
+
+	}
 }
 `,
+				backendSecretList: []*BackendSecretRef{},
 			},
 		},
 		{
@@ -156,13 +160,15 @@ terraform {
 			want: want{
 				cfg: `
 terraform {
-  backend "kubernetes" {
-    secret_suffix     = ""
-    in_cluster_config = true
-    namespace         = "vela-system"
-  }
+	backend "kubernetes" {
+secret_suffix     = ""
+namespace         = "vela-system"
+in_cluster_config = true
+
+	}
 }
 `,
+				backendSecretList: []*BackendSecretRef{},
 			},
 		},
 		{
@@ -181,7 +187,7 @@ terraform {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := RenderConfiguration(tc.args.configuration, tc.args.ns, tc.args.configurationType)
+			got, secretList, err := RenderConfiguration(tc.args.configuration, tc.args.ns, tc.args.configurationType)
 			if tc.want.errMsg != "" && !strings.Contains(err.Error(), tc.want.errMsg) {
 				t.Errorf("ValidConfigurationObject() error = %v, wantErr %v", err, tc.want.errMsg)
 				return
@@ -189,9 +195,11 @@ terraform {
 			if got != tc.want.cfg {
 				t.Errorf("ValidConfigurationObject() = %v, want %v", got, tc.want.cfg)
 			}
+			if !reflect.DeepEqual(tc.want.backendSecretList, secretList) {
+				t.Errorf("ValidBackendSecretList() = %v, want %v", secretList, tc.want.backendSecretList)
+			}
 		})
 	}
-
 }
 
 func TestReplaceTerraformSource(t *testing.T) {

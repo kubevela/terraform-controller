@@ -209,6 +209,12 @@ spec:
                         type: string
                       username:
                         type: string
+                    required:
+                    - password
+                    - repo
+                    - subpath
+                    - url
+                    - username
                     type: object
                   azurerm:
                     description: Azurerm is needed for the Terraform `azurerm` backend
@@ -269,6 +275,10 @@ spec:
                         type: boolean
                       use_msi:
                         type: boolean
+                    required:
+                    - container_name
+                    - key
+                    - storage_account_name
                     type: object
                   consul:
                     description: Consul is needed for the Terraform `consul` backend
@@ -347,6 +357,9 @@ spec:
                         type: string
                       schema:
                         type: string
+                    required:
+                    - access_token
+                    - path
                     type: object
                   cos:
                     description: Consul is needed for the Terraform `consul` backend
@@ -368,6 +381,8 @@ spec:
                         type: string
                       secret_key:
                         type: string
+                    required:
+                    - bucket
                     type: object
                   etcd:
                     description: ETCD is needed for the Terraform `etcd` backend type.
@@ -380,6 +395,9 @@ spec:
                         type: string
                       username:
                         type: string
+                    required:
+                    - endpoints
+                    - path
                     type: object
                   etcdv3:
                     description: ETCDV3 is needed for the Terraform `etcdv3` backend
@@ -458,6 +476,8 @@ spec:
                         type: string
                       username:
                         type: string
+                    required:
+                    - endpoints
                     type: object
                   gcs:
                     description: GCS is needed for the Terraform `gcs` backend type.
@@ -494,6 +514,8 @@ spec:
                         type: string
                       prefix:
                         type: string
+                    required:
+                    - bucket
                     type: object
                   http:
                     description: HTTP is needed for the Terraform `http` backend type.
@@ -522,6 +544,8 @@ spec:
                         type: string
                       username:
                         type: string
+                    required:
+                    - address
                     type: object
                   inClusterConfig:
                     description: InClusterConfig Used to authenticate to the cluster
@@ -603,6 +627,8 @@ spec:
                         type: string
                       username:
                         type: string
+                    required:
+                    - secret_suffix
                     type: object
                   manta:
                     description: Manta is needed for the Terraform `manta` backend
@@ -624,6 +650,10 @@ spec:
                         type: string
                       user:
                         type: string
+                    required:
+                    - account
+                    - key_id
+                    - path
                     type: object
                   oss:
                     description: OSS is needed for the Terraform `oss` backend type.
@@ -687,6 +717,8 @@ spec:
                         type: string
                       tablestore_table:
                         type: string
+                    required:
+                    - bucket
                     type: object
                   pg:
                     description: PG is needed for the Terraform `pg` backend type.
@@ -701,6 +733,8 @@ spec:
                         type: boolean
                       skip_table_creation:
                         type: boolean
+                    required:
+                    - conn_str
                     type: object
                   remote:
                     description: Remote is needed for the Terraform `remote` backend
@@ -719,6 +753,8 @@ spec:
                           prefix:
                             type: string
                         type: object
+                    required:
+                    - workspaces
                     type: object
                   s3:
                     description: s3 is needed for the Terraform `s3` backend type.
@@ -809,6 +845,10 @@ spec:
                         type: string
                       workspace_key_prefix:
                         type: string
+                    required:
+                    - bucket
+                    - key
+                    - region
                     type: object
                   secretSuffix:
                     description: 'SecretSuffix used when creating secrets. Secrets
@@ -941,6 +981,8 @@ spec:
                         type: string
                       user_name:
                         type: string
+                    required:
+                    - container
                     type: object
                 type: object
               customRegion:
