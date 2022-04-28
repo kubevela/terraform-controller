@@ -1,0 +1,45 @@
+apiVersion: terraform.core.oam.dev/v1beta2
+kind: Configuration
+metadata:
+  name: alibaba-oss-bucket-hcl-backend-example
+spec:
+  hcl: |
+    resource "alicloud_oss_bucket" "bucket-acl" {
+      bucket = var.bucket
+      acl = var.acl
+    }
+
+    output "BUCKET_NAME" {
+      value = "${alicloud_oss_bucket.bucket-acl.bucket}.${alicloud_oss_bucket.bucket-acl.extranet_endpoint}"
+    }
+
+    variable "bucket" {
+      description = "OSS bucket name"
+      default = "loheagn-terraform-controller-2"
+      type = string
+    }
+
+    variable "acl" {
+      description = "OSS bucket ACL, supported 'private', 'public-read', 'public-read-write'"
+      default = "private"
+      type = string
+    }
+
+  backend:
+    kubernetes:
+      secret_suffix: 'ali-oss'
+      config_secret:
+        name: cke-secret
+        namespace: default
+        key: config
+
+
+  variable:
+    bucket: "terraform-controller-20220428"
+    acl: "private"
+
+  writeConnectionSecretToRef:
+    name: oss-conn
+    namespace: default
+
+
