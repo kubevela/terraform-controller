@@ -15,6 +15,7 @@ import (
 
 	"github.com/agiledragon/gomonkey/v2"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/sts"
+	tfcfg "github.com/oam-dev/terraform-controller/controllers/configuration"
 	"github.com/stretchr/testify/assert"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -1933,6 +1934,157 @@ func TestCheckWhetherConfigurationChanges(t *testing.T) {
 				if !strings.Contains(err.Error(), tc.want.errMsg) {
 					t.Errorf("CheckWhetherConfigurationChanges() error = %v, wantErr %v", err, tc.want.errMsg)
 				}
+			}
+		})
+	}
+}
+
+func TestTFConfigurationMeta_prepareBackendSecretList(t *testing.T) {
+	type args struct {
+		srcSecretList     []*corev1.Secret
+		backendSecretList []*tfcfg.BackendSecretRef
+	}
+
+	builcK8SClientWithSecret := func(secretList []*corev1.Secret) client.WithWatch {
+		builder := fake.NewClientBuilder()
+		for _, v := range secretList {
+			builder = builder.WithObjects(v)
+		}
+		return builder.Build()
+	}
+
+	srcSecretList1 := []*corev1.Secret{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "a",
+				Namespace: "a",
+			},
+			Data: map[string][]byte{"k1": []byte("something")},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "a",
+				Namespace: "b",
+			},
+			Data: map[string][]byte{"k2": []byte("something else")},
+		},
+	}
+	secretList := []*tfcfg.BackendSecretRef{
+		{
+			Name: "a",
+			SecretRef: &crossplane.SecretKeySelector{
+				SecretReference: crossplane.SecretReference{
+					Name:      "a",
+					Namespace: "a",
+				},
+				Key: "k1",
+			},
+		},
+		{
+			Name: "a-terraform-core-oam-dev",
+			SecretRef: &crossplane.SecretKeySelector{
+				SecretReference: crossplane.SecretReference{
+					Name:      "a",
+					Namespace: "b",
+				},
+				Key: "k2",
+			},
+		},
+	}
+
+	tests := []struct {
+		name      string
+		meta      *TFConfigurationMeta
+		args      args
+		secretMap map[string][]string
+		errMsg    string
+	}{
+		{
+			name: "valid, no error",
+			meta: &TFConfigurationMeta{Namespace: "a"},
+			args: args{
+				srcSecretList:     srcSecretList1,
+				backendSecretList: secretList,
+			},
+			secretMap: map[string][]string{
+				"a":                        {"k1"},
+				"a-terraform-core-oam-dev": {"k2"},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			k8sClient := builcK8SClientWithSecret(tt.args.srcSecretList)
+			err := tt.meta.prepareBackendSecretList(context.Background(), k8sClient, tt.args.backendSecretList)
+			if (tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg)) ||
+				(tt.errMsg == "" && err != nil) {
+				t.Errorf("ValidConfigurationObject() error = %v, wantErr %v", err, tt.errMsg)
+				return
+			}
+			// check secretMap
+			if !reflect.DeepEqual(tt.secretMap, tt.meta.BackendSecretMap) {
+				t.Errorf("gotSecretMap() = %#v, want %#v", tt.secretMap, tt.meta.BackendSecretMap)
+				return
+			}
+		})
+	}
+}
+
+func TestTFConfigurationMeta_createTFBackendSecretVolumes(t *testing.T) {
+	tests := []struct {
+		name string
+		meta *TFConfigurationMeta
+		want []corev1.Volume
+	}{
+		{
+			name: "normal",
+			meta: &TFConfigurationMeta{
+				BackendSecretMap: map[string][]string{
+					"a":                        {"k1"},
+					"a-terraform-core-oam-dev": {"k2", "k3"},
+				},
+			},
+			want: []corev1.Volume{
+				{
+					Name: "a",
+					VolumeSource: corev1.VolumeSource{
+						Secret: &corev1.SecretVolumeSource{
+							SecretName: "a",
+							Items: []corev1.KeyToPath{
+								{
+									Key:  "k1",
+									Path: "k1",
+								},
+							},
+						},
+					},
+				},
+				{
+					Name: "a-terraform-core-oam-dev",
+					VolumeSource: corev1.VolumeSource{
+						Secret: &corev1.SecretVolumeSource{
+							SecretName: "a-terraform-core-oam-dev",
+							Items: []corev1.KeyToPath{
+								{
+									Key:  "k2",
+									Path: "k2",
+								},
+								{
+									Key:  "k3",
+									Path: "k3",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.meta.createTFBackendSecretVolumes()
+			if !reflect.DeepEqual(tt.want, got) {
+				t.Errorf("got: %#v,\n want: %#v", got, tt.want)
 			}
 		})
 	}

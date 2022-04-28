@@ -553,7 +553,7 @@ spec:
                     type: boolean
                   inline:
                     description: Inline allows users to use raw hcl code to specify
-                      their Terraform backend configuration
+                      their Terraform backend
                     type: string
                   kubernetes:
                     description: Kubernetes is needed for the Terraform `kubernetes`
@@ -591,6 +591,8 @@ spec:
                         - name
                         type: object
                       exec:
+                        description: KubernetesBackendConfExec defines the `Exec`
+                          struct in the KubernetesBackendConf
                         properties:
                           api_version:
                             type: string
@@ -663,6 +665,8 @@ spec:
                       acl:
                         type: string
                       assume_role:
+                        description: OSSBackendConfAssumeRole defines the `AssumeRole`
+                          struct in the OSSBackendConf
                         properties:
                           policy:
                             type: string
@@ -747,6 +751,8 @@ spec:
                       token:
                         type: string
                       workspaces:
+                        description: RemoteBackendConfWorkspaces defines the `Workspaces`
+                          struct in RemoteBackendConf
                         properties:
                           name:
                             type: string

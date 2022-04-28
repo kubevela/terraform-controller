@@ -126,7 +126,7 @@ func parseConfigurationBackend(configuration *v1beta2.Configuration, terraformBa
 		backendType = "kubernetes"
 	}
 
-	return handleExplicitBackend(backendConf, backendType, configuration.Namespace)
+	return handleExplicitBackend(backendConf, backendType, terraformBackendNamespace)
 
 }
 
@@ -134,6 +134,10 @@ func handleInlineBackendHCL(code string) (string, error) {
 	type BackendConfig struct {
 		Name   string   `hcl:"name,label"`
 		Remain hcl.Body `hcl:",remain"`
+	}
+
+	type BackendConfigWrap struct {
+		Backend BackendConfig `hcl:"backend,block"`
 	}
 
 	type TerraformConfig struct {
@@ -146,7 +150,7 @@ func handleInlineBackendHCL(code string) (string, error) {
 
 	hclFile, diags := hclparse.NewParser().ParseHCL([]byte(code), "backend")
 	if diags.HasErrors() {
-		return "", fmt.Errorf("there are synax errors in the inline backend hcl code: %w", diags)
+		return "", fmt.Errorf("there are syntax errors in the inline backend hcl code: %w", diags)
 	}
 
 	// try to parse hclFile to Config or BackendConfig
@@ -154,23 +158,21 @@ func handleInlineBackendHCL(code string) (string, error) {
 	backendConfig := &BackendConfig{}
 	shouldWrap := false
 	diags = gohcl.DecodeBody(hclFile.Body, nil, config)
-	if diags.HasErrors() {
-		diags = gohcl.DecodeBody(hclFile.Body, nil, backendConfig)
-		if diags.HasErrors() {
+	if diags.HasErrors() || config.Terraform.Backend.Name == "" {
+		backendConfigWrap := &BackendConfigWrap{}
+		diags = gohcl.DecodeBody(hclFile.Body, nil, backendConfigWrap)
+		if diags.HasErrors() || backendConfigWrap.Backend.Name == "" {
 			return "", fmt.Errorf("the inline backend hcl code is not valid Terraform backend configuration: %w", diags)
 		}
 		shouldWrap = true
-	}
-	if backendConfig == nil {
-		backendConfig = &(config.Terraform.Backend)
+		backendConfig = &backendConfigWrap.Backend
+	} else {
+		backendConfig = &config.Terraform.Backend
 	}
 
 	// check if there is inappropriate fields in the backendConfig
 	checkList := backendSecretMap[strings.ToLower(backendConfig.Name)]
-	attrMap, diags := backendConfig.Remain.JustAttributes()
-	if diags.HasErrors() {
-		return "", fmt.Errorf("there are errors in the `backend` block of the inline backend hcl code: %w", diags)
-	}
+	attrMap, _ := backendConfig.Remain.JustAttributes()
 	for field := range checkList {
 		if _, ok := attrMap[field]; ok {
 			return "", fmt.Errorf("%s is not supported in the inline backend hcl code as we cannot use local file paths in the kubernetes cluster", field)
@@ -214,7 +216,7 @@ func handleExplicitBackend(backendConf interface{}, backendType string, namespac
 		secretList = append(secretList, backendSecret)
 
 		// replace pre attr
-		_ = backendHCLBlock.RemoveAttribute(src)
+		_ = backendHCLBlock.RemoveBlock(backendHCLBlock.FirstMatchingBlock(src, nil))
 		filePathInPod := fmt.Sprintf("/var/%s/%s", backendSecret.Name, secretRef.Key)
 		ctyVal, _ := gocty.ToCtyValue(filePathInPod, cty.String)
 		_ = backendHCLBlock.SetAttributeValue(dest, ctyVal)

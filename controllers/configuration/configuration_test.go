@@ -183,6 +183,241 @@ in_cluster_config = true
 				errMsg: "Unsupported Configuration Type",
 			},
 		},
+		{
+			name: "backend is not nil, use invalid(has syntax error) inline backend conf",
+			args: args{
+				configuration: &v1beta2.Configuration{
+					Spec: v1beta2.ConfigurationSpec{
+						Backend: &v1beta2.Backend{
+							Inline: `
+terraform {
+`,
+						},
+					},
+				},
+				ns: "vela-system",
+			},
+			want: want{
+				errMsg: "there are syntax errors in the inline backend hcl code",
+			},
+		},
+		{
+			name: "backend is not nil, use invalid inline backend conf",
+			args: args{
+				configuration: &v1beta2.Configuration{
+					Spec: v1beta2.ConfigurationSpec{
+						Backend: &v1beta2.Backend{
+							Inline: `
+terraform {
+}
+`,
+						},
+					},
+				},
+				ns: "vela-system",
+			},
+			want: want{
+				errMsg: "the inline backend hcl code is not valid Terraform backend configuration",
+			},
+		},
+		{
+			name: "backend is not nil, use valid inline backend conf",
+			args: args{
+				configuration: &v1beta2.Configuration{
+					Spec: v1beta2.ConfigurationSpec{
+						Backend: &v1beta2.Backend{
+							Inline: `
+terraform {
+	backend "kubernetes" {
+		secret_suffix     = ""
+		namespace         = "vela-system"
+		in_cluster_config = true
+	}
+}
+`,
+						},
+					},
+				},
+				configurationType: types.ConfigurationHCL,
+				ns:                "vela-system",
+			},
+			want: want{
+				errMsg: "",
+				cfg: `
+
+terraform {
+	backend "kubernetes" {
+		secret_suffix     = ""
+		namespace         = "vela-system"
+		in_cluster_config = true
+	}
+}
+`,
+			},
+		},
+		{
+			name: "backend is not nil, use valid inline backend conf, should wrap",
+			args: args{
+				configuration: &v1beta2.Configuration{
+					Spec: v1beta2.ConfigurationSpec{
+						Backend: &v1beta2.Backend{
+							Inline: `backend "kubernetes" {
+	secret_suffix     = ""
+	namespace         = "vela-system"
+	in_cluster_config = true
+}`,
+						},
+					},
+				},
+				configurationType: types.ConfigurationHCL,
+				ns:                "vela-system",
+			},
+			want: want{
+				errMsg: "",
+				cfg: `
+
+terraform {
+backend "kubernetes" {
+	secret_suffix     = ""
+	namespace         = "vela-system"
+	in_cluster_config = true
+}
+}
+`,
+			},
+		},
+		{
+			name: "backend is not nil, use invalid (has invalid fields) inline backend conf",
+			args: args{
+				configuration: &v1beta2.Configuration{
+					Spec: v1beta2.ConfigurationSpec{
+						Backend: &v1beta2.Backend{
+							Inline: `
+terraform {
+	backend "kubernetes" {
+		secret_suffix     = ""
+		namespace         = "vela-system"
+		in_cluster_config = true
+		config_path       = "~/.kube/config"
+	}
+}
+`,
+						},
+					},
+				},
+				configurationType: types.ConfigurationHCL,
+				ns:                "vela-system",
+			},
+			want: want{
+				errMsg: "config_path is not supported in the inline backend hcl code as we cannot use local file paths in the kubernetes cluster",
+			},
+		},
+		{
+			name: "backend is not nil, use explicit backend conf",
+			args: args{
+				configuration: &v1beta2.Configuration{
+					Spec: v1beta2.ConfigurationSpec{
+						Backend: &v1beta2.Backend{
+							S3: &v1beta2.S3BackendConf{
+								Bucket: "my_bucket",
+								Key:    "my_key",
+								Region: "my_region",
+								SharedCredentialsSecret: &crossplane.SecretKeySelector{
+									SecretReference: crossplane.SecretReference{
+										Name:      "abc",
+										Namespace: "a",
+									},
+									Key: "d",
+								},
+							},
+						},
+					},
+				},
+				configurationType: types.ConfigurationHCL,
+				ns:                "vela-system",
+			},
+			want: want{
+				errMsg: "",
+				cfg: `
+
+terraform {
+	backend "s3" {
+bucket = "my_bucket"
+key    = "my_key"
+region = "my_region"
+
+shared_credentials_file = "/var/abc-terraform-core-oam-dev/d"
+
+	}
+}
+`,
+				backendSecretList: []*BackendSecretRef{
+					{
+						Name: "abc-terraform-core-oam-dev",
+						SecretRef: &crossplane.SecretKeySelector{
+							SecretReference: crossplane.SecretReference{
+								Name:      "abc",
+								Namespace: "a",
+							},
+							Key: "d",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "backend is not nil, use explicit backend conf, secret in the same namespace as the configuration",
+			args: args{
+				configuration: &v1beta2.Configuration{
+					Spec: v1beta2.ConfigurationSpec{
+						Backend: &v1beta2.Backend{
+							S3: &v1beta2.S3BackendConf{
+								Bucket: "my_bucket",
+								Key:    "my_key",
+								Region: "my_region",
+								SharedCredentialsSecret: &crossplane.SecretKeySelector{
+									SecretReference: crossplane.SecretReference{
+										Name:      "abc",
+										Namespace: "vela-system",
+									},
+									Key: "d",
+								},
+							},
+						},
+					},
+				},
+				configurationType: types.ConfigurationHCL,
+				ns:                "vela-system",
+			},
+			want: want{
+				errMsg: "",
+				cfg: `
+
+terraform {
+	backend "s3" {
+bucket = "my_bucket"
+key    = "my_key"
+region = "my_region"
+
+shared_credentials_file = "/var/abc/d"
+
+	}
+}
+`,
+				backendSecretList: []*BackendSecretRef{
+					{
+						Name: "abc",
+						SecretRef: &crossplane.SecretKeySelector{
+							SecretReference: crossplane.SecretReference{
+								Name:      "abc",
+								Namespace: "vela-system",
+							},
+							Key: "d",
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range testcases {
@@ -194,9 +429,10 @@ in_cluster_config = true
 			}
 			if got != tc.want.cfg {
 				t.Errorf("ValidConfigurationObject() = %v, want %v", got, tc.want.cfg)
+				return
 			}
 			if !reflect.DeepEqual(tc.want.backendSecretList, secretList) {
-				t.Errorf("ValidBackendSecretList() = %v, want %v", secretList, tc.want.backendSecretList)
+				t.Errorf("ValidBackendSecretList() = %#v, want %#v", secretList, tc.want.backendSecretList)
 			}
 		})
 	}
