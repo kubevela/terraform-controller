@@ -155,6 +155,7 @@ func handleInlineBackendHCL(code string) (string, error) {
 
 	// try to parse hclFile to Config or BackendConfig
 	config := &TerraformConfig{}
+	// nolint:staticcheck
 	backendConfig := &BackendConfig{}
 	shouldWrap := false
 	diags = gohcl.DecodeBody(hclFile.Body, nil, config)
