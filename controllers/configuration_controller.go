@@ -267,7 +267,9 @@ func initTFConfigurationMeta(req ctrl.Request, configuration v1beta2.Configurati
 		meta.RemoteGitPath = configuration.Spec.Path
 	}
 
-	meta.ProviderReference = tfcfg.GetProviderNamespacedName(configuration)
+	if !configuration.Spec.InlineCredentials {
+		meta.ProviderReference = tfcfg.GetProviderNamespacedName(configuration)
+	}
 
 	// Check the existence of Terraform state secret which is used to store TF state file. For detailed information,
 	// please refer to https://www.terraform.io/docs/language/settings/backends/kubernetes.html#configuration-variables
@@ -519,20 +521,22 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	}
 
 	// Check provider
-	p, err := provider.GetProviderFromConfiguration(ctx, k8sClient, meta.ProviderReference.Namespace, meta.ProviderReference.Name)
-	if p == nil {
-		msg := types.ErrProviderNotFound
-		if err != nil {
-			msg = err.Error()
+	if !configuration.Spec.InlineCredentials {
+		p, err := provider.GetProviderFromConfiguration(ctx, k8sClient, meta.ProviderReference.Namespace, meta.ProviderReference.Name)
+		if p == nil {
+			msg := types.ErrProviderNotFound
+			if err != nil {
+				msg = err.Error()
+			}
+			if updateStatusErr := meta.updateApplyStatus(ctx, k8sClient, types.Authorizing, msg); updateStatusErr != nil {
+				return errors.Wrap(updateStatusErr, msg)
+			}
+			return errors.New(msg)
 		}
-		if updateStatusErr := meta.updateApplyStatus(ctx, k8sClient, types.Authorizing, msg); updateStatusErr != nil {
-			return errors.Wrap(updateStatusErr, msg)
-		}
-		return errors.New(msg)
-	}
 
-	if err := meta.getCredentials(ctx, k8sClient, p); err != nil {
-		return err
+		if err := meta.getCredentials(ctx, k8sClient, p); err != nil {
+			return err
+		}
 	}
 
 	// Check whether env changes
