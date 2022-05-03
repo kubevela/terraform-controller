@@ -56,7 +56,7 @@ func main() {
 	flag.DurationVar(&syncPeriod, "informer-re-sync-interval", 10*time.Second, "controller shared informer lister full re-sync period")
 	flag.StringVar(&metricsAddr, "metrics-addr", ":38080", "The address the metric endpoint binds to.")
 	flag.StringVar(&namespace, "namespace", "", "Namespace to watch for resources, defaults to all namespaces")
-	flag.StringVar(&controllerNamespace, "controller-namespace", "vela-system", "Namespace to run the terraform jobs")
+	flag.StringVar(&controllerNamespace, "controller-namespace", "terraform", "Namespace to run the terraform jobs")
 
 	// embed klog
 	klog.InitFlags(nil)
