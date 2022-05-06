@@ -126,7 +126,7 @@ func parseConfigurationBackend(configuration *v1beta2.Configuration, terraformBa
 		backendType = "kubernetes"
 	}
 
-	return handleExplicitBackend(backendConf, backendType, terraformBackendNamespace)
+	return handleExplicitBackend(backendConf, backendType, configuration.Namespace)
 
 }
 
