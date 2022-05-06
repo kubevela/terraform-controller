@@ -741,7 +741,7 @@ func (in *KubernetesBackendConf) DeepCopyInto(out *KubernetesBackendConf) {
 	}
 	if in.Insecure != nil {
 		in, out := &in.Insecure, &out.Insecure
-		*out = new(string)
+		*out = new(bool)
 		**out = **in
 	}
 	if in.ClientCertificate != nil {

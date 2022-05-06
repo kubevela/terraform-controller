@@ -322,7 +322,7 @@ type KubernetesBackendConf struct {
 	Host                 *string            `json:"host,omitempty" hcl:"host"`
 	Username             *string            `json:"username,omitempty" hcl:"username"`
 	Password             *string            `json:"password,omitempty" hcl:"password"`
-	Insecure             *string            `json:"insecure,omitempty" hcl:"insecure"`
+	Insecure             *bool              `json:"insecure,omitempty" hcl:"insecure"`
 	ClientCertificate    *string            `json:"client_certificate,omitempty" hcl:"client_certificate"`
 	ClientKey            *string            `json:"client_key,omitempty" hcl:"client_key"`
 	ClusterCACertificate *string            `json:"cluster_ca_certificate,omitempty" hcl:"cluster_ca_certificate"`
