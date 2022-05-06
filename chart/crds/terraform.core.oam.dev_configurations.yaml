@@ -612,7 +612,7 @@ spec:
                       in_cluster_config:
                         type: boolean
                       insecure:
-                        type: string
+                        type: boolean
                       labels:
                         additionalProperties:
                           type: string
