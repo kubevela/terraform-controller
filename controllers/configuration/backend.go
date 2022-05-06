@@ -70,8 +70,27 @@ var backendTypes = []string{
 	"manta", "oss", "pg", "s3", "swift",
 }
 
-// BackendSecretRef describes which secret should be mounted to the executor pod
-type BackendSecretRef struct {
+// BackendConfSecretPodPathWithKey builds the file path in the executor pod for a BackendConfSecret
+func BackendConfSecretPodPathWithKey(secretName, secretKey string) string {
+	return fmt.Sprintf("/kubevela-terraform-controller-backend-secret/%s/%s", secretName, secretKey)
+}
+
+// BackendConfSecretPodPath builds the dir path in the executor pod for a BackendConfSecret
+func BackendConfSecretPodPath(secretName string) string {
+	return fmt.Sprintf("/kubevela-terraform-controller-backend-secret/%s", secretName)
+}
+
+func checkBackendTypeValid(backendType string) bool {
+	for _, v := range backendTypes {
+		if v == backendType {
+			return true
+		}
+	}
+	return false
+}
+
+// BackendConfSecretRef describes which secret should be mounted to the executor pod
+type BackendConfSecretRef struct {
 	// Name is the name of the secret which will be mounted to a pod when running the job
 	// If the secret referred by the SecretRef is in the same namespace as the Configuration(and the job)
 	// the Name will be the same as the secret's.
@@ -80,7 +99,7 @@ type BackendSecretRef struct {
 	SecretRef *crossplane.SecretKeySelector
 }
 
-func parseConfigurationBackend(configuration *v1beta2.Configuration, terraformBackendNamespace string) (string, []*BackendSecretRef, error) {
+func parseConfigurationBackend(configuration *v1beta2.Configuration, terraformBackendNamespace string) (string, []*BackendConfSecretRef, error) {
 	backend := configuration.Spec.Backend
 
 	var backendConf interface{}
@@ -90,22 +109,26 @@ func parseConfigurationBackend(configuration *v1beta2.Configuration, terraformBa
 		if len(backend.Inline) > 0 {
 			backendTF, err := handleInlineBackendHCL(backend.Inline)
 			return backendTF, nil, err
-		}
+		} else if len(backend.BackendType) > 0 {
+			// check if is custom backend
 
-		// check if is custom backend
-		backendStructValue := reflect.ValueOf(backend)
-		if backendStructValue.Kind() == reflect.Ptr {
-			backendStructValue = backendStructValue.Elem()
-		}
-		for _, typeName := range backendTypes {
-			tName := typeName
-			field := backendStructValue.FieldByNameFunc(func(name string) bool {
-				return strings.EqualFold(name, tName)
-			})
-			if !field.IsNil() {
-				backendConf, backendType = field.Interface(), tName
-				break
+			backendType = strings.ToLower(backend.BackendType)
+			// check if backendType is valid
+			if !checkBackendTypeValid(backendType) {
+				return "", nil, fmt.Errorf("%s is unsupported backendType", backend.BackendType)
 			}
+			// fetch backendConf using reflection
+			backendStructValue := reflect.ValueOf(backend)
+			if backendStructValue.Kind() == reflect.Ptr {
+				backendStructValue = backendStructValue.Elem()
+			}
+			backendField := backendStructValue.FieldByNameFunc(func(name string) bool {
+				return strings.EqualFold(name, backendType)
+			})
+			if backendField.IsNil() {
+				return "", nil, fmt.Errorf("there is no configuration for backendType %s", backend.BackendType)
+			}
+			backendConf = backendField.Interface()
 		}
 	}
 
@@ -171,6 +194,10 @@ func handleInlineBackendHCL(code string) (string, error) {
 		backendConfig = &config.Terraform.Backend
 	}
 
+	// check whether the backendType is valid
+	if strings.EqualFold(backendConfig.Name, "local") {
+		return "", fmt.Errorf("backendType \"local\" is not supported")
+	}
 	// check if there is inappropriate fields in the backendConfig
 	checkList := backendSecretMap[strings.ToLower(backendConfig.Name)]
 	attrMap, _ := backendConfig.Remain.JustAttributes()
@@ -190,12 +217,12 @@ terraform {
 	return code, nil
 }
 
-func handleExplicitBackend(backendConf interface{}, backendType string, namespace string) (string, []*BackendSecretRef, error) {
+func handleExplicitBackend(backendConf interface{}, backendType string, namespace string) (string, []*BackendConfSecretRef, error) {
 	hclFile := hclwrite.NewEmptyFile()
 	gohcl.EncodeIntoBody(backendConf, hclFile.Body())
 	backendHCLBlock := hclFile.Body()
 
-	secretList := make([]*BackendSecretRef, 0)
+	secretList := make([]*BackendConfSecretRef, 0)
 	secretMap := backendSecretMap[backendType]
 	backendConfValue := reflect.ValueOf(backendConf)
 	if backendConfValue.Kind() == reflect.Ptr {
@@ -208,7 +235,7 @@ func handleExplicitBackend(backendConf interface{}, backendType string, namespac
 			continue
 		}
 		secretRef := secretField.Interface().(*crossplane.SecretKeySelector)
-		backendSecret := &BackendSecretRef{SecretRef: secretRef}
+		backendSecret := &BackendConfSecretRef{SecretRef: secretRef}
 		if secretRef.Namespace == namespace {
 			backendSecret.Name = secretRef.Name
 		} else {
@@ -218,8 +245,7 @@ func handleExplicitBackend(backendConf interface{}, backendType string, namespac
 
 		// replace pre attr
 		_ = backendHCLBlock.RemoveBlock(backendHCLBlock.FirstMatchingBlock(src, nil))
-		filePathInPod := fmt.Sprintf("/var/%s/%s", backendSecret.Name, secretRef.Key)
-		ctyVal, _ := gocty.ToCtyValue(filePathInPod, cty.String)
+		ctyVal, _ := gocty.ToCtyValue(BackendConfSecretPodPathWithKey(backendSecret.Name, secretRef.Key), cty.String)
 		_ = backendHCLBlock.SetAttributeValue(dest, ctyVal)
 	}
 

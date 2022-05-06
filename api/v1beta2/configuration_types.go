@@ -119,6 +119,9 @@ type Backend struct {
 	// Inline allows users to use raw hcl code to specify their Terraform backend
 	Inline string `json:"inline,omitempty"`
 
+	// BackendType indicates which backend type to use. This field is needed for custom backend configuration.
+	BackendType string `json:"backend_type,omitempty"`
+
 	// Remote is needed for the Terraform `remote` backend type.
 	Remote *RemoteBackendConf `json:"remote,omitempty"`
 
