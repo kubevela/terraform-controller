@@ -1939,97 +1939,6 @@ func TestCheckWhetherConfigurationChanges(t *testing.T) {
 	}
 }
 
-func TestTFConfigurationMeta_prepareBackendSecretList(t *testing.T) {
-	type args struct {
-		srcSecretList     []*corev1.Secret
-		backendSecretList []*tfcfg.BackendConfSecretRef
-	}
-
-	builcK8SClientWithSecret := func(secretList []*corev1.Secret) client.WithWatch {
-		builder := fake.NewClientBuilder()
-		for _, v := range secretList {
-			builder = builder.WithObjects(v)
-		}
-		return builder.Build()
-	}
-
-	srcSecretList1 := []*corev1.Secret{
-		{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "a",
-				Namespace: "a",
-			},
-			Data: map[string][]byte{"k1": []byte("something")},
-		},
-		{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "a",
-				Namespace: "b",
-			},
-			Data: map[string][]byte{"k2": []byte("something else")},
-		},
-	}
-	secretList := []*tfcfg.BackendConfSecretRef{
-		{
-			Name: "a",
-			SecretRef: &crossplane.SecretKeySelector{
-				SecretReference: crossplane.SecretReference{
-					Name:      "a",
-					Namespace: "a",
-				},
-				Key: "k1",
-			},
-		},
-		{
-			Name: "a-terraform-core-oam-dev",
-			SecretRef: &crossplane.SecretKeySelector{
-				SecretReference: crossplane.SecretReference{
-					Name:      "a",
-					Namespace: "b",
-				},
-				Key: "k2",
-			},
-		},
-	}
-
-	tests := []struct {
-		name      string
-		meta      *TFConfigurationMeta
-		args      args
-		secretMap map[string][]string
-		errMsg    string
-	}{
-		{
-			name: "valid, no error",
-			meta: &TFConfigurationMeta{Namespace: "a"},
-			args: args{
-				srcSecretList:     srcSecretList1,
-				backendSecretList: secretList,
-			},
-			secretMap: map[string][]string{
-				"a":                        {"k1"},
-				"a-terraform-core-oam-dev": {"k2"},
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			k8sClient := builcK8SClientWithSecret(tt.args.srcSecretList)
-			err := tt.meta.prepareBackendSecretList(context.Background(), k8sClient, tt.args.backendSecretList)
-			if (tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg)) ||
-				(tt.errMsg == "" && err != nil) {
-				t.Errorf("ValidConfigurationObject() error = %v, wantErr %v", err, tt.errMsg)
-				return
-			}
-			// check secretMap
-			if !reflect.DeepEqual(tt.secretMap, tt.meta.BackendSecretMap) {
-				t.Errorf("gotSecretMap() = %#v, want %#v", tt.secretMap, tt.meta.BackendSecretMap)
-				return
-			}
-		})
-	}
-}
-
 func TestTFConfigurationMeta_createTFBackendSecretVolumes(t *testing.T) {
 	tests := []struct {
 		name string
@@ -2039,9 +1948,11 @@ func TestTFConfigurationMeta_createTFBackendSecretVolumes(t *testing.T) {
 		{
 			name: "normal",
 			meta: &TFConfigurationMeta{
-				BackendSecretMap: map[string][]string{
-					"a":                        {"k1"},
-					"a-terraform-core-oam-dev": {"k2", "k3"},
+				BackendConf: &tfcfg.BackendConf{
+					Secrets: map[string][]string{
+						"a":                        {"k1"},
+						"a-terraform-core-oam-dev": {"k2", "k3"},
+					},
 				},
 			},
 			want: []corev1.Volume{
@@ -2082,7 +1993,7 @@ func TestTFConfigurationMeta_createTFBackendSecretVolumes(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := tt.meta.createTFBackendSecretVolumes()
+			got := tt.meta.createTFBackendConfSecretVolumes()
 			if !reflect.DeepEqual(tt.want, got) {
 				t.Errorf("got: %#v,\n want: %#v", got, tt.want)
 			}

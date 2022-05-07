@@ -206,7 +206,6 @@ type TFConfigurationMeta struct {
 	ConfigurationChanged  bool
 	EnvChanged            bool
 	ConfigurationCMName   string
-	BackendSecretName     string
 	ApplyJobName          string
 	DestroyJobName        string
 	Envs                  []v1.EnvVar
@@ -216,17 +215,17 @@ type TFConfigurationMeta struct {
 	DeleteResource        bool
 	Credentials           map[string]string
 
-	// BackendSecretMap describes which secret and which key in the secret should be mounted to the executor pod
-	BackendSecretMap map[string][]string
+	BackendConf               *tfcfg.BackendConf
+	BackendSecretName         string
+	TerraformBackendNamespace string
 
 	// JobNodeSelector Expose the node selector of job to the controller level
 	JobNodeSelector map[string]string
 
 	// TerraformImage is the Terraform image which can run `terraform init/plan/apply`
-	TerraformImage            string
-	TerraformBackendNamespace string
-	BusyboxImage              string
-	GitImage                  string
+	TerraformImage string
+	BusyboxImage   string
+	GitImage       string
 
 	// Resources series Variables are for Setting Compute Resources required by this container
 	ResourcesLimitsCPU              string
@@ -515,19 +514,13 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	}
 	meta.ConfigurationType = configurationType
 
-	// TODO(zzxwill) Need to find an alternative to check whether there is an state backend in the Configuration
-
 	// Render configuration with backend
-	completeConfiguration, backendSecretList, err := tfcfg.RenderConfiguration(configuration, meta.TerraformBackendNamespace, configurationType)
+	completeConfiguration, backendConf, err := tfcfg.RenderConfiguration(ctx, k8sClient, configuration, meta.TerraformBackendNamespace, configurationType)
 	if err != nil {
 		return err
 	}
 	meta.CompleteConfiguration = completeConfiguration
-
-	// prepare the secrets used by backend configuration
-	if err := meta.prepareBackendSecretList(ctx, k8sClient, backendSecretList); err != nil {
-		return err
-	}
+	meta.BackendConf = backendConf
 
 	if err := meta.storeTFConfiguration(ctx, k8sClient); err != nil {
 		return err
@@ -709,7 +702,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 		},
 	}
 	backendSecretMounts := make([]v1.VolumeMount, 0)
-	for secretName := range meta.BackendSecretMap {
+	for secretName := range meta.BackendConf.Secrets {
 		backendSecretMounts = append(backendSecretMounts, v1.VolumeMount{
 			Name:      secretName,
 			MountPath: tfcfg.BackendConfSecretPodPath(secretName),
@@ -857,7 +850,7 @@ func (meta *TFConfigurationMeta) assembleExecutorVolumes() []v1.Volume {
 	workingVolume.EmptyDir = &v1.EmptyDirVolumeSource{}
 	inputTFConfigurationVolume := meta.createConfigurationVolume()
 	tfBackendVolume := meta.createTFBackendVolume()
-	tfBackendSecretVolumes := meta.createTFBackendSecretVolumes()
+	tfBackendSecretVolumes := meta.createTFBackendConfSecretVolumes()
 	return append([]v1.Volume{workingVolume, inputTFConfigurationVolume, tfBackendVolume}, tfBackendSecretVolumes...)
 }
 
@@ -1104,38 +1097,9 @@ func (meta *TFConfigurationMeta) createOrUpdateConfigMap(ctx context.Context, k8
 	return nil
 }
 
-func (meta *TFConfigurationMeta) prepareBackendSecretList(ctx context.Context, k8sClient client.Client, backendSecretList []*tfcfg.BackendConfSecretRef) error {
-	secretMap := make(map[string][]string)
-	for _, secretRef := range backendSecretList {
-		secretMap[secretRef.Name] = append(secretMap[secretRef.Name], secretRef.SecretRef.Key)
-
-		if secretRef.SecretRef.Namespace == meta.Namespace {
-			continue
-		}
-		// if the secret isn't in the same namespace, create a new secret and copy the data
-		secret := v1.Secret{}
-		if err := k8sClient.Get(
-			ctx,
-			client.ObjectKey{
-				Name:      secretRef.SecretRef.Name,
-				Namespace: secretRef.SecretRef.Namespace,
-			},
-			&secret,
-		); err != nil {
-			return err
-		}
-		secret.ObjectMeta = metav1.ObjectMeta{Name: secretRef.Name, Namespace: meta.Namespace}
-		if err := k8sClient.Create(ctx, &secret); err != nil {
-			return err
-		}
-	}
-	meta.BackendSecretMap = secretMap
-	return nil
-}
-
-func (meta *TFConfigurationMeta) createTFBackendSecretVolumes() []v1.Volume {
+func (meta *TFConfigurationMeta) createTFBackendConfSecretVolumes() []v1.Volume {
 	volumes := make([]v1.Volume, 0)
-	for secretName, keyList := range meta.BackendSecretMap {
+	for secretName, keyList := range meta.BackendConf.Secrets {
 		items := make([]v1.KeyToPath, 0, len(keyList))
 		for _, key := range keyList {
 			items = append(items, v1.KeyToPath{Key: key, Path: key})

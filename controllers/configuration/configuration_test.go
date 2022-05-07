@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -104,15 +105,25 @@ func TestValidConfigurationObject(t *testing.T) {
 
 func TestRenderConfiguration(t *testing.T) {
 	type args struct {
+		k8sClient         client.Client
 		configuration     *v1beta2.Configuration
 		ns                string
 		configurationType types.ConfigurationType
 	}
 	type want struct {
-		cfg               string
-		backendSecretList []*BackendConfSecretRef
-		errMsg            string
+		cfg         string
+		backendConf *BackendConf
+		errMsg      string
 	}
+
+	secret1 := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "abc",
+			Namespace: "a",
+		},
+		Data: map[string][]byte{"d": []byte("something")},
+	}
+	k8sClient1 := fake.NewClientBuilder().WithObjects(secret1).Build()
 
 	testcases := []struct {
 		name string
@@ -143,7 +154,21 @@ in_cluster_config = true
 	}
 }
 `,
-				backendSecretList: []*BackendConfSecretRef{},
+				backendConf: &BackendConf{
+					BackendType: "kubernetes",
+					HCL: `
+terraform {
+	backend "kubernetes" {
+secret_suffix     = ""
+namespace         = "vela-system"
+in_cluster_config = true
+
+	}
+}
+`,
+					UseDefault: true,
+					Secrets:    make(map[string][]string),
+				},
 			},
 		},
 		{
@@ -168,7 +193,21 @@ in_cluster_config = true
 	}
 }
 `,
-				backendSecretList: []*BackendConfSecretRef{},
+				backendConf: &BackendConf{
+					BackendType: "kubernetes",
+					HCL: `
+terraform {
+	backend "kubernetes" {
+secret_suffix     = ""
+namespace         = "vela-system"
+in_cluster_config = true
+
+	}
+}
+`,
+					UseDefault: true,
+					Secrets:    make(map[string][]string),
+				},
 			},
 		},
 		{
@@ -275,6 +314,20 @@ terraform {
 	}
 }
 `,
+				backendConf: &BackendConf{
+					BackendType: "kubernetes",
+					HCL: `
+terraform {
+	backend "kubernetes" {
+		secret_suffix     = ""
+		namespace         = "vela-system"
+		in_cluster_config = true
+	}
+}
+`,
+					UseDefault: false,
+					Secrets:    make(map[string][]string),
+				},
 			},
 		},
 		{
@@ -306,6 +359,20 @@ backend "kubernetes" {
 }
 }
 `,
+				backendConf: &BackendConf{
+					BackendType: "kubernetes",
+					HCL: `
+terraform {
+backend "kubernetes" {
+	secret_suffix     = ""
+	namespace         = "vela-system"
+	in_cluster_config = true
+}
+}
+`,
+					UseDefault: false,
+					Secrets:    make(map[string][]string),
+				},
 			},
 		},
 		{
@@ -337,6 +404,7 @@ terraform {
 		{
 			name: "backend is not nil, use explicit backend conf",
 			args: args{
+				k8sClient: k8sClient1,
 				configuration: &v1beta2.Configuration{
 					Spec: v1beta2.ConfigurationSpec{
 						Backend: &v1beta2.Backend{
@@ -374,16 +442,23 @@ shared_credentials_file = "/kubevela-terraform-controller-backend-secret/abc-ter
 	}
 }
 `,
-				backendSecretList: []*BackendConfSecretRef{
-					{
-						Name: "abc-terraform-core-oam-dev",
-						SecretRef: &crossplane.SecretKeySelector{
-							SecretReference: crossplane.SecretReference{
-								Name:      "abc",
-								Namespace: "a",
-							},
-							Key: "d",
-						},
+				backendConf: &BackendConf{
+					BackendType: "s3",
+					HCL: `
+terraform {
+	backend "s3" {
+bucket = "my_bucket"
+key    = "my_key"
+region = "my_region"
+
+shared_credentials_file = "/kubevela-terraform-controller-backend-secret/abc-terraform-core-oam-dev/d"
+
+	}
+}
+`,
+					UseDefault: false,
+					Secrets: map[string][]string{
+						"abc-terraform-core-oam-dev": {"d"},
 					},
 				},
 			},
@@ -391,8 +466,11 @@ shared_credentials_file = "/kubevela-terraform-controller-backend-secret/abc-ter
 		{
 			name: "backend is not nil, use explicit backend conf, secret in the same namespace as the configuration",
 			args: args{
+				k8sClient: k8sClient1,
 				configuration: &v1beta2.Configuration{
-					ObjectMeta: metav1.ObjectMeta{Namespace: "a"},
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "a",
+					},
 					Spec: v1beta2.ConfigurationSpec{
 						Backend: &v1beta2.Backend{
 							BackendType: "s3",
@@ -429,16 +507,23 @@ shared_credentials_file = "/kubevela-terraform-controller-backend-secret/abc/d"
 	}
 }
 `,
-				backendSecretList: []*BackendConfSecretRef{
-					{
-						Name: "abc",
-						SecretRef: &crossplane.SecretKeySelector{
-							SecretReference: crossplane.SecretReference{
-								Name:      "abc",
-								Namespace: "a",
-							},
-							Key: "d",
-						},
+				backendConf: &BackendConf{
+					BackendType: "s3",
+					HCL: `
+terraform {
+	backend "s3" {
+bucket = "my_bucket"
+key    = "my_key"
+region = "my_region"
+
+shared_credentials_file = "/kubevela-terraform-controller-backend-secret/abc/d"
+
+	}
+}
+`,
+					UseDefault: false,
+					Secrets: map[string][]string{
+						"abc": {"d"},
 					},
 				},
 			},
@@ -481,7 +566,21 @@ in_cluster_config = true
 	}
 }
 `,
-				backendSecretList: []*BackendConfSecretRef{},
+				backendConf: &BackendConf{
+					BackendType: "kubernetes",
+					HCL: `
+terraform {
+	backend "kubernetes" {
+secret_suffix     = ""
+namespace         = "vela-system"
+in_cluster_config = true
+
+	}
+}
+`,
+					UseDefault: true,
+					Secrets:    map[string][]string{},
+				},
 			},
 		},
 		{
@@ -548,7 +647,11 @@ in_cluster_config = true
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, secretList, err := RenderConfiguration(tc.args.configuration, tc.args.ns, tc.args.configurationType)
+			k8sClient := tc.args.k8sClient
+			if k8sClient == nil {
+				k8sClient = fake.NewClientBuilder().Build()
+			}
+			got, backendConf, err := RenderConfiguration(context.Background(), k8sClient, tc.args.configuration, tc.args.ns, tc.args.configurationType)
 			if tc.want.errMsg != "" && !strings.Contains(err.Error(), tc.want.errMsg) {
 				t.Errorf("ValidConfigurationObject() error = %v, wantErr %v", err, tc.want.errMsg)
 				return
@@ -557,8 +660,9 @@ in_cluster_config = true
 				t.Errorf("ValidConfigurationObject() = %v, want %v", got, tc.want.cfg)
 				return
 			}
-			if !reflect.DeepEqual(tc.want.backendSecretList, secretList) {
-				t.Errorf("ValidBackendSecretList() = %#v, want %#v", secretList, tc.want.backendSecretList)
+
+			if !reflect.DeepEqual(tc.want.backendConf, backendConf) {
+				t.Errorf("ValidBackendSecretList() = %#v, want %#v", backendConf, tc.want.backendConf)
 			}
 		})
 	}
