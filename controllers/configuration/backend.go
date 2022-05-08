@@ -286,7 +286,3 @@ terraform {
 `, backendType, hclFile.Bytes())
 	return backendHCL, backendType, secretList
 }
-
-func bool2Ptr(x bool) *bool {
-	return &x
-}
