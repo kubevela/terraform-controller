@@ -1045,7 +1045,7 @@ func (meta *TFConfigurationMeta) getStateJSON(ctx context.Context, k8sClient cli
 	// If users use custom backend
 	var s = v1.Secret{}
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: fmt.Sprintf(TFStatePullTmpSecret, meta.Name), Namespace: meta.Namespace}, &s); err != nil {
-		return nil, errors.Wrap(err, "`terraform state pull` isn't over yet.")
+		return nil, errors.Wrap(err, "terraform-state-pull isn't over yet.")
 	}
 	tfStateData, ok := s.Data[TFStatePullTmpSecretKey]
 	if !ok {

@@ -146,24 +146,22 @@ func TestRenderConfiguration(t *testing.T) {
 				cfg: `image_id=123
 
 terraform {
-	backend "kubernetes" {
-secret_suffix     = ""
-namespace         = "vela-system"
-in_cluster_config = true
-
-	}
+  backend "kubernetes" {
+    secret_suffix     = ""
+    in_cluster_config = true
+    namespace         = "vela-system"
+  }
 }
 `,
 				backendConf: &BackendConf{
 					BackendType: "kubernetes",
 					HCL: `
 terraform {
-	backend "kubernetes" {
-secret_suffix     = ""
-namespace         = "vela-system"
-in_cluster_config = true
-
-	}
+  backend "kubernetes" {
+    secret_suffix     = ""
+    in_cluster_config = true
+    namespace         = "vela-system"
+  }
 }
 `,
 					Secrets: make(map[string][]string),
@@ -184,24 +182,22 @@ in_cluster_config = true
 			want: want{
 				cfg: `
 terraform {
-	backend "kubernetes" {
-secret_suffix     = ""
-namespace         = "vela-system"
-in_cluster_config = true
-
-	}
+  backend "kubernetes" {
+    secret_suffix     = ""
+    in_cluster_config = true
+    namespace         = "vela-system"
+  }
 }
 `,
 				backendConf: &BackendConf{
 					BackendType: "kubernetes",
 					HCL: `
 terraform {
-	backend "kubernetes" {
-secret_suffix     = ""
-namespace         = "vela-system"
-in_cluster_config = true
-
-	}
+  backend "kubernetes" {
+    secret_suffix     = ""
+    in_cluster_config = true
+    namespace         = "vela-system"
+  }
 }
 `,
 					Secrets: make(map[string][]string),
@@ -556,24 +552,22 @@ shared_credentials_file = "/kubevela-terraform-controller-backend-secret/abc/d"
 				cfg: `
 
 terraform {
-	backend "kubernetes" {
-secret_suffix     = ""
-namespace         = "vela-system"
-in_cluster_config = true
-
-	}
+  backend "kubernetes" {
+    secret_suffix     = ""
+    in_cluster_config = true
+    namespace         = "vela-system"
+  }
 }
 `,
 				backendConf: &BackendConf{
 					BackendType: "kubernetes",
 					HCL: `
 terraform {
-	backend "kubernetes" {
-secret_suffix     = ""
-namespace         = "vela-system"
-in_cluster_config = true
-
-	}
+  backend "kubernetes" {
+    secret_suffix     = ""
+    in_cluster_config = true
+    namespace         = "vela-system"
+  }
 }
 `,
 					Secrets: map[string][]string{},
