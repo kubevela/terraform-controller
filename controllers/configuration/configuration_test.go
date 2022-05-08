@@ -166,8 +166,7 @@ in_cluster_config = true
 	}
 }
 `,
-					UseDefault: true,
-					Secrets:    make(map[string][]string),
+					Secrets: make(map[string][]string),
 				},
 			},
 		},
@@ -205,8 +204,7 @@ in_cluster_config = true
 	}
 }
 `,
-					UseDefault: true,
-					Secrets:    make(map[string][]string),
+					Secrets: make(map[string][]string),
 				},
 			},
 		},
@@ -325,8 +323,8 @@ terraform {
 	}
 }
 `,
-					UseDefault: false,
-					Secrets:    make(map[string][]string),
+					UseCustom: true,
+					Secrets:   make(map[string][]string),
 				},
 			},
 		},
@@ -370,8 +368,8 @@ backend "kubernetes" {
 }
 }
 `,
-					UseDefault: false,
-					Secrets:    make(map[string][]string),
+					UseCustom: true,
+					Secrets:   make(map[string][]string),
 				},
 			},
 		},
@@ -456,7 +454,7 @@ shared_credentials_file = "/kubevela-terraform-controller-backend-secret/abc-ter
 	}
 }
 `,
-					UseDefault: false,
+					UseCustom: true,
 					Secrets: map[string][]string{
 						"abc-terraform-core-oam-dev": {"d"},
 					},
@@ -521,7 +519,7 @@ shared_credentials_file = "/kubevela-terraform-controller-backend-secret/abc/d"
 	}
 }
 `,
-					UseDefault: false,
+					UseCustom: true,
 					Secrets: map[string][]string{
 						"abc": {"d"},
 					},
@@ -578,8 +576,7 @@ in_cluster_config = true
 	}
 }
 `,
-					UseDefault: true,
-					Secrets:    map[string][]string{},
+					Secrets: map[string][]string{},
 				},
 			},
 		},

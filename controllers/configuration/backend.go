@@ -29,6 +29,7 @@ import (
 	"github.com/oam-dev/terraform-controller/api/v1beta2"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/gocty"
+	"k8s.io/klog/v2"
 )
 
 var backendSecretMap = map[string]map[string]string{
@@ -92,8 +93,8 @@ func checkBackendTypeValid(backendType string) bool {
 type BackendConf struct {
 	BackendType string
 	HCL         string
-	// UseDefault indicates whether to use the default kubernetes backend
-	UseDefault bool
+	// UseCustom indicates whether to use custom kubernetes backend
+	UseCustom bool
 	// Secrets describes which secret and which key in the secret should be mounted to the executor pod
 	Secrets map[string][]string
 }
@@ -108,27 +109,27 @@ type BackendConfSecretRef struct {
 	SecretRef *crossplane.SecretKeySelector
 }
 
-// parseConfigurationBackend returns backend hcl string, backend type, useDefault, secretRef list and error
+// parseConfigurationBackend returns backend hcl string, backend type, useCustom, secretRef list and error
 func parseConfigurationBackend(configuration *v1beta2.Configuration, terraformBackendNamespace string) (string, string, bool, []*BackendConfSecretRef, error) {
 	backend := configuration.Spec.Backend
 
 	var (
 		backendConfValue interface{}
 		backendType      string
-		useDefault       bool
 	)
+	useCustom := true
 
 	if backend != nil {
 		if len(backend.Inline) > 0 {
 			backendTF, backendType, err := handleInlineBackendHCL(backend.Inline)
-			return backendTF, backendType, false, nil, err
+			return backendTF, backendType, true, nil, err
 		} else if len(backend.BackendType) > 0 {
 			// check if is valid custom backend
 
 			backendType = strings.ToLower(backend.BackendType)
 			// check if backendType is valid
 			if !checkBackendTypeValid(backendType) {
-				return "", "", useDefault, nil, fmt.Errorf("%s is unsupported backendType", backend.BackendType)
+				return "", "", false, nil, fmt.Errorf("%s is unsupported backendType", backend.BackendType)
 			}
 			// fetch backendConfValue using reflection
 			backendStructValue := reflect.ValueOf(backend)
@@ -139,15 +140,17 @@ func parseConfigurationBackend(configuration *v1beta2.Configuration, terraformBa
 				return strings.EqualFold(name, backendType)
 			})
 			if backendField.IsNil() {
-				return "", "", useDefault, nil, fmt.Errorf("there is no configuration for backendType %s", backend.BackendType)
+				return "", "", false, nil, fmt.Errorf("there is no configuration for backendType %s", backend.BackendType)
 			}
 			backendConfValue = backendField.Interface()
+		} else {
+			klog.Warningf("the spec.backend.backend_type of Configuration(%s, %s) is empty, use the default kubernetes backend", configuration.Namespace, configuration.Name)
 		}
 	}
 
 	if backendConfValue == nil {
 		// use the default kubernetes backend
-		useDefault = true
+		useCustom = false
 		var secretSuffix string
 		if backend != nil {
 			secretSuffix = backend.SecretSuffix
@@ -164,7 +167,7 @@ func parseConfigurationBackend(configuration *v1beta2.Configuration, terraformBa
 	}
 
 	backendHCL, backendType, secretList, err := handleExplicitBackend(backendConfValue, backendType, configuration.Namespace)
-	return backendHCL, backendType, useDefault, secretList, err
+	return backendHCL, backendType, useCustom, secretList, err
 
 }
 

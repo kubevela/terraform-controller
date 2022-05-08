@@ -1948,7 +1948,7 @@ func TestTFConfigurationMeta_createTFBackendSecretVolumes(t *testing.T) {
 		{
 			name: "normal",
 			meta: &TFConfigurationMeta{
-				BackendConf: &tfcfg.BackendConf{
+				BackendConf: tfcfg.BackendConf{
 					Secrets: map[string][]string{
 						"a":                        {"k1"},
 						"a-terraform-core-oam-dev": {"k2", "k3"},

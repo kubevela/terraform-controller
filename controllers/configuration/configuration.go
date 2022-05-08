@@ -53,7 +53,7 @@ func ValidConfigurationObject(configuration *v1beta2.Configuration) (types.Confi
 
 // RenderConfiguration will compose the Terraform configuration with hcl/json and backend
 func RenderConfiguration(ctx context.Context, client client.Client, configuration *v1beta2.Configuration, terraformBackendNamespace string, configurationType types.ConfigurationType) (string, *BackendConf, error) {
-	backendTF, backendType, useDefault, backendSecretList, err := parseConfigurationBackend(configuration, terraformBackendNamespace)
+	backendTF, backendType, useCustom, backendSecretList, err := parseConfigurationBackend(configuration, terraformBackendNamespace)
 	if err != nil {
 		return "", nil, errors.Wrap(err, "failed to prepare Terraform backend configuration")
 	}
@@ -66,7 +66,7 @@ func RenderConfiguration(ctx context.Context, client client.Client, configuratio
 	backendConf := &BackendConf{
 		BackendType: backendType,
 		HCL:         backendTF,
-		UseDefault:  useDefault,
+		UseCustom:   useCustom,
 		Secrets:     secretMap,
 	}
 

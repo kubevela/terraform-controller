@@ -77,6 +77,10 @@ const (
 	TFVariableSecret = "variable-%s"
 	// TFBackendSecret is the Secret name for Kubernetes backend
 	TFBackendSecret = "tfstate-%s-%s"
+	// TFStatePullTmpSecret is the name of the secret stores the result of `terraform state pull`
+	TFStatePullTmpSecret = "tf-state-pull-%s"
+	// TFStatePullTmpSecretKey is the key of the data stored in TFStatePullTmpSecret
+	TFStatePullTmpSecretKey = "tf-state"
 )
 
 // TerraformExecutionType is the type for Terraform execution
@@ -215,7 +219,7 @@ type TFConfigurationMeta struct {
 	DeleteResource        bool
 	Credentials           map[string]string
 
-	BackendConf               *tfcfg.BackendConf
+	BackendConf               tfcfg.BackendConf
 	BackendSecretName         string
 	TerraformBackendNamespace string
 
@@ -520,7 +524,7 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 		return err
 	}
 	meta.CompleteConfiguration = completeConfiguration
-	meta.BackendConf = backendConf
+	meta.BackendConf = *backendConf
 
 	if err := meta.storeTFConfiguration(ctx, k8sClient); err != nil {
 		return err
@@ -769,6 +773,48 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 	}
 	containerMountPointList = append(containerMountPointList, backendSecretMounts...)
 
+	var containerList []v1.Container
+	executionCommand := fmt.Sprintf("terraform %s -lock=false -auto-approve", executionType)
+	if executionType == TerraformApply && meta.BackendConf.UseCustom {
+		const (
+			tfStateJSONFile            = "/tf-state-pull/state-json"
+			tfStatePullSuccessFlagFile = "/tf-state-pull/SUCCESS"
+		)
+		// If users use custom backend type, we should use `terraform state pull` to get the Terraform state json
+		executionCommand += fmt.Sprintf("&& terraform state pull > %s && echo OK > %s", tfStateJSONFile, tfStatePullSuccessFlagFile)
+		// And we should use another container to read the Terraform state json and write the json to a secret
+		logFileMountPoints := []v1.VolumeMount{
+			{
+				Name:      "tf-state-pull",
+				MountPath: "/tf-state-pull",
+			},
+		}
+		logCollectorContainer := v1.Container{
+			Name:            "tf-state-json-collector",
+			Image:           "loheagn/log-collector:0.1.2",
+			ImagePullPolicy: v1.PullIfNotPresent,
+			Args: []string{
+				fmt.Sprintf(TFStatePullTmpSecret, meta.Name),
+				meta.Namespace,
+				TFStatePullTmpSecretKey,
+				tfStateJSONFile,
+				tfStatePullSuccessFlagFile,
+			},
+			VolumeMounts: logFileMountPoints,
+		}
+		containerList = append(containerList, logCollectorContainer)
+		containerMountPointList = append(containerMountPointList, logFileMountPoints...)
+		executorVolumes = append(
+			executorVolumes,
+			v1.Volume{
+				Name: "tf-state-pull",
+				VolumeSource: v1.VolumeSource{
+					EmptyDir: &v1.EmptyDirVolumeSource{},
+				},
+			},
+		)
+	}
+
 	container := v1.Container{
 		Name:            terraformContainerName,
 		Image:           meta.TerraformImage,
@@ -781,6 +827,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 		VolumeMounts: containerMountPointList,
 		Env:          meta.Envs,
 	}
+	containerList = append(containerList, container)
 
 	if meta.ResourcesLimitsCPU != "" || meta.ResourcesLimitsMemory != "" ||
 		meta.ResourcesRequestsCPU != "" || meta.ResourcesRequestsMemory != "" {
@@ -834,7 +881,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 					InitContainers: initContainers,
 					// Container terraform-executor will first copy predefined terraform.d to working directory, and
 					// then run terraform init/apply.
-					Containers:         []v1.Container{container},
+					Containers:         containerList,
 					ServiceAccountName: ServiceAccountName,
 					Volumes:            executorVolumes,
 					RestartPolicy:      v1.RestartPolicyOnFailure,
@@ -898,18 +945,10 @@ type TFState struct {
 
 //nolint:funlen
 func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient client.Client, configuration v1beta2.Configuration) (map[string]v1beta2.Property, error) {
-	var s = v1.Secret{}
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.BackendSecretName, Namespace: meta.TerraformBackendNamespace}, &s); err != nil {
-		return nil, errors.Wrap(err, "terraform state file backend secret is not generated")
-	}
-	tfStateData, ok := s.Data[TerraformStateNameInSecret]
-	if !ok {
-		return nil, fmt.Errorf("failed to get %s from Terraform State secret %s", TerraformStateNameInSecret, s.Name)
-	}
 
-	tfStateJSON, err := util.DecompressTerraformStateSecret(string(tfStateData))
+	tfStateJSON, err := meta.getStateJSON(ctx, k8sClient)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to decompress state secret data")
+		return nil, err
 	}
 
 	var tfState TFState
@@ -983,6 +1022,40 @@ func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient cli
 		}
 	}
 	return outputs, nil
+}
+
+func (meta *TFConfigurationMeta) getStateJSON(ctx context.Context, k8sClient client.Client) ([]byte, error) {
+	if !meta.BackendConf.UseCustom {
+		var s = v1.Secret{}
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.BackendSecretName, Namespace: meta.TerraformBackendNamespace}, &s); err != nil {
+			return nil, errors.Wrap(err, "terraform state file backend secret is not generated")
+		}
+		tfStateData, ok := s.Data[TerraformStateNameInSecret]
+		if !ok {
+			return nil, fmt.Errorf("failed to get %s from Terraform State secret %s", TerraformStateNameInSecret, s.Name)
+		}
+
+		tfStateJSON, err := util.DecompressTerraformStateSecret(string(tfStateData))
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to decompress state secret data")
+		}
+		return tfStateJSON, nil
+	}
+
+	// If users use custom backend
+	var s = v1.Secret{}
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: fmt.Sprintf(TFStatePullTmpSecret, meta.Name), Namespace: meta.Namespace}, &s); err != nil {
+		return nil, errors.Wrap(err, "`terraform state pull` isn't over yet.")
+	}
+	tfStateData, ok := s.Data[TFStatePullTmpSecretKey]
+	if !ok {
+		return nil, fmt.Errorf("failed to get %s from Terraform State secret %s", TFStatePullTmpSecretKey, s.Name)
+	}
+	// delete the tmp terraform-state-pull secret
+	if err := k8sClient.Delete(ctx, &s); err != nil {
+		klog.Warningf("failed to delete the tmp terraform-state-pull secret {Namespace: %s, Name: %s}, please delete it manually", s.Namespace, s.Name)
+	}
+	return tfStateData, nil
 }
 
 func (meta *TFConfigurationMeta) prepareTFVariables(configuration *v1beta2.Configuration) error {

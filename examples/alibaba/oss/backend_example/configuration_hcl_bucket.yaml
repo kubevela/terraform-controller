@@ -26,6 +26,7 @@ spec:
     }
 
   backend:
+    backend_type: kubernetes
     kubernetes:
       secret_suffix: 'ali-oss'
       config_secret:
