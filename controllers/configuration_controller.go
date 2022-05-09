@@ -705,9 +705,9 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 			MountPath: BackendVolumeMountPath,
 		},
 	}
-	backendSecretMounts := make([]v1.VolumeMount, 0)
+	backendConfSecretMounts := make([]v1.VolumeMount, 0)
 	for secretName := range meta.BackendConf.Secrets {
-		backendSecretMounts = append(backendSecretMounts, v1.VolumeMount{
+		backendConfSecretMounts = append(backendConfSecretMounts, v1.VolumeMount{
 			Name:      secretName,
 			MountPath: tfcfg.BackendConfSecretPodPath(secretName),
 			ReadOnly:  true,
@@ -757,7 +757,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 			"-c",
 			"terraform init",
 		},
-		VolumeMounts: append(initContainerVolumeMounts, backendSecretMounts...),
+		VolumeMounts: append(initContainerVolumeMounts, backendConfSecretMounts...),
 	}
 	initContainers = append(initContainers, tfPreApplyInitContainer)
 
@@ -771,49 +771,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 			MountPath: InputTFConfigurationVolumeMountPath,
 		},
 	}
-	containerMountPointList = append(containerMountPointList, backendSecretMounts...)
-
-	var containerList []v1.Container
-	executionCommand := fmt.Sprintf("terraform %s -lock=false -auto-approve", executionType)
-	if executionType == TerraformApply && meta.BackendConf.UseCustom {
-		const (
-			tfStateJSONFile            = "/tf-state-pull/state-json"
-			tfStatePullSuccessFlagFile = "/tf-state-pull/SUCCESS"
-		)
-		// If users use custom backend type, we should use `terraform state pull` to get the Terraform state json
-		executionCommand += fmt.Sprintf("&& terraform state pull > %s && echo OK > %s", tfStateJSONFile, tfStatePullSuccessFlagFile)
-		// And we should use another container to read the Terraform state json and write the json to a secret
-		logFileMountPoints := []v1.VolumeMount{
-			{
-				Name:      "tf-state-pull",
-				MountPath: "/tf-state-pull",
-			},
-		}
-		logCollectorContainer := v1.Container{
-			Name:            "tf-state-json-collector",
-			Image:           "loheagn/log-collector:0.1.2",
-			ImagePullPolicy: v1.PullIfNotPresent,
-			Args: []string{
-				fmt.Sprintf(TFStatePullTmpSecret, meta.Name),
-				meta.Namespace,
-				TFStatePullTmpSecretKey,
-				tfStateJSONFile,
-				tfStatePullSuccessFlagFile,
-			},
-			VolumeMounts: logFileMountPoints,
-		}
-		containerList = append(containerList, logCollectorContainer)
-		containerMountPointList = append(containerMountPointList, logFileMountPoints...)
-		executorVolumes = append(
-			executorVolumes,
-			v1.Volume{
-				Name: "tf-state-pull",
-				VolumeSource: v1.VolumeSource{
-					EmptyDir: &v1.EmptyDirVolumeSource{},
-				},
-			},
-		)
-	}
+	containerMountPointList = append(containerMountPointList, backendConfSecretMounts...)
 
 	container := v1.Container{
 		Name:            terraformContainerName,
@@ -827,7 +785,6 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 		VolumeMounts: containerMountPointList,
 		Env:          meta.Envs,
 	}
-	containerList = append(containerList, container)
 
 	if meta.ResourcesLimitsCPU != "" || meta.ResourcesLimitsMemory != "" ||
 		meta.ResourcesRequestsCPU != "" || meta.ResourcesRequestsMemory != "" {
@@ -881,7 +838,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 					InitContainers: initContainers,
 					// Container terraform-executor will first copy predefined terraform.d to working directory, and
 					// then run terraform init/apply.
-					Containers:         containerList,
+					Containers:         []v1.Container{container},
 					ServiceAccountName: ServiceAccountName,
 					Volumes:            executorVolumes,
 					RestartPolicy:      v1.RestartPolicyOnFailure,
