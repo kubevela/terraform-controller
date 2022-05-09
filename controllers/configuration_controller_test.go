@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -17,8 +18,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 
-	"k8s.io/apimachinery/pkg/api/resource"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -117,6 +118,22 @@ func TestInitTFConfigurationMeta(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestInitTFConfigurationMetaWithJobNodeSelector(t *testing.T) {
+	req := ctrl.Request{}
+	req.Namespace = "default"
+	req.Name = "abc"
+	err := os.Setenv("JOB_NODE_SELECTOR", "{\"ssd\": \"true\"}")
+	assert.Nil(t, err)
+	configuration := v1beta2.Configuration{
+		ObjectMeta: v1.ObjectMeta{
+			Name: "abc",
+		},
+		Spec: v1beta2.ConfigurationSpec{},
+	}
+	meta := initTFConfigurationMeta(req, configuration)
+	assert.Equal(t, meta.JobNodeSelector, map[string]string{"ssd": "true"})
 }
 
 func TestCheckProvider(t *testing.T) {
@@ -1190,6 +1207,23 @@ func TestAssembleTerraformJob(t *testing.T) {
 	containers := job.Spec.Template.Spec.InitContainers
 	assert.Equal(t, containers[0].Image, "c")
 	assert.Equal(t, containers[1].Image, "d")
+}
+
+func TestAssembleTerraformJobWithNodeSelectorSetting(t *testing.T) {
+	meta := &TFConfigurationMeta{
+		Name:                "a",
+		ConfigurationCMName: "b",
+		BusyboxImage:        "c",
+		GitImage:            "d",
+		Namespace:           "e",
+		TerraformImage:      "f",
+		RemoteGit:           "g",
+		JobNodeSelector:     map[string]string{"ssd": "true"},
+	}
+
+	job := meta.assembleTerraformJob(TerraformApply)
+	spec := job.Spec.Template.Spec
+	assert.Equal(t, spec.NodeSelector, map[string]string{"ssd": "true"})
 }
 
 func TestAssembleTerraformJobWithResourcesSetting(t *testing.T) {

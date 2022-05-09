@@ -9,6 +9,9 @@ gitImage: alpine/git:latest
 busyboxImage: busybox:latest
 terraformImage: oamdev/docker-terraform:1.1.2
 
+# "{\"nat\": \"true\"}"
+jobNodeSelector: ""
+
 resources:
   limits:
     cpu: "1000m"

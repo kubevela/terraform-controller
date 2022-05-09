@@ -215,6 +215,9 @@ type TFConfigurationMeta struct {
 	DeleteResource        bool
 	Credentials           map[string]string
 
+	// JobNodeSelector Expose the node selector of job to the controller level
+	JobNodeSelector map[string]string
+
 	// TerraformImage is the Terraform image which can run `terraform init/plan/apply`
 	TerraformImage            string
 	TerraformBackendNamespace string
@@ -240,6 +243,14 @@ func initTFConfigurationMeta(req ctrl.Request, configuration v1beta2.Configurati
 		VariableSecretName:  fmt.Sprintf(TFVariableSecret, req.Name),
 		ApplyJobName:        req.Name + "-" + string(TerraformApply),
 		DestroyJobName:      req.Name + "-" + string(TerraformDestroy),
+	}
+
+	jobNodeSelectorStr := os.Getenv("JOB_NODE_SELECTOR")
+	if jobNodeSelectorStr != "" {
+		err := json.Unmarshal([]byte(jobNodeSelectorStr), &meta.JobNodeSelector)
+		if err != nil {
+			klog.Warningf("the value of JobNodeSelector is not a json string ", err)
+		}
 	}
 
 	// githubBlocked mark whether GitHub is blocked in the cluster
@@ -787,6 +798,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 					ServiceAccountName: ServiceAccountName,
 					Volumes:            executorVolumes,
 					RestartPolicy:      v1.RestartPolicyOnFailure,
+					NodeSelector:       meta.JobNodeSelector,
 				},
 			},
 		},
