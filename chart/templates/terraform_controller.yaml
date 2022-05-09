@@ -35,6 +35,10 @@ spec:
               value: {{ .Values.gitImage}}
             - name: GITHUB_BLOCKED
               value: {{ .Values.githubBlocked }}
+            { { if .Values.jobNodeSelector } }
+            - name: JOB_NODE_SELECTOR
+              value: { { .Values.jobNodeSelector } }
+            { { end } }
             {{ if .Values.resources.limits.cpu }}
             - name: RESOURCES_LIMITS_CPU
               value: {{ .Values.resources.limits.cpu }}
