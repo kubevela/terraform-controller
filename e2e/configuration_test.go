@@ -23,24 +23,23 @@ const (
 )
 
 var (
-	testConfigurationsBasic      = "examples/alibaba/eip/configuration_eip.yaml"
-	testConfigurationsRegression = []string{
+	testConfigurationsInlineCredentials = "examples/random/configuration_random.yaml"
+	testConfigurationsRegression        = []string{
 		"examples/alibaba/eip/configuration_eip.yaml",
 		"examples/alibaba/eip/configuration_eip_remote_in_another_namespace.yaml",
 		"examples/alibaba/eip/configuration_eip_remote_subdirectory.yaml",
-		// "examples/alibaba/rds/configuration_hcl_rds.yaml",
 		"examples/alibaba/oss/configuration_hcl_bucket.yaml",
 	}
 )
 
-func TestBasicConfiguration(t *testing.T) {
+func TestInlineCredentialsConfiguration(t *testing.T) {
 	clientSet, err := client.Init()
 	assert.NilError(t, err)
 	ctx := context.Background()
 
 	klog.Info("1. Applying Configuration")
 	pwd, _ := os.Getwd()
-	configuration := filepath.Join(pwd, "..", testConfigurationsBasic)
+	configuration := filepath.Join(pwd, "..", testConfigurationsInlineCredentials)
 	cmd := fmt.Sprintf("kubectl apply -f %s", configuration)
 	err = exec.Command("bash", "-c", cmd).Start()
 	assert.NilError(t, err)
@@ -57,7 +56,7 @@ func TestBasicConfiguration(t *testing.T) {
 				continue
 			}
 			fields = strings.Fields(line)
-			if len(fields) == 3 && fields[0] == "alibaba-eip" && fields[1] == Available {
+			if len(fields) == 3 && fields[0] == "random-e2e" && fields[1] == Available {
 				goto continueCheck
 			}
 		}
@@ -68,22 +67,22 @@ func TestBasicConfiguration(t *testing.T) {
 	}
 
 continueCheck:
-	klog.Info("3. Checking Configuration status")
+	klog.Info("3. Checking the status of Configs and Secrets")
 
 	klog.Info("- Checking ConfigMap which stores .tf")
-	_, err = clientSet.CoreV1().ConfigMaps("default").Get(ctx, "tf-alibaba-eip", v1.GetOptions{})
+	_, err = clientSet.CoreV1().ConfigMaps("default").Get(ctx, "tf-random-e2e", v1.GetOptions{})
 	assert.NilError(t, err)
 
 	klog.Info("- Checking Secret which stores Backend")
-	_, err = clientSet.CoreV1().Secrets(backendSecretNamespace).Get(ctx, "tfstate-default-alibaba-eip", v1.GetOptions{})
+	_, err = clientSet.CoreV1().Secrets(backendSecretNamespace).Get(ctx, "tfstate-default-random-e2e", v1.GetOptions{})
 	assert.NilError(t, err)
 
 	klog.Info("- Checking Secret which stores outputs")
-	_, err = clientSet.CoreV1().Secrets("default").Get(ctx, "eip-conn", v1.GetOptions{})
+	_, err = clientSet.CoreV1().Secrets("default").Get(ctx, "random-conn", v1.GetOptions{})
 	assert.NilError(t, err)
 
 	klog.Info("- Checking Secret which stores variables")
-	_, err = clientSet.CoreV1().Secrets("default").Get(ctx, "variable-alibaba-eip", v1.GetOptions{})
+	_, err = clientSet.CoreV1().Secrets("default").Get(ctx, "variable-random-e2e", v1.GetOptions{})
 	assert.NilError(t, err)
 
 	klog.Info("4. Deleting Configuration")
@@ -107,7 +106,7 @@ continueCheck:
 				continue
 			}
 			fields = strings.Fields(line)
-			if len(fields) == 3 && fields[0] == "alibaba-eip" {
+			if len(fields) == 3 && fields[0] == "random-e2e" {
 				existed = true
 			}
 		}
@@ -124,25 +123,25 @@ continueCheck:
 	}
 
 	klog.Info("6. Checking Secrets and ConfigMap which should all be deleted")
-	_, err = clientSet.CoreV1().Secrets("default").Get(ctx, "variable-alibaba-eip", v1.GetOptions{})
+	_, err = clientSet.CoreV1().Secrets("default").Get(ctx, "variable-random-e2e", v1.GetOptions{})
 	assert.Equal(t, kerrors.IsNotFound(err), true)
 
-	_, err = clientSet.CoreV1().Secrets("default").Get(ctx, "eip-conn", v1.GetOptions{})
+	_, err = clientSet.CoreV1().Secrets("default").Get(ctx, "random-conn", v1.GetOptions{})
 	assert.Equal(t, kerrors.IsNotFound(err), true)
 
-	_, err = clientSet.CoreV1().Secrets(backendSecretNamespace).Get(ctx, "tfstate-default-alibaba-eip", v1.GetOptions{})
+	_, err = clientSet.CoreV1().Secrets(backendSecretNamespace).Get(ctx, "tfstate-default-random-e2e", v1.GetOptions{})
 	assert.Equal(t, kerrors.IsNotFound(err), true)
 
-	_, err = clientSet.CoreV1().ConfigMaps("default").Get(ctx, "tf-alibaba-eip", v1.GetOptions{})
+	_, err = clientSet.CoreV1().ConfigMaps("default").Get(ctx, "tf-random-e2e", v1.GetOptions{})
 	assert.Equal(t, kerrors.IsNotFound(err), true)
 }
 
-func TestBasicConfigurationRegression(t *testing.T) {
-	var retryTimes = 120
-
-	klog.Info("0. Create namespace")
-	err := exec.Command("bash", "-c", "kubectl create ns abc").Start()
-	assert.NilError(t, err)
-
-	Regression(t, testConfigurationsRegression, retryTimes)
-}
+//func TestBasicConfigurationRegression(t *testing.T) {
+//	var retryTimes = 120
+//
+//	klog.Info("0. Create namespace")
+//	err := exec.Command("bash", "-c", "kubectl create ns abc").Start()
+//	assert.NilError(t, err)
+//
+//	Regression(t, testConfigurationsRegression, retryTimes)
+//}

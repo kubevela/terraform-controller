@@ -215,6 +215,13 @@ spec:
               hcl:
                 description: HCL is the Terraform HCL type configuration
                 type: string
+              inlineCredentials:
+                description: "InlineCredentials specifies the credentials in spec.HCl
+                  field as below. \tprovider \"aws\" { \t\tregion     = \"us-west-2\"
+                  \t\taccess_key = \"my-access-key\" \t\tsecret_key = \"my-secret-key\"
+                  \t} Or indicates a Terraform module or configuration don't need
+                  credentials at all, like provider `random`"
+                type: boolean
               path:
                 description: Path is the sub-directory of remote git repository.
                 type: string

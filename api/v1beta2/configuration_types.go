@@ -64,7 +64,7 @@ type BaseConfigurationSpec struct {
 	//		access_key = "my-access-key"
 	//		secret_key = "my-secret-key"
 	//	}
-	// +kubebuilder:default:=false
+	// Or indicates a Terraform module or configuration don't need credentials at all, like provider `random`
 	InlineCredentials bool `json:"inlineCredentials,omitempty"`
 
 	// DeleteResource will determine whether provisioned cloud resources will be deleted when CR is deleted

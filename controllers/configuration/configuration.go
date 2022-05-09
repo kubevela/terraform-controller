@@ -113,19 +113,17 @@ func Get(ctx context.Context, k8sClient client.Client, namespacedName apitypes.N
 // IsDeletable will check whether the Configuration can be deleted immediately
 // If deletable, it means no external cloud resources are provisioned
 func IsDeletable(ctx context.Context, k8sClient client.Client, configuration *v1beta2.Configuration) (bool, error) {
-	// If credentials is inline in spec.HCL of the configuration, which is a simple scenario, the Configuration is allowed to be deleted
-	if configuration.Spec.InlineCredentials {
-		return true, nil
-	}
-	providerRef := GetProviderNamespacedName(*configuration)
-	providerObj, err := provider.GetProviderFromConfiguration(ctx, k8sClient, providerRef.Namespace, providerRef.Name)
-	if err != nil {
-		return false, err
-	}
-	// allow Configuration to delete when the Provider doesn't exist or is not ready, which means external cloud resources are
-	// not provisioned at all
-	if providerObj == nil || providerObj.Status.State == types.ProviderIsNotReady || configuration.Status.Apply.State == types.TerraformInitError {
-		return true, nil
+	if !configuration.Spec.InlineCredentials {
+		providerRef := GetProviderNamespacedName(*configuration)
+		providerObj, err := provider.GetProviderFromConfiguration(ctx, k8sClient, providerRef.Namespace, providerRef.Name)
+		if err != nil {
+			return false, err
+		}
+		// allow Configuration to delete when the Provider doesn't exist or is not ready, which means external cloud resources are
+		// not provisioned at all
+		if providerObj == nil || providerObj.Status.State == types.ProviderIsNotReady || configuration.Status.Apply.State == types.TerraformInitError {
+			return true, nil
+		}
 	}
 
 	if configuration.Status.Apply.State == types.ConfigurationProvisioningAndChecking {

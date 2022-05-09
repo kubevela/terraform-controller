@@ -151,3 +151,11 @@ Bucket Number is: 0
 
 0.030917(s) elapsed
 ```
+
+## Generate CRDs
+
+```shell
+$ make manifests
+go: creating new go.mod: module tmp
+/Users/zhouzhengxi/go/bin/controller-gen "crd:trivialVersions=true" webhook paths="./..." output:crd:artifacts:config=chart/crds
+```

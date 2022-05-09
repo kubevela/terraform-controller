@@ -957,7 +957,7 @@ func (meta *TFConfigurationMeta) prepareTFVariables(configuration *v1beta2.Confi
 	if configuration == nil {
 		return errors.New("configuration is nil")
 	}
-	if meta.ProviderReference == nil {
+	if !configuration.Spec.InlineCredentials && meta.ProviderReference == nil {
 		return errors.New("The referenced provider could not be retrieved")
 	}
 
@@ -976,7 +976,7 @@ func (meta *TFConfigurationMeta) prepareTFVariables(configuration *v1beta2.Confi
 		envs = append(envs, v1.EnvVar{Name: k, ValueFrom: valueFrom})
 	}
 
-	if meta.Credentials == nil {
+	if !configuration.Spec.InlineCredentials && meta.Credentials == nil {
 		return errors.New(provider.ErrCredentialNotRetrieved)
 	}
 	for k, v := range meta.Credentials {
@@ -984,10 +984,6 @@ func (meta *TFConfigurationMeta) prepareTFVariables(configuration *v1beta2.Confi
 		valueFrom := &v1.EnvVarSource{SecretKeyRef: &v1.SecretKeySelector{Key: k}}
 		valueFrom.SecretKeyRef.Name = meta.VariableSecretName
 		envs = append(envs, v1.EnvVar{Name: k, ValueFrom: valueFrom})
-	}
-	// make sure the env of the Job is set
-	if envs == nil {
-		return errors.New(provider.ErrCredentialNotRetrieved)
 	}
 	meta.Envs = envs
 	meta.VariableSecretData = data
