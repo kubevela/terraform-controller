@@ -383,7 +383,7 @@ func TestIsDeletable(t *testing.T) {
 				configuration: inlineConfiguration,
 			},
 			want: want{
-				deletable: true,
+				deletable: false,
 			},
 		},
 	}
