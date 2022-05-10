@@ -279,6 +279,31 @@ func TestIsDeletable(t *testing.T) {
 		Name:      "default",
 		Namespace: "default",
 	}
+	configuration.Spec.InlineCredentials = false
+
+	defaultConfiguration := &v1beta2.Configuration{}
+	defaultConfiguration.Spec.InlineCredentials = false
+
+	provisioningConfiguration := &v1beta2.Configuration{
+		Status: v1beta2.ConfigurationStatus{
+			Apply: v1beta2.ConfigurationApplyStatus{
+				State: types.ConfigurationProvisioningAndChecking,
+			},
+		},
+	}
+	provisioningConfiguration.Spec.InlineCredentials = false
+
+	readyConfiguration := &v1beta2.Configuration{
+		Status: v1beta2.ConfigurationStatus{
+			Apply: v1beta2.ConfigurationApplyStatus{
+				State: types.Available,
+			},
+		},
+	}
+	readyConfiguration.Spec.InlineCredentials = false
+
+	inlineConfiguration := &v1beta2.Configuration{}
+	inlineConfiguration.Spec.InlineCredentials = true
 
 	type args struct {
 		configuration *v1beta2.Configuration
@@ -297,7 +322,7 @@ func TestIsDeletable(t *testing.T) {
 			name: "provider is not found",
 			args: args{
 				k8sClient:     k8sClient1,
-				configuration: &v1beta2.Configuration{},
+				configuration: defaultConfiguration,
 			},
 			want: want{
 				deletable: true,
@@ -307,7 +332,7 @@ func TestIsDeletable(t *testing.T) {
 			name: "provider is not ready, use default providerRef",
 			args: args{
 				k8sClient:     k8sClient2,
-				configuration: &v1beta2.Configuration{},
+				configuration: defaultConfiguration,
 			},
 			want: want{
 				deletable: true,
@@ -326,14 +351,8 @@ func TestIsDeletable(t *testing.T) {
 		{
 			name: "configuration is provisioning",
 			args: args{
-				k8sClient: k8sClient3,
-				configuration: &v1beta2.Configuration{
-					Status: v1beta2.ConfigurationStatus{
-						Apply: v1beta2.ConfigurationApplyStatus{
-							State: types.ConfigurationProvisioningAndChecking,
-						},
-					},
-				},
+				k8sClient:     k8sClient3,
+				configuration: provisioningConfiguration,
 			},
 			want: want{
 				errMsg: "Destroy could not complete and needs to wait for Provision to complete first",
@@ -342,14 +361,8 @@ func TestIsDeletable(t *testing.T) {
 		{
 			name: "configuration is ready",
 			args: args{
-				k8sClient: k8sClient3,
-				configuration: &v1beta2.Configuration{
-					Status: v1beta2.ConfigurationStatus{
-						Apply: v1beta2.ConfigurationApplyStatus{
-							State: types.Available,
-						},
-					},
-				},
+				k8sClient:     k8sClient3,
+				configuration: readyConfiguration,
 			},
 			want: want{},
 		},
@@ -357,10 +370,20 @@ func TestIsDeletable(t *testing.T) {
 			name: "failed to get provider",
 			args: args{
 				k8sClient:     k8sClient4,
-				configuration: &v1beta2.Configuration{},
+				configuration: defaultConfiguration,
 			},
 			want: want{
 				errMsg: "failed to get Provider object",
+			},
+		},
+		{
+			name: "no provider is needed",
+			args: args{
+				k8sClient:     k8sClient4,
+				configuration: inlineConfiguration,
+			},
+			want: want{
+				deletable: false,
 			},
 		},
 	}

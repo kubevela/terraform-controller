@@ -1,0 +1,65 @@
+apiVersion: terraform.core.oam.dev/v1beta2
+kind: Configuration
+metadata:
+  name: alibaba-eip-inline
+spec:
+  hcl: |
+    provider "alicloud" {
+      access_key = var.access_key
+      secret_key = var.secret_key
+      region     = var.region
+    }
+    
+    resource "alicloud_eip" "this" {
+      bandwidth    = var.bandwidth
+      address_name = var.address_name
+    }
+    
+    variable "address_name" {
+      description = "Name to be used on all resources as prefix. Default to 'TF-Module-EIP'."
+      default     = "TF-Module-EIP"
+      type        = string
+    }
+    
+    variable "bandwidth" {
+      description = "Maximum bandwidth to the elastic public network, measured in Mbps (Mega bit per second)."
+      type        = number
+      default     = 1
+    }
+    
+    variable "access_key" {
+      description = "Access Key ID of the Alibaba Cloud account."
+      type        = string
+    }
+    
+    variable "secret_key" {
+      description = "Access Key Secret of the Alibaba Cloud account."
+      type        = string
+    }
+    
+    variable "region" {
+      description = "Region of the Alibaba Cloud account."
+      type        = string
+      default     = "cn-beijing"
+    }
+    
+    output "EIP_ADDRESS" {
+      description = "The elastic ip address."
+      value       = alicloud_eip.this.ip_address
+    }
+    
+    output "NAME" {
+      value = var.address_name
+    }
+
+  variable:
+    access_key: xxx
+    secret_key: yyy
+
+  inlineCredentials: true
+
+  writeConnectionSecretToRef:
+    name: eip-e2e-inline
+    namespace: default
+
+

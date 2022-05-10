@@ -58,6 +58,15 @@ type BaseConfigurationSpec struct {
 	// ProviderReference specifies the reference to Provider
 	ProviderReference *types.Reference `json:"providerRef,omitempty"`
 
+	// InlineCredentials specifies the credentials in spec.HCl field as below.
+	//	provider "aws" {
+	//		region     = "us-west-2"
+	//		access_key = "my-access-key"
+	//		secret_key = "my-secret-key"
+	//	}
+	// Or indicates a Terraform module or configuration don't need credentials at all, like provider `random`
+	InlineCredentials bool `json:"inlineCredentials,omitempty"`
+
 	// DeleteResource will determine whether provisioned cloud resources will be deleted when CR is deleted
 	// +kubebuilder:default:=true
 	DeleteResource bool `json:"deleteResource,omitempty"`

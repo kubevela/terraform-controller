@@ -17,10 +17,8 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -34,7 +32,6 @@ import (
 
 	"github.com/oam-dev/terraform-controller/api/types"
 	crossplane "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
-	runtimetypes "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
 	"github.com/oam-dev/terraform-controller/api/v1beta2"
 	"github.com/oam-dev/terraform-controller/controllers/provider"
@@ -60,6 +57,7 @@ func TestInitTFConfigurationMeta(t *testing.T) {
 		Name:      "xxx",
 		Namespace: "default",
 	}
+	completeConfiguration.Spec.InlineCredentials = false
 
 	testcases := []struct {
 		name          string
@@ -1388,7 +1386,7 @@ func TestGetTFOutputs(t *testing.T) {
 	configuration4 := v1beta2.Configuration{
 		Spec: v1beta2.ConfigurationSpec{
 			BaseConfigurationSpec: v1beta2.BaseConfigurationSpec{
-				WriteConnectionSecretToReference: &runtimetypes.SecretReference{
+				WriteConnectionSecretToReference: &crossplane.SecretReference{
 					Name:      "connection-secret-c",
 					Namespace: "default",
 				},
@@ -1431,7 +1429,7 @@ func TestGetTFOutputs(t *testing.T) {
 		},
 		Spec: v1beta2.ConfigurationSpec{
 			BaseConfigurationSpec: v1beta2.BaseConfigurationSpec{
-				WriteConnectionSecretToReference: &runtimetypes.SecretReference{
+				WriteConnectionSecretToReference: &crossplane.SecretReference{
 					Name:      "connection-secret-d",
 					Namespace: "default",
 				},
@@ -1476,7 +1474,7 @@ func TestGetTFOutputs(t *testing.T) {
 		},
 		Spec: v1beta2.ConfigurationSpec{
 			BaseConfigurationSpec: v1beta2.BaseConfigurationSpec{
-				WriteConnectionSecretToReference: &runtimetypes.SecretReference{
+				WriteConnectionSecretToReference: &crossplane.SecretReference{
 					Name:      "connection-secret-e",
 					Namespace: "default",
 				},
@@ -1523,7 +1521,7 @@ func TestGetTFOutputs(t *testing.T) {
 		},
 		Spec: v1beta2.ConfigurationSpec{
 			BaseConfigurationSpec: v1beta2.BaseConfigurationSpec{
-				WriteConnectionSecretToReference: &runtimetypes.SecretReference{
+				WriteConnectionSecretToReference: &crossplane.SecretReference{
 					Name:      "connection-secret-e",
 					Namespace: "default",
 				},
@@ -1565,7 +1563,7 @@ func TestGetTFOutputs(t *testing.T) {
 		},
 		Spec: v1beta2.ConfigurationSpec{
 			BaseConfigurationSpec: v1beta2.BaseConfigurationSpec{
-				WriteConnectionSecretToReference: &runtimetypes.SecretReference{
+				WriteConnectionSecretToReference: &crossplane.SecretReference{
 					Name:      "connection-secret-d",
 					Namespace: "default",
 				},
