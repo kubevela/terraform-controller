@@ -18,10 +18,6 @@ import (
 	"github.com/oam-dev/terraform-controller/controllers/client"
 )
 
-const (
-	backendSecretNamespace = "vela-system"
-)
-
 var (
 	testConfigurationsInlineCredentials = "examples/random/configuration_random.yaml"
 	testConfigurationsRegression        = []string{
@@ -33,6 +29,10 @@ var (
 )
 
 func TestInlineCredentialsConfiguration(t *testing.T) {
+	backendSecretNamespace := os.Getenv("TERRAFORM_BACKEND_NAMESPACE")
+	if backendSecretNamespace == "" {
+		backendSecretNamespace = "vela-system"
+	}
 	clientSet, err := client.Init()
 	assert.NilError(t, err)
 	ctx := context.Background()
@@ -45,7 +45,7 @@ func TestInlineCredentialsConfiguration(t *testing.T) {
 	assert.NilError(t, err)
 
 	klog.Info("2. Checking Configuration status")
-	for i := 0; i < 60; i++ {
+	for i := 0; i < 120; i++ {
 		var fields []string
 		output, err := exec.Command("bash", "-c", "kubectl get configuration").Output()
 		assert.NilError(t, err)
@@ -60,7 +60,7 @@ func TestInlineCredentialsConfiguration(t *testing.T) {
 				goto continueCheck
 			}
 		}
-		if i == 59 {
+		if i == 119 {
 			t.Error("Configuration is not ready")
 		}
 		time.Sleep(time.Second * 5)
