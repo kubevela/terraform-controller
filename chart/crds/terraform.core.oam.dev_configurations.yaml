@@ -231,13 +231,10 @@ spec:
                           as we cannot use local file paths in the kubernetes cluster.
                         properties:
                           key:
-                            description: The key to select.
+                            description: Key is the key selected in the secret
                             type: string
                           name:
-                            description: Name of the secret.
-                            type: string
-                          namespace:
-                            description: Namespace of the secret.
+                            description: Name is the name of the secret
                             type: string
                         required:
                         - key
@@ -299,13 +296,10 @@ spec:
                           file paths in the kubernetes cluster.
                         properties:
                           key:
-                            description: The key to select.
+                            description: Key is the key selected in the secret
                             type: string
                           name:
-                            description: Name of the secret.
-                            type: string
-                          namespace:
-                            description: Namespace of the secret.
+                            description: Name is the name of the secret
                             type: string
                         required:
                         - key
@@ -318,13 +312,10 @@ spec:
                           file paths in the kubernetes cluster.
                         properties:
                           key:
-                            description: The key to select.
+                            description: Key is the key selected in the secret
                             type: string
                           name:
-                            description: Name of the secret.
-                            type: string
-                          namespace:
-                            description: Namespace of the secret.
+                            description: Name is the name of the secret
                             type: string
                         required:
                         - key
@@ -343,13 +334,10 @@ spec:
                           in the kubernetes cluster.
                         properties:
                           key:
-                            description: The key to select.
+                            description: Key is the key selected in the secret
                             type: string
                           name:
-                            description: Name of the secret.
-                            type: string
-                          namespace:
-                            description: Namespace of the secret.
+                            description: Name is the name of the secret
                             type: string
                         required:
                         - key
@@ -415,13 +403,10 @@ spec:
                           file paths in the kubernetes cluster.
                         properties:
                           key:
-                            description: The key to select.
+                            description: Key is the key selected in the secret
                             type: string
                           name:
-                            description: Name of the secret.
-                            type: string
-                          namespace:
-                            description: Namespace of the secret.
+                            description: Name is the name of the secret
                             type: string
                         required:
                         - key
@@ -435,13 +420,10 @@ spec:
                           file paths in the kubernetes cluster.
                         properties:
                           key:
-                            description: The key to select.
+                            description: Key is the key selected in the secret
                             type: string
                           name:
-                            description: Name of the secret.
-                            type: string
-                          namespace:
-                            description: Namespace of the secret.
+                            description: Name is the name of the secret
                             type: string
                         required:
                         - key
@@ -457,13 +439,10 @@ spec:
                           in the kubernetes cluster.
                         properties:
                           key:
-                            description: The key to select.
+                            description: Key is the key selected in the secret
                             type: string
                           name:
-                            description: Name of the secret.
-                            type: string
-                          namespace:
-                            description: Namespace of the secret.
+                            description: Name is the name of the secret
                             type: string
                         required:
                         - key
@@ -498,13 +477,10 @@ spec:
                           in the kubernetes cluster.
                         properties:
                           key:
-                            description: The key to select.
+                            description: Key is the key selected in the secret
                             type: string
                           name:
-                            description: Name of the secret.
-                            type: string
-                          namespace:
-                            description: Namespace of the secret.
+                            description: Name is the name of the secret
                             type: string
                         required:
                         - key
@@ -582,13 +558,10 @@ spec:
                           file paths in the kubernetes cluster.
                         properties:
                           key:
-                            description: The key to select.
+                            description: Key is the key selected in the secret
                             type: string
                           name:
-                            description: Name of the secret.
-                            type: string
-                          namespace:
-                            description: Namespace of the secret.
+                            description: Name is the name of the secret
                             type: string
                         required:
                         - key
@@ -709,13 +682,10 @@ spec:
                           cluster.
                         properties:
                           key:
-                            description: The key to select.
+                            description: Key is the key selected in the secret
                             type: string
                           name:
-                            description: Name of the secret.
-                            type: string
-                          namespace:
-                            description: Namespace of the secret.
+                            description: Name is the name of the secret
                             type: string
                         required:
                         - key
@@ -829,13 +799,10 @@ spec:
                           cluster.
                         properties:
                           key:
-                            description: The key to select.
+                            description: Key is the key selected in the secret
                             type: string
                           name:
-                            description: Name of the secret.
-                            type: string
-                          namespace:
-                            description: Namespace of the secret.
+                            description: Name is the name of the secret
                             type: string
                         required:
                         - key
@@ -890,13 +857,10 @@ spec:
                           in the kubernetes cluster.
                         properties:
                           key:
-                            description: The key to select.
+                            description: Key is the key selected in the secret
                             type: string
                           name:
-                            description: Name of the secret.
-                            type: string
-                          namespace:
-                            description: Namespace of the secret.
+                            description: Name is the name of the secret
                             type: string
                         required:
                         - key
@@ -909,13 +873,10 @@ spec:
                           as we cannot use local file paths in the kubernetes cluster.
                         properties:
                           key:
-                            description: The key to select.
+                            description: Key is the key selected in the secret
                             type: string
                           name:
-                            description: Name of the secret.
-                            type: string
-                          namespace:
-                            description: Namespace of the secret.
+                            description: Name is the name of the secret
                             type: string
                         required:
                         - key
@@ -946,13 +907,10 @@ spec:
                           as we cannot use local file paths in the kubernetes cluster.
                         properties:
                           key:
-                            description: The key to select.
+                            description: Key is the key selected in the secret
                             type: string
                           name:
-                            description: Name of the secret.
-                            type: string
-                          namespace:
-                            description: Namespace of the secret.
+                            description: Name is the name of the secret
                             type: string
                         required:
                         - key

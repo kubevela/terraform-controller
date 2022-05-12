@@ -6,10 +6,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/oam-dev/terraform-controller/controllers/configuration/backend"
 	"github.com/pkg/errors"
-	v1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	apitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -52,62 +51,22 @@ func ValidConfigurationObject(configuration *v1beta2.Configuration) (types.Confi
 }
 
 // RenderConfiguration will compose the Terraform configuration with hcl/json and backend
-func RenderConfiguration(ctx context.Context, client client.Client, configuration *v1beta2.Configuration, terraformBackendNamespace string, configurationType types.ConfigurationType) (string, *BackendConf, error) {
-	backendTF, backendType, useCustom, backendSecretList, err := parseConfigurationBackend(configuration, terraformBackendNamespace)
+func RenderConfiguration(configuration *v1beta2.Configuration, terraformBackendNamespace string, configurationType types.ConfigurationType) (string, *backend.Conf, error) {
+	backendConf, err := backend.ParseConfigurationBackend(configuration, terraformBackendNamespace)
 	if err != nil {
 		return "", nil, errors.Wrap(err, "failed to prepare Terraform backend configuration")
-	}
-
-	secretMap, err := prepareBackendSecretList(ctx, client, configuration.Namespace, backendSecretList)
-	if err != nil {
-		return "", nil, err
-	}
-
-	backendConf := &BackendConf{
-		BackendType: backendType,
-		HCL:         backendTF,
-		UseCustom:   useCustom,
-		Secrets:     secretMap,
 	}
 
 	switch configurationType {
 	case types.ConfigurationHCL:
 		completedConfiguration := configuration.Spec.HCL
-		completedConfiguration += "\n" + backendTF
+		completedConfiguration += "\n" + backendConf.HCL
 		return completedConfiguration, backendConf, nil
 	case types.ConfigurationRemote:
-		return backendTF, backendConf, nil
+		return backendConf.HCL, backendConf, nil
 	default:
 		return "", nil, errors.New("Unsupported Configuration Type")
 	}
-}
-
-func prepareBackendSecretList(ctx context.Context, k8sClient client.Client, namespace string, backendSecretList []*BackendConfSecretRef) (map[string][]string, error) {
-	secretMap := make(map[string][]string)
-	for _, secretRef := range backendSecretList {
-		secretMap[secretRef.Name] = append(secretMap[secretRef.Name], secretRef.SecretRef.Key)
-
-		if secretRef.SecretRef.Namespace == namespace {
-			continue
-		}
-		// if the secret isn't in the same namespace, create a new secret and copy the data
-		secret := v1.Secret{}
-		if err := k8sClient.Get(
-			ctx,
-			client.ObjectKey{
-				Name:      secretRef.SecretRef.Name,
-				Namespace: secretRef.SecretRef.Namespace,
-			},
-			&secret,
-		); err != nil {
-			return nil, err
-		}
-		secret.ObjectMeta = metav1.ObjectMeta{Name: secretRef.Name, Namespace: namespace}
-		if err := k8sClient.Create(ctx, &secret); err != nil {
-			return nil, err
-		}
-	}
-	return secretMap, nil
 }
 
 // SetRegion will set the region for Configuration

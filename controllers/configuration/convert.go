@@ -17,26 +17,12 @@ limitations under the License.
 package configuration
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"strconv"
-	"text/template"
 
-	sprig "github.com/go-task/slim-sprig"
-	"github.com/oam-dev/terraform-controller/api/v1beta2"
 	"k8s.io/apimachinery/pkg/runtime"
 )
-
-var backendTF = `
-terraform {
-  backend "kubernetes" {
-    secret_suffix     = "{{.SecretSuffix}}"
-    in_cluster_config = {{.InClusterConfig}}
-    namespace         = "{{.Namespace}}"
-  }
-}
-`
 
 // RawExtension2Map will convert rawExtension to map
 // This function is copied from oam-dev/kubevela
@@ -54,32 +40,6 @@ func RawExtension2Map(raw *runtime.RawExtension) (map[string]interface{}, error)
 		return nil, err
 	}
 	return ret, nil
-}
-
-type backendVars struct {
-	SecretSuffix    string
-	InClusterConfig bool
-	Namespace       string
-}
-
-// RenderTemplate renders Backend template
-func RenderTemplate(backend *v1beta2.Backend, namespace string) (string, error) {
-	tmpl, err := template.New("backend").Funcs(template.FuncMap(sprig.FuncMap())).Parse(backendTF)
-	if err != nil {
-		return "", err
-	}
-
-	templateVars := backendVars{
-		SecretSuffix:    backend.SecretSuffix,
-		InClusterConfig: backend.InClusterConfig,
-		Namespace:       namespace,
-	}
-	var wr bytes.Buffer
-	err = tmpl.Execute(&wr, templateVars)
-	if err != nil {
-		return "", err
-	}
-	return wr.String(), nil
 }
 
 // Interface2String converts an interface{} type to string

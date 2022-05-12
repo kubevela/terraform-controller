@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/oam-dev/terraform-controller/controllers/configuration/backend"
 	"github.com/stretchr/testify/assert"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -105,25 +105,15 @@ func TestValidConfigurationObject(t *testing.T) {
 
 func TestRenderConfiguration(t *testing.T) {
 	type args struct {
-		k8sClient         client.Client
 		configuration     *v1beta2.Configuration
 		ns                string
 		configurationType types.ConfigurationType
 	}
 	type want struct {
 		cfg         string
-		backendConf *BackendConf
+		backendConf *backend.Conf
 		errMsg      string
 	}
-
-	secret1 := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "abc",
-			Namespace: "a",
-		},
-		Data: map[string][]byte{"d": []byte("something")},
-	}
-	k8sClient1 := fake.NewClientBuilder().WithObjects(secret1).Build()
 
 	testcases := []struct {
 		name string
@@ -153,7 +143,7 @@ terraform {
   }
 }
 `,
-				backendConf: &BackendConf{
+				backendConf: &backend.Conf{
 					BackendType: "kubernetes",
 					HCL: `
 terraform {
@@ -164,7 +154,7 @@ terraform {
   }
 }
 `,
-					Secrets: make(map[string][]string),
+					Secrets: nil,
 				},
 			},
 		},
@@ -189,7 +179,7 @@ terraform {
   }
 }
 `,
-				backendConf: &BackendConf{
+				backendConf: &backend.Conf{
 					BackendType: "kubernetes",
 					HCL: `
 terraform {
@@ -200,7 +190,7 @@ terraform {
   }
 }
 `,
-					Secrets: make(map[string][]string),
+					Secrets: nil,
 				},
 			},
 		},
@@ -216,433 +206,11 @@ terraform {
 				errMsg: "Unsupported Configuration Type",
 			},
 		},
-		{
-			name: "backend is not nil, use invalid(has syntax error) inline backend conf",
-			args: args{
-				configuration: &v1beta2.Configuration{
-					Spec: v1beta2.ConfigurationSpec{
-						Backend: &v1beta2.Backend{
-							Inline: `
-terraform {
-`,
-						},
-					},
-				},
-				ns: "vela-system",
-			},
-			want: want{
-				errMsg: "there are syntax errors in the inline backend hcl code",
-			},
-		},
-		{
-			name: "backend is not nil, use invalid inline backend conf",
-			args: args{
-				configuration: &v1beta2.Configuration{
-					Spec: v1beta2.ConfigurationSpec{
-						Backend: &v1beta2.Backend{
-							Inline: `
-terraform {
-}
-`,
-						},
-					},
-				},
-				ns: "vela-system",
-			},
-			want: want{
-				errMsg: "the inline backend hcl code is not valid Terraform backend configuration",
-			},
-		},
-		{
-			name: "backend is not nil, use invalid (unsupported backendType) inline backend conf",
-			args: args{
-				configuration: &v1beta2.Configuration{
-					Spec: v1beta2.ConfigurationSpec{
-						Backend: &v1beta2.Backend{
-							Inline: `
-terraform {
-	backend "local" {
-		path = "/some/path"
-	}
-}
-`,
-						},
-					},
-				},
-				ns: "vela-system",
-			},
-			want: want{
-				errMsg: "backendType \"local\" is not supported",
-			},
-		},
-		{
-			name: "backend is not nil, use valid inline backend conf",
-			args: args{
-				configuration: &v1beta2.Configuration{
-					Spec: v1beta2.ConfigurationSpec{
-						Backend: &v1beta2.Backend{
-							Inline: `
-terraform {
-	backend "kubernetes" {
-		secret_suffix     = ""
-		namespace         = "vela-system"
-		in_cluster_config = true
-	}
-}
-`,
-						},
-					},
-				},
-				configurationType: types.ConfigurationHCL,
-				ns:                "vela-system",
-			},
-			want: want{
-				errMsg: "",
-				cfg: `
-
-terraform {
-	backend "kubernetes" {
-		secret_suffix     = ""
-		namespace         = "vela-system"
-		in_cluster_config = true
-	}
-}
-`,
-				backendConf: &BackendConf{
-					BackendType: "kubernetes",
-					HCL: `
-terraform {
-	backend "kubernetes" {
-		secret_suffix     = ""
-		namespace         = "vela-system"
-		in_cluster_config = true
-	}
-}
-`,
-					UseCustom: true,
-					Secrets:   make(map[string][]string),
-				},
-			},
-		},
-		{
-			name: "backend is not nil, use valid inline backend conf, should wrap",
-			args: args{
-				configuration: &v1beta2.Configuration{
-					Spec: v1beta2.ConfigurationSpec{
-						Backend: &v1beta2.Backend{
-							Inline: `backend "kubernetes" {
-	secret_suffix     = ""
-	namespace         = "vela-system"
-	in_cluster_config = true
-}`,
-						},
-					},
-				},
-				configurationType: types.ConfigurationHCL,
-				ns:                "vela-system",
-			},
-			want: want{
-				errMsg: "",
-				cfg: `
-
-terraform {
-backend "kubernetes" {
-	secret_suffix     = ""
-	namespace         = "vela-system"
-	in_cluster_config = true
-}
-}
-`,
-				backendConf: &BackendConf{
-					BackendType: "kubernetes",
-					HCL: `
-terraform {
-backend "kubernetes" {
-	secret_suffix     = ""
-	namespace         = "vela-system"
-	in_cluster_config = true
-}
-}
-`,
-					UseCustom: true,
-					Secrets:   make(map[string][]string),
-				},
-			},
-		},
-		{
-			name: "backend is not nil, use invalid (has invalid fields) inline backend conf",
-			args: args{
-				configuration: &v1beta2.Configuration{
-					Spec: v1beta2.ConfigurationSpec{
-						Backend: &v1beta2.Backend{
-							Inline: `
-terraform {
-	backend "kubernetes" {
-		secret_suffix     = ""
-		namespace         = "vela-system"
-		in_cluster_config = true
-		config_path       = "~/.kube/config"
-	}
-}
-`,
-						},
-					},
-				},
-				configurationType: types.ConfigurationHCL,
-				ns:                "vela-system",
-			},
-			want: want{
-				errMsg: "config_path is not supported in the inline backend hcl code as we cannot use local file paths in the kubernetes cluster",
-			},
-		},
-		{
-			name: "backend is not nil, use explicit backend conf",
-			args: args{
-				k8sClient: k8sClient1,
-				configuration: &v1beta2.Configuration{
-					Spec: v1beta2.ConfigurationSpec{
-						Backend: &v1beta2.Backend{
-							BackendType: "s3",
-							S3: &v1beta2.S3BackendConf{
-								Bucket: "my_bucket",
-								Key:    "my_key",
-								Region: "my_region",
-								SharedCredentialsSecret: &crossplane.SecretKeySelector{
-									SecretReference: crossplane.SecretReference{
-										Name:      "abc",
-										Namespace: "a",
-									},
-									Key: "d",
-								},
-							},
-						},
-					},
-				},
-				configurationType: types.ConfigurationHCL,
-				ns:                "vela-system",
-			},
-			want: want{
-				errMsg: "",
-				cfg: `
-
-terraform {
-	backend "s3" {
-bucket = "my_bucket"
-key    = "my_key"
-region = "my_region"
-
-shared_credentials_file = "/kubevela-terraform-controller-backend-secret/abc-terraform-core-oam-dev/d"
-
-	}
-}
-`,
-				backendConf: &BackendConf{
-					BackendType: "s3",
-					HCL: `
-terraform {
-	backend "s3" {
-bucket = "my_bucket"
-key    = "my_key"
-region = "my_region"
-
-shared_credentials_file = "/kubevela-terraform-controller-backend-secret/abc-terraform-core-oam-dev/d"
-
-	}
-}
-`,
-					UseCustom: true,
-					Secrets: map[string][]string{
-						"abc-terraform-core-oam-dev": {"d"},
-					},
-				},
-			},
-		},
-		{
-			name: "backend is not nil, use explicit backend conf, secret in the same namespace as the configuration",
-			args: args{
-				k8sClient: k8sClient1,
-				configuration: &v1beta2.Configuration{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "a",
-					},
-					Spec: v1beta2.ConfigurationSpec{
-						Backend: &v1beta2.Backend{
-							BackendType: "s3",
-							S3: &v1beta2.S3BackendConf{
-								Bucket: "my_bucket",
-								Key:    "my_key",
-								Region: "my_region",
-								SharedCredentialsSecret: &crossplane.SecretKeySelector{
-									SecretReference: crossplane.SecretReference{
-										Name:      "abc",
-										Namespace: "a",
-									},
-									Key: "d",
-								},
-							},
-						},
-					},
-				},
-				configurationType: types.ConfigurationHCL,
-				ns:                "vela-system",
-			},
-			want: want{
-				errMsg: "",
-				cfg: `
-
-terraform {
-	backend "s3" {
-bucket = "my_bucket"
-key    = "my_key"
-region = "my_region"
-
-shared_credentials_file = "/kubevela-terraform-controller-backend-secret/abc/d"
-
-	}
-}
-`,
-				backendConf: &BackendConf{
-					BackendType: "s3",
-					HCL: `
-terraform {
-	backend "s3" {
-bucket = "my_bucket"
-key    = "my_key"
-region = "my_region"
-
-shared_credentials_file = "/kubevela-terraform-controller-backend-secret/abc/d"
-
-	}
-}
-`,
-					UseCustom: true,
-					Secrets: map[string][]string{
-						"abc": {"d"},
-					},
-				},
-			},
-		},
-		{
-			name: "backend is not nil, use explicit backend conf, no backendType",
-			args: args{
-				configuration: &v1beta2.Configuration{
-					ObjectMeta: metav1.ObjectMeta{Namespace: "a"},
-					Spec: v1beta2.ConfigurationSpec{
-						Backend: &v1beta2.Backend{
-							S3: &v1beta2.S3BackendConf{
-								Bucket: "my_bucket",
-								Key:    "my_key",
-								Region: "my_region",
-								SharedCredentialsSecret: &crossplane.SecretKeySelector{
-									SecretReference: crossplane.SecretReference{
-										Name:      "abc",
-										Namespace: "a",
-									},
-									Key: "d",
-								},
-							},
-						},
-					},
-				},
-				configurationType: types.ConfigurationHCL,
-				ns:                "vela-system",
-			},
-			want: want{
-				errMsg: "",
-				cfg: `
-
-terraform {
-  backend "kubernetes" {
-    secret_suffix     = ""
-    in_cluster_config = true
-    namespace         = "vela-system"
-  }
-}
-`,
-				backendConf: &BackendConf{
-					BackendType: "kubernetes",
-					HCL: `
-terraform {
-  backend "kubernetes" {
-    secret_suffix     = ""
-    in_cluster_config = true
-    namespace         = "vela-system"
-  }
-}
-`,
-					Secrets: map[string][]string{},
-				},
-			},
-		},
-		{
-			name: "backend is not nil, use explicit backend conf, unsupported backendType",
-			args: args{
-				configuration: &v1beta2.Configuration{
-					ObjectMeta: metav1.ObjectMeta{Namespace: "a"},
-					Spec: v1beta2.ConfigurationSpec{
-						Backend: &v1beta2.Backend{
-							BackendType: "someType",
-							S3: &v1beta2.S3BackendConf{
-								Bucket: "my_bucket",
-								Key:    "my_key",
-								Region: "my_region",
-								SharedCredentialsSecret: &crossplane.SecretKeySelector{
-									SecretReference: crossplane.SecretReference{
-										Name:      "abc",
-										Namespace: "a",
-									},
-									Key: "d",
-								},
-							},
-						},
-					},
-				},
-				configurationType: types.ConfigurationHCL,
-				ns:                "vela-system",
-			},
-			want: want{
-				errMsg: "someType is unsupported backendType",
-			},
-		},
-		{
-			name: "backend is not nil, use explicit backend conf, invalid backendType",
-			args: args{
-				configuration: &v1beta2.Configuration{
-					ObjectMeta: metav1.ObjectMeta{Namespace: "a"},
-					Spec: v1beta2.ConfigurationSpec{
-						Backend: &v1beta2.Backend{
-							BackendType: "kubernetes",
-							S3: &v1beta2.S3BackendConf{
-								Bucket: "my_bucket",
-								Key:    "my_key",
-								Region: "my_region",
-								SharedCredentialsSecret: &crossplane.SecretKeySelector{
-									SecretReference: crossplane.SecretReference{
-										Name:      "abc",
-										Namespace: "a",
-									},
-									Key: "d",
-								},
-							},
-						},
-					},
-				},
-				configurationType: types.ConfigurationHCL,
-				ns:                "vela-system",
-			},
-			want: want{
-				errMsg: "there is no configuration for backendType kubernetes",
-			},
-		},
 	}
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			k8sClient := tc.args.k8sClient
-			if k8sClient == nil {
-				k8sClient = fake.NewClientBuilder().Build()
-			}
-			got, backendConf, err := RenderConfiguration(context.Background(), k8sClient, tc.args.configuration, tc.args.ns, tc.args.configurationType)
+			got, backendConf, err := RenderConfiguration(tc.args.configuration, tc.args.ns, tc.args.configurationType)
 			if tc.want.errMsg != "" && !strings.Contains(err.Error(), tc.want.errMsg) {
 				t.Errorf("ValidConfigurationObject() error = %v, wantErr %v", err, tc.want.errMsg)
 				return

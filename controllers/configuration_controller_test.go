@@ -15,7 +15,7 @@ import (
 
 	"github.com/agiledragon/gomonkey/v2"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/sts"
-	tfcfg "github.com/oam-dev/terraform-controller/controllers/configuration"
+	"github.com/oam-dev/terraform-controller/controllers/configuration/backend"
 	"github.com/stretchr/testify/assert"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -1948,10 +1948,10 @@ func TestTFConfigurationMeta_createTFBackendSecretVolumes(t *testing.T) {
 		{
 			name: "normal",
 			meta: &TFConfigurationMeta{
-				BackendConf: tfcfg.BackendConf{
-					Secrets: map[string][]string{
-						"a":                        {"k1"},
-						"a-terraform-core-oam-dev": {"k2", "k3"},
+				BackendConf: backend.Conf{
+					Secrets: []*backend.ConfSecretSelector{
+						{Name: "a", Keys: []string{"k1"}},
+						{Name: "a-terraform-core-oam-dev", Keys: []string{"k2", "k3"}},
 					},
 				},
 			},

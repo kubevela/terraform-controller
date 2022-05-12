@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/oam-dev/terraform-controller/controllers/configuration/backend"
 	"github.com/pkg/errors"
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
@@ -219,7 +220,7 @@ type TFConfigurationMeta struct {
 	DeleteResource        bool
 	Credentials           map[string]string
 
-	BackendConf               tfcfg.BackendConf
+	BackendConf               backend.Conf
 	BackendSecretName         string
 	TerraformBackendNamespace string
 
@@ -519,7 +520,7 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	meta.ConfigurationType = configurationType
 
 	// Render configuration with backend
-	completeConfiguration, backendConf, err := tfcfg.RenderConfiguration(ctx, k8sClient, configuration, meta.TerraformBackendNamespace, configurationType)
+	completeConfiguration, backendConf, err := tfcfg.RenderConfiguration(configuration, meta.TerraformBackendNamespace, configurationType)
 	if err != nil {
 		return err
 	}
@@ -706,10 +707,10 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 		},
 	}
 	backendConfSecretMounts := make([]v1.VolumeMount, 0)
-	for secretName := range meta.BackendConf.Secrets {
+	for _, backendConfSecret := range meta.BackendConf.Secrets {
 		backendConfSecretMounts = append(backendConfSecretMounts, v1.VolumeMount{
-			Name:      secretName,
-			MountPath: tfcfg.BackendConfSecretPodPath(secretName),
+			Name:      backendConfSecret.Name,
+			MountPath: backendConfSecret.Path,
 			ReadOnly:  true,
 		})
 	}
@@ -1002,7 +1003,7 @@ func (meta *TFConfigurationMeta) getStateJSON(ctx context.Context, k8sClient cli
 	// If users use custom backend
 	var s = v1.Secret{}
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: fmt.Sprintf(TFStatePullTmpSecret, meta.Name), Namespace: meta.Namespace}, &s); err != nil {
-		return nil, errors.Wrap(err, "terraform-state-pull isn't over yet.")
+		return nil, errors.Wrap(err, "terraform-state-pull isn't over yet")
 	}
 	tfStateData, ok := s.Data[TFStatePullTmpSecretKey]
 	if !ok {
@@ -1129,16 +1130,16 @@ func (meta *TFConfigurationMeta) createOrUpdateConfigMap(ctx context.Context, k8
 
 func (meta *TFConfigurationMeta) createTFBackendConfSecretVolumes() []v1.Volume {
 	volumes := make([]v1.Volume, 0)
-	for secretName, keyList := range meta.BackendConf.Secrets {
-		items := make([]v1.KeyToPath, 0, len(keyList))
-		for _, key := range keyList {
+	for _, backendConfSecret := range meta.BackendConf.Secrets {
+		items := make([]v1.KeyToPath, 0, len(backendConfSecret.Keys))
+		for _, key := range backendConfSecret.Keys {
 			items = append(items, v1.KeyToPath{Key: key, Path: key})
 		}
 		volumes = append(volumes, v1.Volume{
-			Name: secretName,
+			Name: backendConfSecret.Name,
 			VolumeSource: v1.VolumeSource{
 				Secret: &v1.SecretVolumeSource{
-					SecretName: secretName,
+					SecretName: backendConfSecret.Name,
 					Items:      items,
 				},
 			},
