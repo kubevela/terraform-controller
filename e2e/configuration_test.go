@@ -26,6 +26,7 @@ var (
 		"examples/alibaba/eip/configuration_eip_remote_subdirectory.yaml",
 		"examples/alibaba/oss/configuration_hcl_bucket.yaml",
 	}
+	testConfigurationsForceDelete = "examples/random/configuration_force_delete.yaml"
 )
 
 func TestInlineCredentialsConfiguration(t *testing.T) {
@@ -112,7 +113,7 @@ continueCheck:
 		}
 		if existed {
 			if i == 59 {
-				t.Error("Configuration is not ready")
+				t.Error("Configuration is not deleted")
 			}
 
 			time.Sleep(time.Second * 5)
@@ -134,6 +135,52 @@ continueCheck:
 
 	_, err = clientSet.CoreV1().ConfigMaps("default").Get(ctx, "tf-random-e2e", v1.GetOptions{})
 	assert.Equal(t, kerrors.IsNotFound(err), true)
+}
+
+func TestForceDeleteConfiguration(t *testing.T) {
+	klog.Info("1. Applying Configuration whose hcl is not valid")
+	pwd, _ := os.Getwd()
+	configuration := filepath.Join(pwd, "..", testConfigurationsForceDelete)
+	cmd := fmt.Sprintf("kubectl apply -f %s", configuration)
+	err := exec.Command("bash", "-c", cmd).Start()
+	assert.NilError(t, err)
+
+	klog.Info("2. Deleting Configuration")
+	cmd = fmt.Sprintf("kubectl delete -f %s", configuration)
+	err = exec.Command("bash", "-c", cmd).Start()
+	assert.NilError(t, err)
+
+	klog.Info("5. Checking Configuration is deleted")
+	for i := 0; i < 60; i++ {
+		var (
+			fields  []string
+			existed bool
+		)
+		output, err := exec.Command("bash", "-c", "kubectl get configuration").Output()
+		assert.NilError(t, err)
+
+		lines := strings.Split(string(output), "\n")
+
+		for j, line := range lines {
+			if j == 0 {
+				continue
+			}
+			fields = strings.Fields(line)
+			if len(fields) == 3 && fields[0] == "random-e2e-force-delete" {
+				existed = true
+			}
+		}
+		if existed {
+			if i == 59 {
+				t.Error("Configuration is not deleted")
+			}
+
+			time.Sleep(time.Second * 5)
+			continue
+		} else {
+			break
+		}
+	}
 }
 
 //func TestBasicConfigurationRegression(t *testing.T) {

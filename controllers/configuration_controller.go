@@ -355,61 +355,75 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, namespac
 		return err
 	}
 
+	if configuration.Spec.ForceDelete != nil && *configuration.Spec.ForceDelete {
+		// Try to clean up more sub-resources as possible. Ignore the issues if it hit any.
+		if err := r.cleanUpSubResources(ctx, namespace, configuration, meta); err != nil {
+			klog.Warningf("Failed to clean up sub-resources, but it's ignored as the resources are being forced to delete: %s", err)
+		}
+		return nil
+	}
 	// When the deletion Job process succeeded, clean up work is starting.
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.DestroyJobName, Namespace: meta.Namespace}, &destroyJob); err != nil {
 		return err
 	}
 	if destroyJob.Status.Succeeded == int32(1) || deleteConfigurationDirectly {
-		// 1. delete Terraform input Configuration ConfigMap
-		if err := meta.deleteConfigMap(ctx, k8sClient); err != nil {
+		return r.cleanUpSubResources(ctx, namespace, configuration, meta)
+	}
+
+	return errors.New(types.MessageDestroyJobNotCompleted)
+}
+
+func (r *ConfigurationReconciler) cleanUpSubResources(ctx context.Context, namespace string, configuration v1beta2.Configuration, meta *TFConfigurationMeta) error {
+	var k8sClient = r.Client
+
+	// 1. delete Terraform input Configuration ConfigMap
+	if err := meta.deleteConfigMap(ctx, k8sClient); err != nil {
+		return err
+	}
+
+	// 2. delete connectionSecret
+	if configuration.Spec.WriteConnectionSecretToReference != nil {
+		secretName := configuration.Spec.WriteConnectionSecretToReference.Name
+		secretNameSpace := configuration.Spec.WriteConnectionSecretToReference.Namespace
+		if err := deleteConnectionSecret(ctx, k8sClient, secretName, secretNameSpace); err != nil {
 			return err
 		}
-
-		// 2. delete connectionSecret
-		if configuration.Spec.WriteConnectionSecretToReference != nil {
-			secretName := configuration.Spec.WriteConnectionSecretToReference.Name
-			secretNameSpace := configuration.Spec.WriteConnectionSecretToReference.Namespace
-			if err := deleteConnectionSecret(ctx, k8sClient, secretName, secretNameSpace); err != nil {
-				return err
-			}
-		}
-
-		// 3. delete apply job
-		var applyJob batchv1.Job
-		if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.ApplyJobName, Namespace: namespace}, &applyJob); err == nil {
-			if err := k8sClient.Delete(ctx, &applyJob, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
-				return err
-			}
-		}
-
-		// 4. delete destroy job
-		var j batchv1.Job
-		if err := r.Client.Get(ctx, client.ObjectKey{Name: destroyJob.Name, Namespace: destroyJob.Namespace}, &j); err == nil {
-			if err := r.Client.Delete(ctx, &j, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
-				return err
-			}
-		}
-
-		// 5. delete secret which stores variables
-		klog.InfoS("Deleting the secret which stores variables", "Name", meta.VariableSecretName)
-		var variableSecret v1.Secret
-		if err := r.Client.Get(ctx, client.ObjectKey{Name: meta.VariableSecretName, Namespace: meta.Namespace}, &variableSecret); err == nil {
-			if err := r.Client.Delete(ctx, &variableSecret); err != nil {
-				return err
-			}
-		}
-
-		// 6. delete Kubernetes backend secret
-		klog.InfoS("Deleting the secret which stores Kubernetes backend", "Name", meta.BackendSecretName)
-		var kubernetesBackendSecret v1.Secret
-		if err := r.Client.Get(ctx, client.ObjectKey{Name: meta.BackendSecretName, Namespace: meta.TerraformBackendNamespace}, &kubernetesBackendSecret); err == nil {
-			if err := r.Client.Delete(ctx, &kubernetesBackendSecret); err != nil {
-				return err
-			}
-		}
-		return nil
 	}
-	return errors.New(types.MessageDestroyJobNotCompleted)
+
+	// 3. delete apply job
+	var applyJob batchv1.Job
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.ApplyJobName, Namespace: namespace}, &applyJob); err == nil {
+		if err := k8sClient.Delete(ctx, &applyJob, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
+			return err
+		}
+	}
+
+	// 4. delete destroy job
+	var j batchv1.Job
+	if err := r.Client.Get(ctx, client.ObjectKey{Name: meta.DestroyJobName, Namespace: meta.Namespace}, &j); err == nil {
+		if err := r.Client.Delete(ctx, &j, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
+			return err
+		}
+	}
+
+	// 5. delete secret which stores variables
+	klog.InfoS("Deleting the secret which stores variables", "Name", meta.VariableSecretName)
+	var variableSecret v1.Secret
+	if err := r.Client.Get(ctx, client.ObjectKey{Name: meta.VariableSecretName, Namespace: meta.Namespace}, &variableSecret); err == nil {
+		if err := r.Client.Delete(ctx, &variableSecret); err != nil {
+			return err
+		}
+	}
+
+	// 6. delete Kubernetes backend secret
+	klog.InfoS("Deleting the secret which stores Kubernetes backend", "Name", meta.BackendSecretName)
+	var kubernetesBackendSecret v1.Secret
+	if err := r.Client.Get(ctx, client.ObjectKey{Name: meta.BackendSecretName, Namespace: meta.TerraformBackendNamespace}, &kubernetesBackendSecret); err == nil {
+		if err := r.Client.Delete(ctx, &kubernetesBackendSecret); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (r *ConfigurationReconciler) preCheckResourcesSetting(meta *TFConfigurationMeta) error {
