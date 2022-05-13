@@ -502,8 +502,10 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	}
 	meta.CompleteConfiguration = completeConfiguration
 
-	if err := meta.storeTFConfiguration(ctx, k8sClient); err != nil {
-		return err
+	if configuration.ObjectMeta.DeletionTimestamp.IsZero() {
+		if err := meta.storeTFConfiguration(ctx, k8sClient); err != nil {
+			return err
+		}
 	}
 
 	// Check whether configuration(hcl/json) is changed

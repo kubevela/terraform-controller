@@ -144,6 +144,12 @@ install-chart:
 	helm test -n terraform terraform-controller --timeout 5m
 	kubectl get pod -n terraform -l "app=terraform-controller"
 
+# load docker image to the kind cluster
+kind-load:
+	docker build -t oamdev/terraform-controller:e2e .
+	kind load docker-image oamdev/terraform-controller:e2e
+
+
 alibaba-credentials:
 ifeq (, $(ALICLOUD_ACCESS_KEY))
 	@echo "Environment variable ALICLOUD_ACCESS_KEY is not set"
