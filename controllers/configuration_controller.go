@@ -78,10 +78,6 @@ const (
 	TFVariableSecret = "variable-%s"
 	// TFBackendSecret is the Secret name for Kubernetes backend
 	TFBackendSecret = "tfstate-%s-%s"
-	// TFStatePullTmpSecret is the name of the secret stores the result of `terraform state pull`
-	TFStatePullTmpSecret = "tf-state-pull-%s"
-	// TFStatePullTmpSecretKey is the key of the data stored in TFStatePullTmpSecret
-	TFStatePullTmpSecretKey = "tf-state"
 )
 
 // TerraformExecutionType is the type for Terraform execution
@@ -1001,19 +997,28 @@ func (meta *TFConfigurationMeta) getStateJSON(ctx context.Context, k8sClient cli
 	}
 
 	// If users use custom backend
-	var s = v1.Secret{}
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: fmt.Sprintf(TFStatePullTmpSecret, meta.Name), Namespace: meta.Namespace}, &s); err != nil {
-		return nil, errors.Wrap(err, "terraform-state-pull isn't over yet")
+	var tfStateData []byte
+	errCh := make(chan error)
+	timeoutCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancel()
+	go func() {
+		stateJSON, err := backend.GetStateJSON(timeoutCtx, k8sClient, meta.Namespace, &meta.BackendConf)
+		if r := recover(); r != nil {
+			err = fmt.Errorf("panic when fetch state json: %#v", r)
+		}
+		if err != nil {
+			errCh <- err
+			return
+		}
+		tfStateData = stateJSON
+		errCh <- nil
+	}()
+	select {
+	case err := <-errCh:
+		return tfStateData, err
+	case <-timeoutCtx.Done():
+		return nil, fmt.Errorf("get state json timeout")
 	}
-	tfStateData, ok := s.Data[TFStatePullTmpSecretKey]
-	if !ok {
-		return nil, fmt.Errorf("failed to get %s from Terraform State secret %s", TFStatePullTmpSecretKey, s.Name)
-	}
-	// delete the tmp terraform-state-pull secret
-	if err := k8sClient.Delete(ctx, &s); err != nil {
-		klog.Warningf("failed to delete the tmp terraform-state-pull secret {Namespace: %s, Name: %s}, please delete it manually", s.Namespace, s.Name)
-	}
-	return tfStateData, nil
 }
 
 func (meta *TFConfigurationMeta) prepareTFVariables(configuration *v1beta2.Configuration) error {
