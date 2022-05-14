@@ -2000,3 +2000,121 @@ func TestTFConfigurationMeta_createTFBackendSecretVolumes(t *testing.T) {
 		})
 	}
 }
+
+func TestTFConfigurationMeta_getStateJSON(t *testing.T) {
+	type fields struct {
+		Name                      string
+		Namespace                 string
+		BackendConf               backend.Conf
+		BackendSecretName         string
+		TerraformBackendNamespace string
+	}
+	type args struct {
+		ctx       context.Context
+		k8sClient client.Client
+	}
+
+	secret1 := corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "abc",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"d": []byte(`MTIzNDU=`),
+		},
+	}
+	k8sClient1 := fake.NewClientBuilder().WithObjects(&secret1).Build()
+
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		want    []byte
+		wantErr string
+	}{
+		{
+			name: "custom kubernetes, invalid kubeconfig content",
+			fields: fields{
+				Name:      "configuration",
+				Namespace: "default",
+				BackendConf: backend.Conf{
+					BackendType: "kubernetes",
+					UseCustom:   true,
+					HCL: `
+terraform {
+	backend "kubernetes" {
+		secret_suffix     = "ali-oss"
+		namespace         = "default"
+		in_cluster_config = false
+		config_path       = "backend-conf-secret/abc/d"
+	}
+}
+`,
+					Secrets: []*backend.ConfSecretSelector{
+						{
+							Name: "abc",
+							Path: "backend-conf-secret/abc/",
+							Keys: []string{"d"},
+						},
+					},
+				},
+			},
+			args: args{
+				ctx:       context.Background(),
+				k8sClient: k8sClient1,
+			},
+			want:    nil,
+			wantErr: "failed to initialize kubernetes configuration",
+		},
+		{
+			name: "custom kubernetes, can not get conf secret",
+			fields: fields{
+				Name:      "configuration",
+				Namespace: "default",
+				BackendConf: backend.Conf{
+					BackendType: "kubernetes",
+					UseCustom:   true,
+					HCL: `
+terraform {
+	backend "kubernetes" {
+		secret_suffix     = "ali-oss"
+		namespace         = "default"
+		in_cluster_config = false
+		config_path       = "backend-conf-secret/abc/d"
+	}
+}
+`,
+					Secrets: []*backend.ConfSecretSelector{
+						{
+							Name: "abcd",
+							Path: "backend-conf-secret/abcd/",
+							Keys: []string{"d"},
+						},
+					},
+				},
+			},
+			args: args{
+				ctx:       context.Background(),
+				k8sClient: k8sClient1,
+			},
+			want:    nil,
+			wantErr: "cannot find the secret{Name: abcd, Namespace: default}",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			meta := &TFConfigurationMeta{
+				Name:                      tt.fields.Name,
+				Namespace:                 tt.fields.Namespace,
+				BackendConf:               tt.fields.BackendConf,
+				BackendSecretName:         tt.fields.BackendSecretName,
+				TerraformBackendNamespace: tt.fields.TerraformBackendNamespace,
+			}
+			got, err := meta.getStateJSON(tt.args.ctx, tt.args.k8sClient)
+			if tt.wantErr != "" && !strings.Contains(err.Error(), tt.wantErr) || tt.wantErr == "" && err != nil {
+				t.Errorf("get error: %s, but want: %s", err, tt.wantErr)
+			}
+			assert.Equalf(t, tt.want, got, "getStateJSON(%v, %v)", tt.args.ctx, tt.args.k8sClient)
+		})
+	}
+}
