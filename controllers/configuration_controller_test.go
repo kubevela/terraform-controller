@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"k8s.io/utils/pointer"
 	"os"
 	"reflect"
 	"strings"
@@ -114,6 +115,75 @@ func TestInitTFConfigurationMeta(t *testing.T) {
 			if !reflect.DeepEqual(meta.Name, tc.want.Name) {
 				t.Errorf("initTFConfigurationMeta = %v, want %v", meta, tc.want)
 			}
+		})
+	}
+}
+
+func TestInitTFConfigurationMetaWithDeleteResource(t *testing.T) {
+	req := ctrl.Request{}
+	req.Namespace = "default"
+	req.Name = "abc"
+	testcases := []struct {
+		name string
+		configuration v1beta2.Configuration
+		meta          *TFConfigurationMeta
+	}{
+		{
+			name: "DeleteResource is false",
+			configuration: v1beta2.Configuration{
+				ObjectMeta: v1.ObjectMeta{
+					Name: "abc",
+				},
+				Spec: v1beta2.ConfigurationSpec{
+					BaseConfigurationSpec: v1beta2.BaseConfigurationSpec{
+						DeleteResource: pointer.Bool(true),
+					},
+				},
+			},
+			meta: &TFConfigurationMeta{
+				DeleteResource:    true,
+			},
+		},
+		{
+			name: "DeleteResource is true",
+			configuration: v1beta2.Configuration{
+				ObjectMeta: v1.ObjectMeta{
+					Name: "abc",
+				},
+				Spec: v1beta2.ConfigurationSpec{
+					BaseConfigurationSpec: v1beta2.BaseConfigurationSpec{
+						DeleteResource: pointer.Bool(false),
+					},
+				},
+			},
+			meta: &TFConfigurationMeta{
+				DeleteResource:    false,
+			},
+		},
+		{
+			name: "DeleteResource is nil",
+			configuration: v1beta2.Configuration{
+				ObjectMeta: v1.ObjectMeta{
+					Name: "abc",
+				},
+				Spec: v1beta2.ConfigurationSpec{
+					BaseConfigurationSpec: v1beta2.BaseConfigurationSpec{
+						DeleteResource: nil,
+					},
+				},
+			},
+			meta: &TFConfigurationMeta{
+				DeleteResource:    true,
+			},
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			meta := initTFConfigurationMeta(req, tc.configuration)
+			if !reflect.DeepEqual(meta.DeleteResource, tc.meta.DeleteResource) {
+				t.Errorf("initTFConfigurationMeta = %v, want %v", meta, tc.meta)
+			}
+
 		})
 	}
 }
