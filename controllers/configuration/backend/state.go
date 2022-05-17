@@ -18,7 +18,6 @@ package backend
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -55,16 +54,12 @@ func GetStateJSON(ctx context.Context, k8sClient client.Client, namespace string
 		_ = os.MkdirAll(dirPath, os.ModePerm)
 		for _, key := range secret.Keys {
 			err := func() error {
-				data, err := base64.StdEncoding.DecodeString(string(gotSecret.Data[key]))
-				if err != nil {
-					return err
-				}
 				file, err := os.Create(filepath.Join(filepath.Clean(dirPath), filepath.Clean(key)))
 				if err != nil {
 					return err
 				}
 				defer func() { _ = file.Close() }()
-				_, err = file.Write(data)
+				_, err = file.Write(gotSecret.Data[key])
 				return err
 			}()
 			if err != nil {

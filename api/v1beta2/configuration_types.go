@@ -64,9 +64,6 @@ type ConfigurationSpec struct {
 	// Or indicates a Terraform module or configuration don't need credentials at all, like provider `random`
 	InlineCredentials bool `json:"inlineCredentials,omitempty"`
 
-	// BackendReference specifies the reference to Backend
-	BackendReference *types.Reference `json:"backendRef,omitempty"`
-
 	// DeleteResource will determine whether provisioned cloud resources will be deleted when CR is deleted
 	// +kubebuilder:default:=true
 	DeleteResource *bool `json:"deleteResource,omitempty"`

@@ -99,6 +99,12 @@ func TestConfData_Get(t *testing.T) {
 			want: false,
 		},
 		{
+			name: "simple bool, missing",
+			hcl:  `check=false`,
+			key:  "check1",
+			want: nil,
+		},
+		{
 			name: "simple int",
 			hcl:  `check=1`,
 			key:  "check",

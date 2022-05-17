@@ -706,7 +706,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 	for _, backendConfSecret := range meta.BackendConf.Secrets {
 		backendConfSecretMounts = append(backendConfSecretMounts, v1.VolumeMount{
 			Name:      backendConfSecret.Name,
-			MountPath: backendConfSecret.Path,
+			MountPath: filepath.Join(WorkingVolumeMountPath, backendConfSecret.Path),
 			ReadOnly:  true,
 		})
 	}
@@ -1002,10 +1002,14 @@ func (meta *TFConfigurationMeta) getStateJSON(ctx context.Context, k8sClient cli
 	timeoutCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				errMsg := fmt.Sprintf("get state json from backend error: %s", r)
+				klog.Error(errMsg)
+				errCh <- errors.New(errMsg)
+			}
+		}()
 		stateJSON, err := backend.GetStateJSON(timeoutCtx, k8sClient, meta.Namespace, &meta.BackendConf)
-		if r := recover(); r != nil {
-			err = fmt.Errorf("panic when fetch state json: %#v", r)
-		}
 		if err != nil {
 			errCh <- err
 			return

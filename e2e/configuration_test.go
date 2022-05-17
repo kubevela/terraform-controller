@@ -5,22 +5,26 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
 
 	"golang.org/x/net/context"
 	"gotest.tools/assert"
+	v12 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
 	"github.com/oam-dev/terraform-controller/controllers/client"
 )
 
 var (
-	testConfigurationsInlineCredentials = "examples/random/configuration_random.yaml"
-	testConfigurationsRegression        = []string{
+	testConfigurationsInlineCredentials                        = "examples/random/configuration_random.yaml"
+	testConfigurationsInlineCredentialsCustomBackendKubernetes = "examples/random/configuration_random_custom_backend_kubernetes.yaml"
+	testConfigurationsRegression                               = []string{
 		"examples/alibaba/eip/configuration_eip.yaml",
 		"examples/alibaba/eip/configuration_eip_remote_in_another_namespace.yaml",
 		"examples/alibaba/eip/configuration_eip_remote_subdirectory.yaml",
@@ -29,7 +33,39 @@ var (
 	testConfigurationsForceDelete = "examples/random/configuration_force_delete.yaml"
 )
 
-func TestInlineCredentialsConfiguration(t *testing.T) {
+type ConfigurationAttr struct {
+	Name                   string
+	YamlPath               string
+	TFConfigMapName        string
+	BackendStateSecretName string
+	OutputsSecretName      string
+	VariableSecretName     string
+}
+
+type TestContext struct {
+	context.Context
+	Configuration          *ConfigurationAttr
+	BackendSecretNamespace string
+	ClientSet              *kubernetes.Clientset
+}
+
+type DoFunc = func(ctx *TestContext)
+
+type Injector struct {
+	BeforeApplyConfiguration DoFunc
+	CleanUp                  DoFunc
+	// add more actions and check points if needed
+}
+
+func invoke(do DoFunc, ctx *TestContext) {
+	if do != nil {
+		do(ctx)
+	}
+}
+
+func testBase(t *testing.T, configuration ConfigurationAttr, injector Injector, useCustomBackend bool) {
+	klog.Infof("%s test begins……", configuration.Name)
+
 	backendSecretNamespace := os.Getenv("TERRAFORM_BACKEND_NAMESPACE")
 	if backendSecretNamespace == "" {
 		backendSecretNamespace = "vela-system"
@@ -38,10 +74,18 @@ func TestInlineCredentialsConfiguration(t *testing.T) {
 	assert.NilError(t, err)
 	ctx := context.Background()
 
+	testCtx := &TestContext{
+		Context:                ctx,
+		Configuration:          &configuration,
+		BackendSecretNamespace: backendSecretNamespace,
+		ClientSet:              clientSet,
+	}
+
 	klog.Info("1. Applying Configuration")
+	invoke(injector.BeforeApplyConfiguration, testCtx)
 	pwd, _ := os.Getwd()
-	configuration := filepath.Join(pwd, "..", testConfigurationsInlineCredentials)
-	cmd := fmt.Sprintf("kubectl apply -f %s", configuration)
+	configuration.YamlPath = filepath.Join(pwd, "..", configuration.YamlPath)
+	cmd := fmt.Sprintf("kubectl apply -f %s", configuration.YamlPath)
 	err = exec.Command("bash", "-c", cmd).Start()
 	assert.NilError(t, err)
 
@@ -57,7 +101,7 @@ func TestInlineCredentialsConfiguration(t *testing.T) {
 				continue
 			}
 			fields = strings.Fields(line)
-			if len(fields) == 3 && fields[0] == "random-e2e" && fields[1] == Available {
+			if len(fields) == 3 && fields[0] == configuration.Name && fields[1] == Available {
 				goto continueCheck
 			}
 		}
@@ -71,23 +115,25 @@ continueCheck:
 	klog.Info("3. Checking the status of Configs and Secrets")
 
 	klog.Info("- Checking ConfigMap which stores .tf")
-	_, err = clientSet.CoreV1().ConfigMaps("default").Get(ctx, "tf-random-e2e", v1.GetOptions{})
+	_, err = clientSet.CoreV1().ConfigMaps("default").Get(ctx, configuration.TFConfigMapName, v1.GetOptions{})
 	assert.NilError(t, err)
 
-	klog.Info("- Checking Secret which stores Backend")
-	_, err = clientSet.CoreV1().Secrets(backendSecretNamespace).Get(ctx, "tfstate-default-random-e2e", v1.GetOptions{})
-	assert.NilError(t, err)
+	if !useCustomBackend {
+		klog.Info("- Checking Secret which stores Backend")
+		_, err = clientSet.CoreV1().Secrets(backendSecretNamespace).Get(ctx, configuration.BackendStateSecretName, v1.GetOptions{})
+		assert.NilError(t, err)
+	}
 
 	klog.Info("- Checking Secret which stores outputs")
-	_, err = clientSet.CoreV1().Secrets("default").Get(ctx, "random-conn", v1.GetOptions{})
+	_, err = clientSet.CoreV1().Secrets("default").Get(ctx, configuration.OutputsSecretName, v1.GetOptions{})
 	assert.NilError(t, err)
 
 	klog.Info("- Checking Secret which stores variables")
-	_, err = clientSet.CoreV1().Secrets("default").Get(ctx, "variable-random-e2e", v1.GetOptions{})
+	_, err = clientSet.CoreV1().Secrets("default").Get(ctx, configuration.VariableSecretName, v1.GetOptions{})
 	assert.NilError(t, err)
 
 	klog.Info("4. Deleting Configuration")
-	cmd = fmt.Sprintf("kubectl delete -f %s", configuration)
+	cmd = fmt.Sprintf("kubectl delete -f %s", configuration.YamlPath)
 	err = exec.Command("bash", "-c", cmd).Start()
 	assert.NilError(t, err)
 
@@ -107,7 +153,7 @@ continueCheck:
 				continue
 			}
 			fields = strings.Fields(line)
-			if len(fields) == 3 && fields[0] == "random-e2e" {
+			if len(fields) == 3 && fields[0] == configuration.Name {
 				existed = true
 			}
 		}
@@ -124,17 +170,86 @@ continueCheck:
 	}
 
 	klog.Info("6. Checking Secrets and ConfigMap which should all be deleted")
-	_, err = clientSet.CoreV1().Secrets("default").Get(ctx, "variable-random-e2e", v1.GetOptions{})
+	_, err = clientSet.CoreV1().Secrets("default").Get(ctx, configuration.VariableSecretName, v1.GetOptions{})
 	assert.Equal(t, kerrors.IsNotFound(err), true)
 
-	_, err = clientSet.CoreV1().Secrets("default").Get(ctx, "random-conn", v1.GetOptions{})
+	_, err = clientSet.CoreV1().Secrets("default").Get(ctx, configuration.OutputsSecretName, v1.GetOptions{})
 	assert.Equal(t, kerrors.IsNotFound(err), true)
 
-	_, err = clientSet.CoreV1().Secrets(backendSecretNamespace).Get(ctx, "tfstate-default-random-e2e", v1.GetOptions{})
+	if !useCustomBackend {
+		_, err = clientSet.CoreV1().Secrets(backendSecretNamespace).Get(ctx, configuration.BackendStateSecretName, v1.GetOptions{})
+		assert.Equal(t, kerrors.IsNotFound(err), true)
+	}
+
+	_, err = clientSet.CoreV1().ConfigMaps("default").Get(ctx, configuration.TFConfigMapName, v1.GetOptions{})
 	assert.Equal(t, kerrors.IsNotFound(err), true)
 
-	_, err = clientSet.CoreV1().ConfigMaps("default").Get(ctx, "tf-random-e2e", v1.GetOptions{})
-	assert.Equal(t, kerrors.IsNotFound(err), true)
+	invoke(injector.CleanUp, testCtx)
+
+	klog.Infof("%s test ends……", configuration.Name)
+}
+
+func TestInlineCredentialsConfiguration(t *testing.T) {
+	configuration := ConfigurationAttr{
+		Name:                   "random-e2e",
+		YamlPath:               testConfigurationsInlineCredentials,
+		TFConfigMapName:        "tf-random-e2e",
+		BackendStateSecretName: "tfstate-default-random-e2e",
+		OutputsSecretName:      "random-conn",
+		VariableSecretName:     "variable-random-e2e",
+	}
+	testBase(t, configuration, Injector{}, false)
+}
+
+func TestInlineCredentialsConfigurationUseCustomBackendKubernetes(t *testing.T) {
+	configuration := ConfigurationAttr{
+		Name:                   "random-e2e-custom-backend-kubernetes",
+		YamlPath:               testConfigurationsInlineCredentialsCustomBackendKubernetes,
+		TFConfigMapName:        "tf-random-e2e-custom-backend-kubernetes",
+		BackendStateSecretName: "tfstate-default-random-e2e-custom-backend-kubernetes",
+		OutputsSecretName:      "random-conn-custom-backend-kubernetes",
+		VariableSecretName:     "variable-random-e2e-custom-backend-kubernetes",
+	}
+	secretName, secretKey := "kubeconfig", "config"
+	beforeApply := func(ctx *TestContext) {
+		// prepare the backend conf secret
+
+		// 1. read the kubeconfig file
+		homeDir, _ := os.UserHomeDir()
+		kubeconfig, err := os.ReadFile(filepath.Join(homeDir, ".kube/config"))
+		assert.NilError(t, err)
+		kSvc, _ := ctx.ClientSet.CoreV1().Services("default").Get(ctx, "kubernetes", v1.GetOptions{})
+		kubeconfigStr := string(kubeconfig)
+		kubeconfigStr = regexp.MustCompile(`127.0.0.1:\d+`).ReplaceAllString(kubeconfigStr, fmt.Sprintf("%s:%d", kSvc.Spec.ClusterIP, kSvc.Spec.Ports[0].Port))
+
+		// 2. create the secret
+		secret := &v12.Secret{
+			ObjectMeta: v1.ObjectMeta{
+				Name:      secretName,
+				Namespace: "default",
+			},
+			Data: map[string][]byte{
+				secretKey: []byte(kubeconfigStr),
+			},
+		}
+		_, getErr := ctx.ClientSet.CoreV1().Secrets("default").Get(ctx, secretName, v1.GetOptions{})
+		if getErr == nil {
+			_ = ctx.ClientSet.CoreV1().Secrets("default").Delete(ctx, secretName, v1.DeleteOptions{})
+		}
+		_, _ = ctx.ClientSet.CoreV1().Secrets("default").Create(ctx, secret, v1.CreateOptions{})
+	}
+	cleanUp := func(ctx *TestContext) {
+		_ = ctx.ClientSet.CoreV1().Secrets("default").Delete(ctx, secretName, v1.DeleteOptions{})
+	}
+	testBase(
+		t,
+		configuration,
+		Injector{
+			BeforeApplyConfiguration: beforeApply,
+			CleanUp:                  cleanUp,
+		},
+		true,
+	)
 }
 
 func TestForceDeleteConfiguration(t *testing.T) {

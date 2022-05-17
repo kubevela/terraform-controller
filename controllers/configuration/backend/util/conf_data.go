@@ -16,6 +16,8 @@ limitations under the License.
 
 package util
 
+import "k8s.io/klog/v2"
+
 // ConfData contains all the attributes in the backend block of the hcl code
 type ConfData map[string]interface{}
 
@@ -29,5 +31,9 @@ func (d ConfData) GetOk(key string) (interface{}, bool) {
 // Get returns the value if the ConfData has the entry for key
 // Otherwise, it returns nil
 func (d ConfData) Get(key string) interface{} {
-	return d[key]
+	x, ok := d[key]
+	if !ok || x == nil {
+		klog.Errorf("fetch %s from the custom backend conf error", key)
+	}
+	return x
 }

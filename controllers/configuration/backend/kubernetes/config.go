@@ -111,8 +111,11 @@ func (b *backend) configure(data util.ConfData) error {
 		b.labels = labels
 	}
 
-	ns := data.Get("namespace").(string)
-	b.namespace = ns
+	ns, ok := data.GetOk("namespace")
+	if !ok {
+		ns = "default"
+	}
+	b.namespace = ns.(string)
 	b.nameSuffix = data.Get("secret_suffix").(string)
 	b.config = cfg
 
@@ -125,8 +128,11 @@ func getInitialConfig(data util.ConfData) (*restclient.Config, error) {
 	var cfg *restclient.Config
 	var err error
 
-	inCluster := data.Get("in_cluster_config").(bool)
-	if inCluster {
+	inCluster, ok := data.GetOk("in_cluster_config")
+	if !ok {
+		inCluster = false
+	}
+	if inCluster.(bool) {
 		cfg, err = restclient.InClusterConfig()
 		if err != nil {
 			return nil, err
