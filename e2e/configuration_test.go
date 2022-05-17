@@ -203,12 +203,11 @@ func TestInlineCredentialsConfiguration(t *testing.T) {
 
 func TestInlineCredentialsConfigurationUseCustomBackendKubernetes(t *testing.T) {
 	configuration := ConfigurationAttr{
-		Name:                   "random-e2e-custom-backend-kubernetes",
-		YamlPath:               testConfigurationsInlineCredentialsCustomBackendKubernetes,
-		TFConfigMapName:        "tf-random-e2e-custom-backend-kubernetes",
-		BackendStateSecretName: "tfstate-default-random-e2e-custom-backend-kubernetes",
-		OutputsSecretName:      "random-conn-custom-backend-kubernetes",
-		VariableSecretName:     "variable-random-e2e-custom-backend-kubernetes",
+		Name:               "random-e2e-custom-backend-kubernetes",
+		YamlPath:           testConfigurationsInlineCredentialsCustomBackendKubernetes,
+		TFConfigMapName:    "tf-random-e2e-custom-backend-kubernetes",
+		OutputsSecretName:  "random-conn-custom-backend-kubernetes",
+		VariableSecretName: "variable-random-e2e-custom-backend-kubernetes",
 	}
 	secretName, secretKey := "kubeconfig", "config"
 	beforeApply := func(ctx *TestContext) {
