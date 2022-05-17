@@ -81,6 +81,8 @@ func testBase(t *testing.T, configuration ConfigurationAttr, injector Injector, 
 		ClientSet:              clientSet,
 	}
 
+	defer invoke(injector.CleanUp, testCtx)
+
 	klog.Info("1. Applying Configuration")
 	invoke(injector.BeforeApplyConfiguration, testCtx)
 	pwd, _ := os.Getwd()
@@ -183,8 +185,6 @@ continueCheck:
 
 	_, err = clientSet.CoreV1().ConfigMaps("default").Get(ctx, configuration.TFConfigMapName, v1.GetOptions{})
 	assert.Equal(t, kerrors.IsNotFound(err), true)
-
-	invoke(injector.CleanUp, testCtx)
 
 	klog.Infof("%s test ends……", configuration.Name)
 }
