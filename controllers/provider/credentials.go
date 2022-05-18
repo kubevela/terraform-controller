@@ -35,6 +35,7 @@ const (
 	ucloud  CloudProvider = "ucloud"
 	custom  CloudProvider = "custom"
 	baidu   CloudProvider = "baidu"
+	huawei  CloudProvider = "huawei"
 )
 
 const (
@@ -107,6 +108,8 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, provid
 			return getCustomCredentials(secretData, name, namespace)
 		case string(baidu):
 			return getBaiduCloudCredentials(secretData, name, namespace, region)
+		case string(huawei):
+			return getHuaWeiCloudCredentials(secretData, name, namespace, region)
 		default:
 			errMsg := "unsupported provider"
 			klog.InfoS(errMsg, "Provider", provider.Spec.Provider)
