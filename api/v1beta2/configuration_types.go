@@ -36,10 +36,10 @@ type ConfigurationSpec struct {
 	Variable *runtime.RawExtension `json:"variable,omitempty"`
 
 	// Backend describes the Terraform backend configuration.
-	// This field is needed if the users use a git repo to provide the hcl files and
+	// This field is needed if the users use a git repo to provide the hcl files or
 	// want to use their custom Terraform backend (instead of the default kubernetes backend type).
-	// Notice: the content in this field will **override** the backend configuration in the inline hcl code or
-	// in the hcl files in the git repo.
+	// Notice: This field may cause two backend blocks in the final Terraform module and make the executor job failed.
+	// So, please make sure that there are no backend configurations in your inline hcl code or the git repo.
 	Backend *Backend `json:"backend,omitempty"`
 
 	// Path is the sub-directory of remote git repository.
