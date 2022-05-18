@@ -1,0 +1,13 @@
+apiVersion: terraform.core.oam.dev/v1beta1
+kind: Provider
+metadata:
+  name: default
+spec:
+  provider: huawei
+  region: cn-north-4
+  credentials:
+    source: Secret
+    secretRef:
+      namespace: vela-system
+      name: huawei-account-creds
+      key: credentials
