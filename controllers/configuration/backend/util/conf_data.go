@@ -33,7 +33,7 @@ func (d ConfData) GetOk(key string) (interface{}, bool) {
 func (d ConfData) Get(key string) interface{} {
 	x, ok := d[key]
 	if !ok || x == nil {
-		klog.Errorf("fetch %s from the custom backend conf error", key)
+		klog.Errorf("fetch %s from the custom backend conf (%#v) error", key, d)
 	}
 	return x
 }
