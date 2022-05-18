@@ -1,7 +1,7 @@
 apiVersion: terraform.core.oam.dev/v1beta1
 kind: Configuration
 metadata:
-  name: tencent-rds-mysql-hcl
+  name: huawei-vpc-hcl
 spec:
   hcl: |
     terraform {

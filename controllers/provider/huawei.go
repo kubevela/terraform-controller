@@ -12,7 +12,7 @@ const (
 	envHuaWeiCloudSecretKey = "HW_SECRET_KEY"
 )
 
-// HuaWeiCloudCredentials are credentials for Tencent Cloud
+// HuaWeiCloudCredentials are credentials for Huawei Cloud
 type HuaWeiCloudCredentials struct {
 	AccessKey string `yaml:"accessKey"`
 	SecretKey string `yaml:"secretKey"`
