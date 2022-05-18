@@ -1,0 +1,20 @@
+apiVersion: terraform.core.oam.dev/v1beta2
+kind: Configuration
+metadata:
+  name: random-e2e-force-delete
+spec:
+  hcl: |
+    resource "random_id" "server" {
+      byte_length = 8
+    }
+    
+    output "random_id" {
+      value = random_id.server.hex
+
+  inlineCredentials: true
+
+  forceDelete: true
+
+  writeConnectionSecretToRef:
+    name: random-conn
+    namespace: default

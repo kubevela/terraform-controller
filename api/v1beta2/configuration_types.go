@@ -73,6 +73,10 @@ type BaseConfigurationSpec struct {
 
 	// Region is cloud provider's region. It will override the region in the region field of ProviderReference
 	Region string `json:"customRegion,omitempty"`
+
+	// ForceDelete will force delete Configuration no matter which state it is or whether it has provisioned some resources
+	// It will help delete Configuration in unexpected cases.
+	ForceDelete *bool `json:"forceDelete,omitempty"`
 }
 
 // ConfigurationStatus defines the observed state of Configuration

@@ -1125,6 +1125,19 @@ func TestTerraformDestroy(t *testing.T) {
 		VariableSecretName: "c",
 	}
 
+	r5 := &ConfigurationReconciler{}
+	forceDeleteConfig5 := &v1beta2.Configuration{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "force-delete-config-5",
+		},
+		Spec: v1beta2.ConfigurationSpec{},
+	}
+	var forceDelete = true
+	forceDeleteConfig5.Spec.ForceDelete = &forceDelete
+	k8sClient5 := fake.NewClientBuilder().WithScheme(s).WithObjects(forceDeleteConfig5).Build()
+	r5.Client = k8sClient5
+
 	type args struct {
 		r             *ConfigurationReconciler
 		namespace     string
@@ -1176,6 +1189,14 @@ func TestTerraformDestroy(t *testing.T) {
 				meta:          meta4,
 			},
 			want: want{},
+		},
+		{
+			name: "force delete configuration",
+			args: args{
+				r:             r5,
+				configuration: forceDeleteConfig5,
+				meta:          &TFConfigurationMeta{},
+			},
 		},
 	}
 	for _, tc := range testcases {
@@ -1331,8 +1352,6 @@ func TestGetTFOutputs(t *testing.T) {
 	k8sClient1 := fake.NewClientBuilder().Build()
 	meta1 := &TFConfigurationMeta{}
 
-	//scheme := runtime.NewScheme()
-	//v1beta2.AddToScheme(scheme)
 	secret2 := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "a",
