@@ -319,28 +319,6 @@ terraform {
 			},
 		},
 		{
-			name: "backend is not nil, use explicit backend conf, unsupported backendType",
-			args: args{
-				configuration: &v1beta2.Configuration{
-					ObjectMeta: metav1.ObjectMeta{Namespace: "a"},
-					Spec: v1beta2.ConfigurationSpec{
-						Backend: &v1beta2.Backend{
-							BackendType: "someType",
-							S3: &v1beta2.S3BackendConf{
-								Bucket: "my_bucket",
-								Key:    "my_key",
-								Region: "my_region",
-							},
-						},
-					},
-				},
-				terraformBackendNamespace: "vela-system",
-			},
-			want: want{
-				errMsg: "someType is unsupported backendType",
-			},
-		},
-		{
 			name: "backend is not nil, use explicit backend conf, invalid backendType",
 			args: args{
 				configuration: &v1beta2.Configuration{

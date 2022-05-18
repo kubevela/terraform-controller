@@ -106,6 +106,10 @@ type Property struct {
 	Value string `json:"value,omitempty"`
 }
 
+// BackendType is an enum type for the Terraform backend types
+// +kubebuilder:validation:Enum=remote;artifactory;azurerm;consul;cos;etcd;etcdv3;gcs;http;kubernetes;manta;oso;pg;s3;swift
+type BackendType string
+
 // Backend describes the Terraform backend configuration
 type Backend struct {
 	// SecretSuffix used when creating secrets. Secrets will be named in the format: tfstate-{workspace}-{secretSuffix}
@@ -117,7 +121,7 @@ type Backend struct {
 	Inline string `json:"inline,omitempty"`
 
 	// BackendType indicates which backend type to use. This field is needed for custom backend configuration.
-	BackendType string `json:"backend_type,omitempty"`
+	BackendType BackendType `json:"backend_type,omitempty"`
 
 	// Remote is needed for the Terraform `remote` backend type.
 	Remote *RemoteBackendConf `json:"remote,omitempty"`

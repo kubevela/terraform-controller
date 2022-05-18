@@ -78,13 +78,13 @@ func GetStateJSON(ctx context.Context, k8sClient client.Client, namespace string
 	if err != nil {
 		return nil, fmt.Errorf("can not convert the backen hcl code to json format: %w", err)
 	}
-	confData := confValue["terraform"].([]interface{})[0].(map[string]interface{})["backend"].(map[string]interface{})[conf.BackendType].([]interface{})[0].(map[string]interface{})
+	confData := confValue["terraform"].([]interface{})[0].(map[string]interface{})["backend"].(map[string]interface{})[string(conf.BackendType)].([]interface{})[0].(map[string]interface{})
 
 	// 4. build client
 	pwd, _ := os.Getwd()
 	_ = os.Chdir(tmpDir)
 	defer func() { _ = os.Chdir(pwd) }()
-	f := clientInitFuncMap[conf.BackendType]
+	f := clientInitFuncMap[string(conf.BackendType)]
 	if f == nil {
 		return nil, fmt.Errorf("getting state json from the %s backend is not supported", conf.BackendType)
 	}

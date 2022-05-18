@@ -35,7 +35,7 @@ import (
 	"k8s.io/klog/v2"
 )
 
-var backendSecretMap = map[string]map[string]string{
+var backendSecretMap = map[v1beta2.BackendType]map[string]string{
 	"azurerm": {
 		"client_certificate_path": "ClientCertificateSecret",
 	},
@@ -69,11 +69,6 @@ var backendSecretMap = map[string]map[string]string{
 	},
 }
 
-var backendTypes = []string{
-	"remote", "artifactory", "azurerm", "consul", "cos", "etcd", "etcdv3", "gcs", "http", "kubernetes",
-	"manta", "oss", "pg", "s3", "swift",
-}
-
 var backendTF = `
 terraform {
   backend "kubernetes" {
@@ -86,7 +81,7 @@ terraform {
 
 // Conf contains all the backend information in the meta
 type Conf struct {
-	BackendType string
+	BackendType v1beta2.BackendType
 	HCL         string
 	// UseCustom indicates whether to use custom kubernetes backend
 	UseCustom bool
@@ -130,16 +125,7 @@ func renderTemplate(backend *v1beta2.Backend, namespace string) (string, error) 
 	return wr.String(), nil
 }
 
-func checkBackendTypeValid(backendType string) bool {
-	for _, v := range backendTypes {
-		if v == backendType {
-			return true
-		}
-	}
-	return false
-}
-
-// ParseConfigurationBackend returns backend hcl string, backend type, useCustom, secretRef list and error
+// ParseConfigurationBackend parses backend Conf from the v1beta2.Configuration
 func ParseConfigurationBackend(configuration *v1beta2.Configuration, terraformBackendNamespace string) (*Conf, error) {
 	backend := configuration.Spec.Backend
 
@@ -161,19 +147,14 @@ func ParseConfigurationBackend(configuration *v1beta2.Configuration, terraformBa
 		// In this case, use the explicit custom backend
 
 		// first, check if is valid custom backend
-
-		backendType := strings.ToLower(backend.BackendType)
-		// check if backendType is valid
-		if !checkBackendTypeValid(backendType) {
-			return nil, fmt.Errorf("%s is unsupported backendType", backend.BackendType)
-		}
+		backendType := backend.BackendType
 		// fetch backendConfValue using reflection
 		backendStructValue := reflect.ValueOf(backend)
 		if backendStructValue.Kind() == reflect.Ptr {
 			backendStructValue = backendStructValue.Elem()
 		}
 		backendField := backendStructValue.FieldByNameFunc(func(name string) bool {
-			return strings.EqualFold(name, backendType)
+			return strings.EqualFold(name, string(backendType))
 		})
 		if backendField.IsNil() {
 			return nil, fmt.Errorf("there is no configuration for backendType %s", backend.BackendType)
@@ -220,7 +201,7 @@ func ParseConfigurationBackend(configuration *v1beta2.Configuration, terraformBa
 
 }
 
-func handleInlineBackendHCL(code string) (string, string, error) {
+func handleInlineBackendHCL(code string) (string, v1beta2.BackendType, error) {
 	type BackendConfig struct {
 		Name   string   `hcl:"name,label"`
 		Remain hcl.Body `hcl:",remain"`
@@ -266,7 +247,7 @@ func handleInlineBackendHCL(code string) (string, string, error) {
 		return "", "", fmt.Errorf("backendType \"local\" is not supported")
 	}
 	// check if there is inappropriate fields in the backendConfig
-	checkList := backendSecretMap[strings.ToLower(backendConfig.Name)]
+	checkList := backendSecretMap[v1beta2.BackendType(strings.ToLower(backendConfig.Name))]
 	attrMap, _ := backendConfig.Remain.JustAttributes()
 	for field := range checkList {
 		if _, ok := attrMap[field]; ok {
@@ -279,12 +260,12 @@ func handleInlineBackendHCL(code string) (string, string, error) {
 terraform {
 %s
 }
-`, code), backendConfig.Name, nil
+`, code), v1beta2.BackendType(backendConfig.Name), nil
 	}
-	return code, backendConfig.Name, nil
+	return code, v1beta2.BackendType(backendConfig.Name), nil
 }
 
-func handleExplicitBackend(backendConf interface{}, backendType string) (string, string, []*ConfSecretSelector) {
+func handleExplicitBackend(backendConf interface{}, backendType v1beta2.BackendType) (string, v1beta2.BackendType, []*ConfSecretSelector) {
 	hclFile := hclwrite.NewEmptyFile()
 	gohcl.EncodeIntoBody(backendConf, hclFile.Body())
 	backendHCLBlock := hclFile.Body()
