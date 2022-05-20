@@ -43,11 +43,6 @@ type ConfigurationSpec struct {
 	// Path is the sub-directory of remote git repository.
 	Path string `json:"path,omitempty"`
 
-	BaseConfigurationSpec `json:",inline"`
-}
-
-// BaseConfigurationSpec defines the common fields of a ConfigurationSpec
-type BaseConfigurationSpec struct {
 	// WriteConnectionSecretToReference specifies the namespace and name of a
 	// Secret to which any connection details for this managed resource should
 	// be written. Connection details frequently include the endpoint, username,

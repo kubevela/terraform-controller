@@ -1404,11 +1404,9 @@ func TestGetTFOutputs(t *testing.T) {
 	k8sClient4 := fake.NewClientBuilder().WithObjects(secret4).Build()
 	configuration4 := v1beta2.Configuration{
 		Spec: v1beta2.ConfigurationSpec{
-			BaseConfigurationSpec: v1beta2.BaseConfigurationSpec{
-				WriteConnectionSecretToReference: &crossplane.SecretReference{
-					Name:      "connection-secret-c",
-					Namespace: "default",
-				},
+			WriteConnectionSecretToReference: &crossplane.SecretReference{
+				Name:      "connection-secret-c",
+				Namespace: "default",
 			},
 		},
 	}
@@ -1447,11 +1445,9 @@ func TestGetTFOutputs(t *testing.T) {
 			Name: "configuration5",
 		},
 		Spec: v1beta2.ConfigurationSpec{
-			BaseConfigurationSpec: v1beta2.BaseConfigurationSpec{
-				WriteConnectionSecretToReference: &crossplane.SecretReference{
-					Name:      "connection-secret-d",
-					Namespace: "default",
-				},
+			WriteConnectionSecretToReference: &crossplane.SecretReference{
+				Name:      "connection-secret-d",
+				Namespace: "default",
 			},
 		},
 	}
@@ -1492,11 +1488,9 @@ func TestGetTFOutputs(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: v1beta2.ConfigurationSpec{
-			BaseConfigurationSpec: v1beta2.BaseConfigurationSpec{
-				WriteConnectionSecretToReference: &crossplane.SecretReference{
-					Name:      "connection-secret-e",
-					Namespace: "default",
-				},
+			WriteConnectionSecretToReference: &crossplane.SecretReference{
+				Name:      "connection-secret-e",
+				Namespace: "default",
 			},
 		},
 	}
@@ -1539,11 +1533,9 @@ func TestGetTFOutputs(t *testing.T) {
 			Namespace: "b",
 		},
 		Spec: v1beta2.ConfigurationSpec{
-			BaseConfigurationSpec: v1beta2.BaseConfigurationSpec{
-				WriteConnectionSecretToReference: &crossplane.SecretReference{
-					Name:      "connection-secret-e",
-					Namespace: "default",
-				},
+			WriteConnectionSecretToReference: &crossplane.SecretReference{
+				Name:      "connection-secret-e",
+				Namespace: "default",
 			},
 		},
 	}
@@ -1581,11 +1573,9 @@ func TestGetTFOutputs(t *testing.T) {
 			Name: "configuration5",
 		},
 		Spec: v1beta2.ConfigurationSpec{
-			BaseConfigurationSpec: v1beta2.BaseConfigurationSpec{
-				WriteConnectionSecretToReference: &crossplane.SecretReference{
-					Name:      "connection-secret-d",
-					Namespace: "default",
-				},
+			WriteConnectionSecretToReference: &crossplane.SecretReference{
+				Name:      "connection-secret-d",
+				Namespace: "default",
 			},
 		},
 	}
