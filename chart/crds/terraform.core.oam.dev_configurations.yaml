@@ -278,7 +278,7 @@ spec:
                     - key
                     - storage_account_name
                     type: object
-                  backend_type:
+                  backendType:
                     description: BackendType indicates which backend type to use.
                       This field is needed for custom backend configuration.
                     enum:

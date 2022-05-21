@@ -13,7 +13,7 @@ spec:
     }
 
   backend:
-    backend_type: kubernetes
+    backendType: kubernetes
     kubernetes:
       secret_suffix: custom-backend-kubernetes
       config_secret:

@@ -172,7 +172,7 @@ func ParseConfigurationBackend(configuration *v1beta2.Configuration, terraformBa
 
 	case backend != nil && len(backend.BackendType) == 0:
 		// In this case, use the default k8s backend
-		klog.Warningf("the spec.backend.backend_type of Configuration{Namespace: %s, Name: %s} is empty, use the default kubernetes backend", configuration.Namespace, configuration.Name)
+		klog.Warningf("the spec.backend.backendType of Configuration{Namespace: %s, Name: %s} is empty, use the default kubernetes backend", configuration.Namespace, configuration.Name)
 		fallthrough // down to default
 
 	default:
