@@ -36,37 +36,11 @@ import (
 )
 
 var backendSecretMap = map[v1beta2.BackendType]map[string]string{
-	"azurerm": {
-		"client_certificate_path": "ClientCertificateSecret",
-	},
-	"consul": {
-		"ca_file":   "CAFileSecret",
-		"cert_file": "CertFileSecret",
-		"key_file":  "KeyFileSecret",
-	},
-	"etcdv3": {
-		"cacert_path": "CacertSecret",
-		"cert_path":   "CertSecret",
-		"key_path":    "KeySecret",
-	},
-	"gcs": {
-		"credentials": "CredentialsSecret",
-	},
 	"kubernetes": {
 		"config_path":  "ConfigSecret",
 		"config_paths": "ConfigSecrets",
 	},
-	"oss": {
-		"shared_credentials_file": "SharedCredentialsSecret",
-	},
-	"s3": {
-		"shared_credentials_file": "SharedCredentialsSecret",
-	},
-	"swift": {
-		"cacert_file": "CacertSecret",
-		"cert":        "CertSecret",
-		"key":         "KeySecret",
-	},
+	// add more backend types
 }
 
 var backendTF = `

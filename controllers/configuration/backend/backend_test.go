@@ -241,12 +241,10 @@ terraform {
 				configuration: &v1beta2.Configuration{
 					Spec: v1beta2.ConfigurationSpec{
 						Backend: &v1beta2.Backend{
-							BackendType: "s3",
-							S3: &v1beta2.S3BackendConf{
-								Bucket: "my_bucket",
-								Key:    "my_key",
-								Region: "my_region",
-								SharedCredentialsSecret: &v1beta2.CurrentNSSecretSelector{
+							BackendType: "kubernetes",
+							Kubernetes: &v1beta2.KubernetesBackendConf{
+								SecretSuffix: "suffix",
+								ConfigSecret: &v1beta2.CurrentNSSecretSelector{
 									Name: "abc",
 									Key:  "d",
 								},
@@ -259,15 +257,13 @@ terraform {
 			want: want{
 				errMsg: "",
 				backendConf: &Conf{
-					BackendType: "s3",
+					BackendType: "kubernetes",
 					HCL: `
 terraform {
-	backend "s3" {
-bucket = "my_bucket"
-key    = "my_key"
-region = "my_region"
+	backend "kubernetes" {
+secret_suffix = "suffix"
 
-shared_credentials_file = "backend-conf-secret/abc/d"
+config_path = "backend-conf-secret/abc/d"
 
 	}
 }
@@ -290,10 +286,8 @@ shared_credentials_file = "backend-conf-secret/abc/d"
 					ObjectMeta: metav1.ObjectMeta{Namespace: "a"},
 					Spec: v1beta2.ConfigurationSpec{
 						Backend: &v1beta2.Backend{
-							S3: &v1beta2.S3BackendConf{
-								Bucket: "my_bucket",
-								Key:    "my_key",
-								Region: "my_region",
+							Kubernetes: &v1beta2.KubernetesBackendConf{
+								SecretSuffix: "suffix",
 							},
 						},
 					},
@@ -326,11 +320,6 @@ terraform {
 					Spec: v1beta2.ConfigurationSpec{
 						Backend: &v1beta2.Backend{
 							BackendType: "kubernetes",
-							S3: &v1beta2.S3BackendConf{
-								Bucket: "my_bucket",
-								Key:    "my_key",
-								Region: "my_region",
-							},
 						},
 					},
 				},
