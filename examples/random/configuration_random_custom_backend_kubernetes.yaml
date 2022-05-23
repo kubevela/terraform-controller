@@ -16,9 +16,6 @@ spec:
     backendType: kubernetes
     kubernetes:
       secret_suffix: custom-backend-kubernetes
-      config_secret:
-        name: kubeconfig
-        key: config
 
   inlineCredentials: true
 

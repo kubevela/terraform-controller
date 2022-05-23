@@ -228,72 +228,9 @@ spec:
                     description: Kubernetes is needed for the Terraform `kubernetes`
                       backend type.
                     properties:
-                      client_certificate:
-                        type: string
-                      client_key:
-                        type: string
-                      cluster_ca_certificate:
-                        type: string
-                      config_context:
-                        type: string
-                      config_context_auth_info:
-                        type: string
-                      config_context_cluster:
-                        type: string
-                      config_secret:
-                        description: ConfigSecret is a reference to a secret containing
-                          the kubeconfig file. It's used to replace the `config_path`
-                          in native hcl backend configuration as we cannot use local
-                          file paths in the kubernetes cluster.
-                        properties:
-                          key:
-                            description: Key is the key selected in the secret
-                            type: string
-                          name:
-                            description: Name is the name of the secret
-                            type: string
-                        required:
-                        - key
-                        - name
-                        type: object
-                      exec:
-                        description: KubernetesBackendConfExec defines the `Exec`
-                          struct in the KubernetesBackendConf
-                        properties:
-                          api_version:
-                            type: string
-                          args:
-                            items:
-                              type: string
-                            type: array
-                          command:
-                            type: string
-                          env:
-                            additionalProperties:
-                              type: string
-                            type: object
-                        type: object
-                      host:
-                        type: string
-                      in_cluster_config:
-                        type: boolean
-                      insecure:
-                        type: boolean
-                      labels:
-                        additionalProperties:
-                          type: string
-                        type: object
-                      load_config_file:
-                        type: boolean
                       namespace:
                         type: string
-                      password:
-                        type: string
                       secret_suffix:
-                        type: string
-                      token:
-                        type: string
-                      username:
                         type: string
                     required:
                     - secret_suffix

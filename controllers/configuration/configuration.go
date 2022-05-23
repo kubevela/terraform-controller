@@ -51,8 +51,8 @@ func ValidConfigurationObject(configuration *v1beta2.Configuration) (types.Confi
 }
 
 // RenderConfiguration will compose the Terraform configuration with hcl/json and backend
-func RenderConfiguration(configuration *v1beta2.Configuration, terraformBackendNamespace string, configurationType types.ConfigurationType) (string, *backend.Conf, error) {
-	backendConf, err := backend.ParseConfigurationBackend(configuration, terraformBackendNamespace)
+func RenderConfiguration(configuration *v1beta2.Configuration, k8sClient client.Client, configurationType types.ConfigurationType) (string, backend.Backend, error) {
+	backendInterface, err := backend.ParseConfigurationBackend(configuration, k8sClient)
 	if err != nil {
 		return "", nil, errors.Wrap(err, "failed to prepare Terraform backend configuration")
 	}
@@ -60,10 +60,10 @@ func RenderConfiguration(configuration *v1beta2.Configuration, terraformBackendN
 	switch configurationType {
 	case types.ConfigurationHCL:
 		completedConfiguration := configuration.Spec.HCL
-		completedConfiguration += "\n" + backendConf.HCL
-		return completedConfiguration, backendConf, nil
+		completedConfiguration += "\n" + backendInterface.HCL()
+		return completedConfiguration, backendInterface, nil
 	case types.ConfigurationRemote:
-		return backendConf.HCL, backendConf, nil
+		return backendInterface.HCL(), backendInterface, nil
 	default:
 		return "", nil, errors.New("Unsupported Configuration Type")
 	}

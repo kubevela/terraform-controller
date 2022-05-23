@@ -17,13 +17,11 @@ limitations under the License.
 package backend
 
 import (
-	"bytes"
+	"context"
 	"fmt"
 	"reflect"
 	"strings"
-	"text/template"
 
-	sprig "github.com/go-task/slim-sprig"
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2/hclparse"
@@ -32,92 +30,87 @@ import (
 	"github.com/pkg/errors"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/gocty"
-	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-var backendSecretMap = map[v1beta2.BackendType]map[string]string{
+var backendInitFuncMap = map[v1beta2.BackendType]*backendInitFunc{
 	"kubernetes": {
-		"config_path":  "ConfigSecret",
-		"config_paths": "ConfigSecrets",
+		InitFuncFromHCL:  newK8SBackendFromHCL,
+		InitFuncFromConf: newK8SBackendFromConf,
 	},
-	// add more backend types
 }
 
-var backendTF = `
-terraform {
-  backend "kubernetes" {
-    secret_suffix     = "{{.SecretSuffix}}"
-    in_cluster_config = {{.InClusterConfig}}
-    namespace         = "{{.Namespace}}"
-  }
-}
-`
-
-// Conf contains all the backend information in the meta
-type Conf struct {
-	BackendType v1beta2.BackendType
-	HCL         string
-	// UseCustom indicates whether to use custom kubernetes backend
-	UseCustom bool
-	// Secrets describes which secret and which key in the secret should be mounted to the executor pod
-	Secrets []*ConfSecretSelector
+type Backend interface {
+	HCL() string
+	GetTFStateJSON(ctx context.Context) ([]byte, error)
+	CleanUp(ctx context.Context) error
 }
 
-// ConfSecretSelector describes which secret should be mounted to the executor pod
-type ConfSecretSelector struct {
-	// Name is the name of the secret which will be mounted to a pod when running the job
-	Name string
-	// Path is a relative path, indicates which path the secret should be mounted to
-	Path string
-	// Keys are the keys that contains the file content in secret
-	Keys []string
+type backendInitFunc struct {
+	InitFuncFromHCL  func(string, *ParsedBackendConfig, client.Client) (Backend, error)
+	InitFuncFromConf func(string, interface{}, client.Client) (Backend, error)
 }
 
-type backendVars struct {
-	SecretSuffix    string
-	InClusterConfig bool
-	Namespace       string
+type ParsedBackendConfig struct {
+	Name   string   `hcl:"name,label"`
+	Remain hcl.Body `hcl:",remain"`
 }
 
-// renderTemplate renders Backend template
-func renderTemplate(backend *v1beta2.Backend, namespace string) (string, error) {
-	tmpl, err := template.New("backend").Funcs(template.FuncMap(sprig.FuncMap())).Parse(backendTF)
+func (conf ParsedBackendConfig) getAttrValue(key string) (*cty.Value, error) {
+	attrs, diags := conf.Remain.JustAttributes()
+	if diags.HasErrors() {
+		return nil, diags
+	}
+	attr := attrs[key]
+	if attr == nil {
+		return nil, fmt.Errorf("cannot find attr %s", key)
+	}
+	v, diags := attr.Expr.Value(nil)
+	if diags.HasErrors() {
+		return nil, diags
+	}
+	return &v, nil
+}
+
+func (conf ParsedBackendConfig) getAttrString(key string) (string, error) {
+	v, err := conf.getAttrValue(key)
 	if err != nil {
 		return "", err
 	}
-
-	templateVars := backendVars{
-		SecretSuffix:    backend.SecretSuffix,
-		InClusterConfig: backend.InClusterConfig,
-		Namespace:       namespace,
-	}
-	var wr bytes.Buffer
-	err = tmpl.Execute(&wr, templateVars)
-	if err != nil {
-		return "", err
-	}
-	return wr.String(), nil
+	result := ""
+	err = gocty.FromCtyValue(*v, &result)
+	return result, err
 }
 
 // ParseConfigurationBackend parses backend Conf from the v1beta2.Configuration
-func ParseConfigurationBackend(configuration *v1beta2.Configuration, terraformBackendNamespace string) (*Conf, error) {
+func ParseConfigurationBackend(configuration *v1beta2.Configuration, k8sClient client.Client) (Backend, error) {
 	backend := configuration.Spec.Backend
 
 	switch {
 
-	case backend != nil && len(backend.Inline) > 0:
-		// In this case, use the inline custom backend
-		backendTF, backendType, err := handleInlineBackendHCL(backend.Inline)
-		if err != nil {
-			return nil, err
+	case backend == nil || (backend.Inline == "" && backend.BackendType == ""):
+		// use the default k8s backend
+		if configuration.Spec.Backend != nil {
+			if configuration.Spec.Backend.SecretSuffix == "" {
+				configuration.Spec.Backend.SecretSuffix = configuration.Name
+			}
+			configuration.Spec.Backend.InClusterConfig = true
+		} else {
+			configuration.Spec.Backend = &v1beta2.Backend{
+				SecretSuffix:    configuration.Name,
+				InClusterConfig: true,
+			}
 		}
-		return &Conf{
-			BackendType: backendType,
-			HCL:         backendTF,
-			UseCustom:   true,
-		}, nil
+		return newDefaultK8SBackend(configuration.Spec.Backend.SecretSuffix, k8sClient), nil
 
-	case backend != nil && len(backend.BackendType) > 0:
+	case backend.Inline != "" && backend.BackendType != "":
+		return nil, errors.New("it's not allowed to set `spec.backend.inline` and `spec.backend.backendType` at the same time")
+
+	case backend.Inline != "":
+		// In this case, use the inline custom backend
+		return handleInlineBackendHCL(backend.Inline, k8sClient)
+
+	case backend.BackendType != "":
 		// In this case, use the explicit custom backend
 
 		// first, check if is valid custom backend
@@ -136,79 +129,42 @@ func ParseConfigurationBackend(configuration *v1beta2.Configuration, terraformBa
 		backendConfValue := backendField.Interface()
 
 		// second, handle the backendConf
-		backendHCL, backendType, secretList := handleExplicitBackend(backendConfValue, backendType)
-		return &Conf{
-			BackendType: backendType,
-			HCL:         backendHCL,
-			UseCustom:   true,
-			Secrets:     secretList,
-		}, nil
-
-	case backend != nil && len(backend.BackendType) == 0:
-		// In this case, use the default k8s backend
-		klog.Warningf("the spec.backend.backendType of Configuration{Namespace: %s, Name: %s} is empty, use the default kubernetes backend", configuration.Namespace, configuration.Name)
-		fallthrough // down to default
-
-	default:
-		// use the default k8s backend
-		if configuration.Spec.Backend != nil {
-			if configuration.Spec.Backend.SecretSuffix == "" {
-				configuration.Spec.Backend.SecretSuffix = configuration.Name
-			}
-			configuration.Spec.Backend.InClusterConfig = true
-		} else {
-			configuration.Spec.Backend = &v1beta2.Backend{
-				SecretSuffix:    configuration.Name,
-				InClusterConfig: true,
-			}
-		}
-		backendTF, err := renderTemplate(configuration.Spec.Backend, terraformBackendNamespace)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to prepare Terraform backend configuration")
-		}
-		return &Conf{
-			BackendType: "kubernetes",
-			HCL:         backendTF,
-			UseCustom:   false,
-		}, nil
+		return handleExplicitBackend(backendConfValue, backendType, k8sClient)
 	}
 
+	return nil, nil
 }
 
-func handleInlineBackendHCL(code string) (string, v1beta2.BackendType, error) {
-	type BackendConfig struct {
-		Name   string   `hcl:"name,label"`
-		Remain hcl.Body `hcl:",remain"`
-	}
+func handleInlineBackendHCL(code string, k8sClient client.Client) (Backend, error) {
 
 	type BackendConfigWrap struct {
-		Backend BackendConfig `hcl:"backend,block"`
+		Backend ParsedBackendConfig `hcl:"backend,block"`
 	}
 
 	type TerraformConfig struct {
 		Remain    interface{} `hcl:",remain"`
 		Terraform struct {
-			Remain  interface{}   `hcl:",remain"`
-			Backend BackendConfig `hcl:"backend,block"`
+			Remain  interface{}         `hcl:",remain"`
+			Backend ParsedBackendConfig `hcl:"backend,block"`
 		} `hcl:"terraform,block"`
 	}
 
 	hclFile, diags := hclparse.NewParser().ParseHCL([]byte(code), "backend")
 	if diags.HasErrors() {
-		return "", "", fmt.Errorf("there are syntax errors in the inline backend hcl code: %w", diags)
+		return nil, fmt.Errorf("there are syntax errors in the inline backend hcl code: %w", diags)
 	}
 
 	// try to parse hclFile to Config or BackendConfig
 	config := &TerraformConfig{}
 	// nolint:staticcheck
-	backendConfig := &BackendConfig{}
+	backendConfig := &ParsedBackendConfig{}
 	shouldWrap := false
 	diags = gohcl.DecodeBody(hclFile.Body, nil, config)
 	if diags.HasErrors() || config.Terraform.Backend.Name == "" {
 		backendConfigWrap := &BackendConfigWrap{}
 		diags = gohcl.DecodeBody(hclFile.Body, nil, backendConfigWrap)
 		if diags.HasErrors() || backendConfigWrap.Backend.Name == "" {
-			return "", "", fmt.Errorf("the inline backend hcl code is not valid Terraform backend configuration: %w", diags)
+			return nil, fmt.Errorf("the inline backend hcl code is not valid Terraform backend configuration: %w", diags)
 		}
 		shouldWrap = true
 		backendConfig = &backendConfigWrap.Backend
@@ -216,68 +172,23 @@ func handleInlineBackendHCL(code string) (string, v1beta2.BackendType, error) {
 		backendConfig = &config.Terraform.Backend
 	}
 
-	// check whether the backendType is valid
-	if strings.EqualFold(backendConfig.Name, "local") {
-		return "", "", fmt.Errorf("backendType \"local\" is not supported")
-	}
-	// check if there is inappropriate fields in the backendConfig
-	checkList := backendSecretMap[v1beta2.BackendType(strings.ToLower(backendConfig.Name))]
-	attrMap, _ := backendConfig.Remain.JustAttributes()
-	for field := range checkList {
-		if _, ok := attrMap[field]; ok {
-			return "", "", fmt.Errorf("%s is not supported in the inline backend hcl code as we cannot use local file paths in the kubernetes cluster", field)
-		}
-	}
-
 	if shouldWrap {
-		return fmt.Sprintf(`
+		code = fmt.Sprintf(`
 terraform {
 %s
 }
-`, code), v1beta2.BackendType(backendConfig.Name), nil
+`, code)
 	}
-	return code, v1beta2.BackendType(backendConfig.Name), nil
+	initFunc := backendInitFuncMap[v1beta2.BackendType(backendConfig.Name)]
+	if initFunc == nil || initFunc.InitFuncFromHCL == nil {
+		return nil, fmt.Errorf("backend type (%s) is not supported", backendConfig.Name)
+	}
+	return initFunc.InitFuncFromHCL(code, backendConfig, k8sClient)
 }
 
-func handleExplicitBackend(backendConf interface{}, backendType v1beta2.BackendType) (string, v1beta2.BackendType, []*ConfSecretSelector) {
+func handleExplicitBackend(backendConf interface{}, backendType v1beta2.BackendType, k8sClient client.Client) (Backend, error) {
 	hclFile := hclwrite.NewEmptyFile()
 	gohcl.EncodeIntoBody(backendConf, hclFile.Body())
-	backendHCLBlock := hclFile.Body()
-
-	backendConfSecretSelectorMap := make(map[string]*ConfSecretSelector)
-	secretMap := backendSecretMap[backendType]
-	backendConfValue := reflect.ValueOf(backendConf)
-	if backendConfValue.Kind() == reflect.Ptr {
-		backendConfValue = backendConfValue.Elem()
-	}
-	for dest, src := range secretMap {
-		// get the src value (secret ref)
-		secretField := backendConfValue.FieldByName(src)
-		if !secretField.IsValid() || secretField.IsNil() {
-			continue
-		}
-		secretSelector := secretField.Interface().(*v1beta2.CurrentNSSecretSelector)
-
-		backendConfSecretSelector := backendConfSecretSelectorMap[secretSelector.Name]
-		if backendConfSecretSelector == nil {
-			backendConfSecretSelector = &ConfSecretSelector{
-				Name: secretSelector.Name,
-				Path: "backend-conf-secret/" + secretSelector.Name,
-			}
-			backendConfSecretSelectorMap[secretSelector.Name] = backendConfSecretSelector
-		}
-		backendConfSecretSelector.Keys = append(backendConfSecretSelector.Keys, secretSelector.Key)
-
-		// replace pre attr
-		_ = backendHCLBlock.RemoveBlock(backendHCLBlock.FirstMatchingBlock(src, nil))
-		ctyVal, _ := gocty.ToCtyValue(backendConfSecretSelector.Path+"/"+secretSelector.Key, cty.String)
-		_ = backendHCLBlock.SetAttributeValue(dest, ctyVal)
-	}
-
-	secretList := make([]*ConfSecretSelector, 0, len(backendConfSecretSelectorMap))
-	for _, v := range backendConfSecretSelectorMap {
-		secretList = append(secretList, v)
-	}
 
 	backendHCL := fmt.Sprintf(`
 terraform {
@@ -286,5 +197,10 @@ terraform {
 	}
 }
 `, backendType, hclFile.Bytes())
-	return backendHCL, backendType, secretList
+
+	initFunc := backendInitFuncMap[backendType]
+	if initFunc == nil || initFunc.InitFuncFromConf == nil {
+		return nil, fmt.Errorf("backend type (%s) is not supported", backendType)
+	}
+	return initFunc.InitFuncFromConf(backendHCL, backendConf, k8sClient)
 }
