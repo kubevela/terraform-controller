@@ -523,9 +523,6 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	meta.CompleteConfiguration = completeConfiguration
 	meta.BackendConf = *backendConf
 
-	if err := meta.storeTFConfiguration(ctx, k8sClient); err != nil {
-		return err
-	}
 	if configuration.ObjectMeta.DeletionTimestamp.IsZero() {
 		if err := meta.storeTFConfiguration(ctx, k8sClient); err != nil {
 			return err
