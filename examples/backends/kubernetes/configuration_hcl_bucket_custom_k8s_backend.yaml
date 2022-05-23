@@ -1,3 +1,15 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: kubeconfig
+  namespace: default
+type: Opaque
+data:
+  # put your own kubeconfig(base64 encoded) here
+  config:
+
+---
+
 apiVersion: terraform.core.oam.dev/v1beta2
 kind: Configuration
 metadata:
@@ -30,17 +42,14 @@ spec:
     kubernetes:
       secret_suffix: 'ali-oss'
       config_secret:
-        name: cke-secret
+        name: kubeconfig
         namespace: default
         key: config
 
-
   variable:
-    bucket: "terraform-controller-20220428"
+    bucket: "terraform-controller-20220523"
     acl: "private"
 
   writeConnectionSecretToRef:
     name: oss-conn
     namespace: default
-
-
