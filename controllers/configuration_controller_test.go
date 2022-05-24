@@ -5,12 +5,13 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"k8s.io/utils/pointer"
 	"os"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"k8s.io/utils/pointer"
 
 	"github.com/agiledragon/gomonkey/v2"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/sts"
@@ -124,7 +125,7 @@ func TestInitTFConfigurationMetaWithDeleteResource(t *testing.T) {
 	req.Namespace = "default"
 	req.Name = "abc"
 	testcases := []struct {
-		name string
+		name          string
 		configuration v1beta2.Configuration
 		meta          *TFConfigurationMeta
 	}{
@@ -135,13 +136,11 @@ func TestInitTFConfigurationMetaWithDeleteResource(t *testing.T) {
 					Name: "abc",
 				},
 				Spec: v1beta2.ConfigurationSpec{
-					BaseConfigurationSpec: v1beta2.BaseConfigurationSpec{
-						DeleteResource: pointer.Bool(true),
-					},
+					DeleteResource: pointer.Bool(true),
 				},
 			},
 			meta: &TFConfigurationMeta{
-				DeleteResource:    true,
+				DeleteResource: true,
 			},
 		},
 		{
@@ -151,13 +150,11 @@ func TestInitTFConfigurationMetaWithDeleteResource(t *testing.T) {
 					Name: "abc",
 				},
 				Spec: v1beta2.ConfigurationSpec{
-					BaseConfigurationSpec: v1beta2.BaseConfigurationSpec{
-						DeleteResource: pointer.Bool(false),
-					},
+					DeleteResource: pointer.Bool(false),
 				},
 			},
 			meta: &TFConfigurationMeta{
-				DeleteResource:    false,
+				DeleteResource: false,
 			},
 		},
 		{
@@ -167,13 +164,11 @@ func TestInitTFConfigurationMetaWithDeleteResource(t *testing.T) {
 					Name: "abc",
 				},
 				Spec: v1beta2.ConfigurationSpec{
-					BaseConfigurationSpec: v1beta2.BaseConfigurationSpec{
-						DeleteResource: nil,
-					},
+					DeleteResource: nil,
 				},
 			},
 			meta: &TFConfigurationMeta{
-				DeleteResource:    true,
+				DeleteResource: true,
 			},
 		},
 	}
