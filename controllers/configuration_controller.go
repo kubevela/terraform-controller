@@ -51,6 +51,7 @@ import (
 )
 
 const (
+	defaultNamespace   = "default"
 	terraformWorkspace = "default"
 	// WorkingVolumeMountPath is the mount path for working volume
 	WorkingVolumeMountPath = "/data"
@@ -260,7 +261,11 @@ func initTFConfigurationMeta(req ctrl.Request, configuration v1beta2.Configurati
 	}
 
 	meta.RemoteGit = tfcfg.ReplaceTerraformSource(configuration.Spec.Remote, githubBlockedStr)
-	meta.DeleteResource = configuration.Spec.DeleteResource
+	if configuration.Spec.DeleteResource != nil {
+		meta.DeleteResource = *configuration.Spec.DeleteResource
+	} else {
+		meta.DeleteResource = true
+	}
 	if configuration.Spec.Path == "" {
 		meta.RemoteGitPath = "."
 	} else {
@@ -911,7 +916,7 @@ func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient cli
 	name := writeConnectionSecretToReference.Name
 	ns := writeConnectionSecretToReference.Namespace
 	if ns == "" {
-		ns = "default"
+		ns = defaultNamespace
 	}
 	data := make(map[string][]byte)
 	for k, v := range outputs {
@@ -1044,7 +1049,7 @@ func deleteConnectionSecret(ctx context.Context, k8sClient client.Client, name, 
 
 	var connectionSecret v1.Secret
 	if len(ns) == 0 {
-		ns = "default"
+		ns = defaultNamespace
 	}
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: name, Namespace: ns}, &connectionSecret); err == nil {
 		return k8sClient.Delete(ctx, &connectionSecret)

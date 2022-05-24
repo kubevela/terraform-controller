@@ -64,7 +64,7 @@ type ConfigurationSpec struct {
 
 	// DeleteResource will determine whether provisioned cloud resources will be deleted when CR is deleted
 	// +kubebuilder:default:=true
-	DeleteResource bool `json:"deleteResource,omitempty"`
+	DeleteResource *bool `json:"deleteResource,omitempty"`
 
 	// Region is cloud provider's region. It will override the region in the region field of ProviderReference
 	Region string `json:"customRegion,omitempty"`
