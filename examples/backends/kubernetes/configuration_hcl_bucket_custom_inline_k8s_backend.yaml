@@ -26,10 +26,12 @@ spec:
     }
 
   backend:
-    backendType: kubernetes
-    kubernetes:
-      secret_suffix: 'ali-oss'
-      namespace: 'terraform'
+    inline: |
+      terraform {
+        backend "kubernetes" {
+          secret_suffix = "a"
+        }
+      }
 
   variable:
     bucket: "terraform-controller-20220523"

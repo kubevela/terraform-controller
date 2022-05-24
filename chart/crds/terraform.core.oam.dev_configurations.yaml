@@ -200,21 +200,7 @@ spec:
                     description: BackendType indicates which backend type to use.
                       This field is needed for custom backend configuration.
                     enum:
-                    - remote
-                    - artifactory
-                    - azurerm
-                    - consul
-                    - cos
-                    - etcd
-                    - etcdv3
-                    - gcs
-                    - http
                     - kubernetes
-                    - manta
-                    - oso
-                    - pg
-                    - s3
-                    - swift
                     type: string
                   inClusterConfig:
                     description: InClusterConfig Used to authenticate to the cluster

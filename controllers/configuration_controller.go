@@ -406,8 +406,10 @@ func (r *ConfigurationReconciler) cleanUpSubResources(ctx context.Context, names
 	}
 
 	// 6. delete Kubernetes backend secret
-	if err := meta.Backend.CleanUp(ctx); err != nil {
-		return err
+	if meta.Backend != nil {
+		if err := meta.Backend.CleanUp(ctx); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -720,17 +722,6 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 	}
 	initContainers = append(initContainers, tfPreApplyInitContainer)
 
-	containerMountPointList := []v1.VolumeMount{
-		{
-			Name:      meta.Name,
-			MountPath: WorkingVolumeMountPath,
-		},
-		{
-			Name:      InputTFConfigurationVolumeName,
-			MountPath: InputTFConfigurationVolumeMountPath,
-		},
-	}
-
 	container := v1.Container{
 		Name:            terraformContainerName,
 		Image:           meta.TerraformImage,
@@ -740,8 +731,17 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 			"-c",
 			fmt.Sprintf("terraform %s -lock=false -auto-approve", executionType),
 		},
-		VolumeMounts: containerMountPointList,
-		Env:          meta.Envs,
+		VolumeMounts: []v1.VolumeMount{
+			{
+				Name:      meta.Name,
+				MountPath: WorkingVolumeMountPath,
+			},
+			{
+				Name:      InputTFConfigurationVolumeName,
+				MountPath: InputTFConfigurationVolumeMountPath,
+			},
+		},
+		Env: meta.Envs,
 	}
 
 	if meta.ResourcesLimitsCPU != "" || meta.ResourcesLimitsMemory != "" ||
@@ -812,7 +812,7 @@ func (meta *TFConfigurationMeta) assembleExecutorVolumes() []v1.Volume {
 	workingVolume.EmptyDir = &v1.EmptyDirVolumeSource{}
 	inputTFConfigurationVolume := meta.createConfigurationVolume()
 	tfBackendVolume := meta.createTFBackendVolume()
-	return append([]v1.Volume{workingVolume, inputTFConfigurationVolume, tfBackendVolume})
+	return []v1.Volume{workingVolume, inputTFConfigurationVolume, tfBackendVolume}
 }
 
 func (meta *TFConfigurationMeta) createConfigurationVolume() v1.Volume {
@@ -859,10 +859,13 @@ type TFState struct {
 
 //nolint:funlen
 func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient client.Client, configuration v1beta2.Configuration) (map[string]v1beta2.Property, error) {
-
-	tfStateJSON, err := meta.Backend.GetTFStateJSON(ctx)
-	if err != nil {
-		return nil, err
+	var tfStateJSON []byte
+	var err error
+	if meta.Backend != nil {
+		tfStateJSON, err = meta.Backend.GetTFStateJSON(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	var tfState TFState

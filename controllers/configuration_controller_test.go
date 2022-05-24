@@ -15,6 +15,7 @@ import (
 
 	"github.com/agiledragon/gomonkey/v2"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/sts"
+	"github.com/oam-dev/terraform-controller/controllers/configuration/backend"
 	"github.com/stretchr/testify/assert"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -86,7 +87,6 @@ func TestInitTFConfigurationMeta(t *testing.T) {
 					Name:      "default",
 					Namespace: "default",
 				},
-				BackendSecretName: "tfstate-default-abc",
 			},
 		},
 		{
@@ -105,7 +105,6 @@ func TestInitTFConfigurationMeta(t *testing.T) {
 					Name:      "xxx",
 					Namespace: "default",
 				},
-				BackendSecretName: "tfstate-default-s1",
 			},
 		},
 	}
@@ -363,11 +362,11 @@ func TestConfigurationReconcile(t *testing.T) {
 
 	backendSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf(TFBackendSecret, terraformWorkspace, "a"),
+			Name:      "tfstate-default-a",
 			Namespace: "vela-system",
 		},
 		Data: map[string][]byte{
-			TerraformStateNameInSecret: stateData,
+			"tfstate": stateData,
 		},
 		Type: corev1.SecretTypeOpaque,
 	}
@@ -1188,6 +1187,11 @@ func TestTerraformDestroy(t *testing.T) {
 			Namespace: "default",
 		},
 		VariableSecretName: "c",
+		Backend: &backend.K8SBackend{
+			Client:       k8sClient4,
+			SecretSuffix: "a",
+			SecretNS:     "default",
+		},
 	}
 
 	r5 := &ConfigurationReconciler{}
@@ -1415,19 +1419,28 @@ func TestGetTFOutputs(t *testing.T) {
 
 	ctx := context.Background()
 	k8sClient1 := fake.NewClientBuilder().Build()
-	meta1 := &TFConfigurationMeta{}
+	meta1 := &TFConfigurationMeta{
+		Backend: &backend.K8SBackend{
+			Client:       k8sClient1,
+			SecretSuffix: "a",
+			SecretNS:     "default",
+		},
+	}
 
 	secret2 := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "a",
+			Name:      "tfstate-default-a",
 			Namespace: "default",
 		},
 		Type: corev1.SecretTypeOpaque,
 	}
 	k8sClient2 := fake.NewClientBuilder().WithObjects(secret2).Build()
 	meta2 := &TFConfigurationMeta{
-		BackendSecretName:         "a",
-		TerraformBackendNamespace: "default",
+		Backend: &backend.K8SBackend{
+			Client:       k8sClient2,
+			SecretSuffix: "a",
+			SecretNS:     "default",
+		},
 	}
 
 	tfStateData, _ := base64.StdEncoding.DecodeString("H4sIAAAAAAAA/4SQzarbMBCF934KoXUdPKNf+1VKCWNp5AocO8hyaSl592KlcBd3cZfnHPHpY/52QshfXI68b3IS+tuVK5dCaS+P+8ci4TbcULb94JJplZPAFte8MS18PQrKBO8Q+xk59SHa1AMA9M4YmoN3FGJ8M/azPs96yElcCkLIsG+V8sblnqOc3uXlRuvZ0GxSSuiCRUYbw2gGHRFGPxitEgJYQDQ0a68I2ChNo1cAZJ2bR20UtW8bsv55NuJRS94W2erXe5X5QQs3A/FZ4fhJaOwUgZTVMRjto1HGpSGSQuuD955hdDDPcR6NY1ZpQJ/YwagTRAvBpsi8LXn7Pa1U+ahfWHX/zWThYz9L4Otg3390r+5fAAAA//8hmcuNuQEAAA==")
@@ -1442,28 +1455,31 @@ func TestGetTFOutputs(t *testing.T) {
 
 	secret3 := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "b",
+			Name:      "tfstate-default-b",
 			Namespace: "default",
 		},
 		Type: corev1.SecretTypeOpaque,
 		Data: map[string][]byte{
-			TerraformStateNameInSecret: tfStateData,
+			"tfstate": tfStateData,
 		},
 	}
 	k8sClient3 := fake.NewClientBuilder().WithObjects(secret3).Build()
 	meta3 := &TFConfigurationMeta{
-		BackendSecretName:         "b",
-		TerraformBackendNamespace: "default",
+		Backend: &backend.K8SBackend{
+			Client:       k8sClient3,
+			SecretSuffix: "b",
+			SecretNS:     "default",
+		},
 	}
 
 	secret4 := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "c",
+			Name:      "tfstate-default-c",
 			Namespace: "default",
 		},
 		Type: corev1.SecretTypeOpaque,
 		Data: map[string][]byte{
-			TerraformStateNameInSecret: tfStateData,
+			"tfstate": tfStateData,
 		},
 	}
 	k8sClient4 := fake.NewClientBuilder().WithObjects(secret4).Build()
@@ -1476,18 +1492,21 @@ func TestGetTFOutputs(t *testing.T) {
 		},
 	}
 	meta4 := &TFConfigurationMeta{
-		BackendSecretName:         "c",
-		TerraformBackendNamespace: "default",
+		Backend: &backend.K8SBackend{
+			Client:       k8sClient4,
+			SecretSuffix: "c",
+			SecretNS:     "default",
+		},
 	}
 
 	secret5 := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "d",
+			Name:      "tfstate-default-d",
 			Namespace: "default",
 		},
 		Type: corev1.SecretTypeOpaque,
 		Data: map[string][]byte{
-			TerraformStateNameInSecret: tfStateData,
+			"tfstate": tfStateData,
 		},
 	}
 	oldConnectionSecret5 := &corev1.Secret{
@@ -1517,18 +1536,21 @@ func TestGetTFOutputs(t *testing.T) {
 		},
 	}
 	meta5 := &TFConfigurationMeta{
-		BackendSecretName:         "d",
-		TerraformBackendNamespace: "default",
+		Backend: &backend.K8SBackend{
+			Client:       k8sClient5,
+			SecretSuffix: "d",
+			SecretNS:     "default",
+		},
 	}
 
 	secret6 := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "e",
+			Name:      "tfstate-default-e",
 			Namespace: "default",
 		},
 		Type: corev1.SecretTypeOpaque,
 		Data: map[string][]byte{
-			TerraformStateNameInSecret: tfStateData,
+			"tfstate": tfStateData,
 		},
 	}
 	oldConnectionSecret6 := &corev1.Secret{
@@ -1560,20 +1582,23 @@ func TestGetTFOutputs(t *testing.T) {
 		},
 	}
 	meta6 := &TFConfigurationMeta{
-		BackendSecretName:         "e",
-		TerraformBackendNamespace: "default",
+		Backend: &backend.K8SBackend{
+			Client:       k8sClient6,
+			SecretSuffix: "e",
+			SecretNS:     "default",
+		},
 	}
 
 	namespaceA := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "a"}}
 	namespaceB := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "b"}}
 	secret7 := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "f",
+			Name:      "tfstate-default-f",
 			Namespace: "a",
 		},
 		Type: corev1.SecretTypeOpaque,
 		Data: map[string][]byte{
-			TerraformStateNameInSecret: tfStateData,
+			"tfstate": tfStateData,
 		},
 	}
 	oldConnectionSecret7 := &corev1.Secret{
@@ -1605,18 +1630,21 @@ func TestGetTFOutputs(t *testing.T) {
 		},
 	}
 	meta7 := &TFConfigurationMeta{
-		BackendSecretName:         "f",
-		TerraformBackendNamespace: "a",
+		Backend: &backend.K8SBackend{
+			Client:       k8sClient7,
+			SecretSuffix: "f",
+			SecretNS:     "a",
+		},
 	}
 
 	secret8 := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "d",
+			Name:      "tfstate-default-d",
 			Namespace: "default",
 		},
 		Type: corev1.SecretTypeOpaque,
 		Data: map[string][]byte{
-			TerraformStateNameInSecret: tfStateData,
+			"tfstate": tfStateData,
 		},
 	}
 	oldConnectionSecret8 := &corev1.Secret{
@@ -1645,8 +1673,11 @@ func TestGetTFOutputs(t *testing.T) {
 		},
 	}
 	meta8 := &TFConfigurationMeta{
-		BackendSecretName:         "d",
-		TerraformBackendNamespace: "default",
+		Backend: &backend.K8SBackend{
+			Client:       k8sClient8,
+			SecretSuffix: "d",
+			SecretNS:     "default",
+		},
 	}
 
 	testcases := map[string]struct {

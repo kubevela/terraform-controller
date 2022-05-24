@@ -16,6 +16,7 @@ spec:
     backendType: kubernetes
     kubernetes:
       secret_suffix: custom-backend-kubernetes
+      namespace: a
 
   inlineCredentials: true
 

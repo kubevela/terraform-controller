@@ -5,14 +5,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 	"time"
 
 	"golang.org/x/net/context"
 	"gotest.tools/assert"
-	v12 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -38,6 +36,7 @@ type ConfigurationAttr struct {
 	YamlPath               string
 	TFConfigMapName        string
 	BackendStateSecretName string
+	BackendStateSecretNS   string
 	OutputsSecretName      string
 	VariableSecretName     string
 }
@@ -66,10 +65,14 @@ func invoke(do DoFunc, ctx *TestContext) {
 func testBase(t *testing.T, configuration ConfigurationAttr, injector Injector, useCustomBackend bool) {
 	klog.Infof("%s test begins……", configuration.Name)
 
-	backendSecretNamespace := os.Getenv("TERRAFORM_BACKEND_NAMESPACE")
+	backendSecretNamespace := configuration.BackendStateSecretNS
 	if backendSecretNamespace == "" {
-		backendSecretNamespace = "vela-system"
+		backendSecretNamespace = os.Getenv("TERRAFORM_BACKEND_NAMESPACE")
+		if backendSecretNamespace == "" {
+			backendSecretNamespace = "vela-system"
+		}
 	}
+
 	clientSet, err := client.Init()
 	assert.NilError(t, err)
 	ctx := context.Background()
@@ -203,42 +206,23 @@ func TestInlineCredentialsConfiguration(t *testing.T) {
 
 func TestInlineCredentialsConfigurationUseCustomBackendKubernetes(t *testing.T) {
 	configuration := ConfigurationAttr{
-		Name:               "random-e2e-custom-backend-kubernetes",
-		YamlPath:           testConfigurationsInlineCredentialsCustomBackendKubernetes,
-		TFConfigMapName:    "tf-random-e2e-custom-backend-kubernetes",
-		OutputsSecretName:  "random-conn-custom-backend-kubernetes",
-		VariableSecretName: "variable-random-e2e-custom-backend-kubernetes",
+		Name:                   "random-e2e-custom-backend-kubernetes",
+		YamlPath:               testConfigurationsInlineCredentialsCustomBackendKubernetes,
+		BackendStateSecretName: "tfstate-default-custom-backend-kubernetes",
+		BackendStateSecretNS:   "a",
+		TFConfigMapName:        "tf-random-e2e-custom-backend-kubernetes",
+		OutputsSecretName:      "random-conn-custom-backend-kubernetes",
+		VariableSecretName:     "variable-random-e2e-custom-backend-kubernetes",
 	}
-	secretName, secretKey := "kubeconfig", "config"
 	beforeApply := func(ctx *TestContext) {
-		// prepare the backend conf secret
-
-		// 1. read the kubeconfig file
-		homeDir, _ := os.UserHomeDir()
-		kubeconfig, err := os.ReadFile(filepath.Join(homeDir, ".kube/config"))
+		cmd := exec.Command("bash", "-c", "kubectl create ns a")
+		err := cmd.Run()
 		assert.NilError(t, err)
-		kSvc, _ := ctx.ClientSet.CoreV1().Services("default").Get(ctx, "kubernetes", v1.GetOptions{})
-		kubeconfigStr := string(kubeconfig)
-		kubeconfigStr = regexp.MustCompile(`127.0.0.1:\d+`).ReplaceAllString(kubeconfigStr, fmt.Sprintf("%s:%d", kSvc.Spec.ClusterIP, kSvc.Spec.Ports[0].Port))
-
-		// 2. create the secret
-		secret := &v12.Secret{
-			ObjectMeta: v1.ObjectMeta{
-				Name:      secretName,
-				Namespace: "default",
-			},
-			Data: map[string][]byte{
-				secretKey: []byte(kubeconfigStr),
-			},
-		}
-		_, getErr := ctx.ClientSet.CoreV1().Secrets("default").Get(ctx, secretName, v1.GetOptions{})
-		if getErr == nil {
-			_ = ctx.ClientSet.CoreV1().Secrets("default").Delete(ctx, secretName, v1.DeleteOptions{})
-		}
-		_, _ = ctx.ClientSet.CoreV1().Secrets("default").Create(ctx, secret, v1.CreateOptions{})
 	}
 	cleanUp := func(ctx *TestContext) {
-		_ = ctx.ClientSet.CoreV1().Secrets("default").Delete(ctx, secretName, v1.DeleteOptions{})
+		cmd := exec.Command("bash", "-c", "kubectl delete ns a")
+		err := cmd.Run()
+		assert.NilError(t, err)
 	}
 	testBase(
 		t,

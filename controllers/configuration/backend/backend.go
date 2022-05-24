@@ -33,31 +33,42 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-var backendInitFuncMap = map[v1beta2.BackendType]*backendInitFunc{
+var backendInitFuncMap = map[string]*backendInitFunc{
 	"kubernetes": {
-		InitFuncFromHCL:  newK8SBackendFromHCL,
-		InitFuncFromConf: newK8SBackendFromConf,
+		initFuncFromHCL:  newK8SBackendFromInline,
+		initFuncFromConf: newK8SBackendFromExplicit,
 	},
 }
 
+// Backend is an abstraction of what all backend types can do
 type Backend interface {
+	// HCL can get the hcl code string
 	HCL() string
+
+	// GetTFStateJSON is used to get the Terraform state json from backend
 	GetTFStateJSON(ctx context.Context) ([]byte, error)
+
+	// CleanUp is used to clean up the backend when delete the configuration object
+	// For example, if the configuration use kubernetes backend, CleanUp will delete the backend secret
 	CleanUp(ctx context.Context) error
 }
 
 type backendInitFunc struct {
-	InitFuncFromHCL  func(string, *ParsedBackendConfig, client.Client) (Backend, error)
-	InitFuncFromConf func(string, interface{}, client.Client) (Backend, error)
+	initFuncFromHCL  func(*ParsedBackendConfig, client.Client) (Backend, error)
+	initFuncFromConf func(interface{}, client.Client) (Backend, error)
 }
 
+// ParsedBackendConfig is a struct parsed from the backend hcl block
 type ParsedBackendConfig struct {
-	Name   string   `hcl:"name,label"`
-	Remain hcl.Body `hcl:",remain"`
+	// Name is the label of the backend hcl block
+	// It means which backend type the configuration will use
+	Name string `hcl:"name,label"`
+	// Attrs are the key-value pairs in the backend hcl block
+	Attrs hcl.Body `hcl:",remain"`
 }
 
 func (conf ParsedBackendConfig) getAttrValue(key string) (*cty.Value, error) {
-	attrs, diags := conf.Remain.JustAttributes()
+	attrs, diags := conf.Attrs.JustAttributes()
 	if diags.HasErrors() {
 		return nil, diags
 	}
@@ -121,7 +132,7 @@ func ParseConfigurationBackend(configuration *v1beta2.Configuration, k8sClient c
 			backendStructValue = backendStructValue.Elem()
 		}
 		backendField := backendStructValue.FieldByNameFunc(func(name string) bool {
-			return strings.EqualFold(name, string(backendType))
+			return strings.EqualFold(name, backendType)
 		})
 		if backendField.IsNil() {
 			return nil, fmt.Errorf("there is no configuration for backendType %s", backend.BackendType)
@@ -158,7 +169,6 @@ func handleInlineBackendHCL(code string, k8sClient client.Client) (Backend, erro
 	config := &TerraformConfig{}
 	// nolint:staticcheck
 	backendConfig := &ParsedBackendConfig{}
-	shouldWrap := false
 	diags = gohcl.DecodeBody(hclFile.Body, nil, config)
 	if diags.HasErrors() || config.Terraform.Backend.Name == "" {
 		backendConfigWrap := &BackendConfigWrap{}
@@ -166,41 +176,25 @@ func handleInlineBackendHCL(code string, k8sClient client.Client) (Backend, erro
 		if diags.HasErrors() || backendConfigWrap.Backend.Name == "" {
 			return nil, fmt.Errorf("the inline backend hcl code is not valid Terraform backend configuration: %w", diags)
 		}
-		shouldWrap = true
 		backendConfig = &backendConfigWrap.Backend
 	} else {
 		backendConfig = &config.Terraform.Backend
 	}
 
-	if shouldWrap {
-		code = fmt.Sprintf(`
-terraform {
-%s
-}
-`, code)
-	}
-	initFunc := backendInitFuncMap[v1beta2.BackendType(backendConfig.Name)]
-	if initFunc == nil || initFunc.InitFuncFromHCL == nil {
+	initFunc := backendInitFuncMap[backendConfig.Name]
+	if initFunc == nil || initFunc.initFuncFromHCL == nil {
 		return nil, fmt.Errorf("backend type (%s) is not supported", backendConfig.Name)
 	}
-	return initFunc.InitFuncFromHCL(code, backendConfig, k8sClient)
+	return initFunc.initFuncFromHCL(backendConfig, k8sClient)
 }
 
-func handleExplicitBackend(backendConf interface{}, backendType v1beta2.BackendType, k8sClient client.Client) (Backend, error) {
+func handleExplicitBackend(backendConf interface{}, backendType string, k8sClient client.Client) (Backend, error) {
 	hclFile := hclwrite.NewEmptyFile()
 	gohcl.EncodeIntoBody(backendConf, hclFile.Body())
 
-	backendHCL := fmt.Sprintf(`
-terraform {
-	backend "%s" {
-%s
-	}
-}
-`, backendType, hclFile.Bytes())
-
 	initFunc := backendInitFuncMap[backendType]
-	if initFunc == nil || initFunc.InitFuncFromConf == nil {
+	if initFunc == nil || initFunc.initFuncFromConf == nil {
 		return nil, fmt.Errorf("backend type (%s) is not supported", backendType)
 	}
-	return initFunc.InitFuncFromConf(backendHCL, backendConf, k8sClient)
+	return initFunc.initFuncFromConf(backendConf, k8sClient)
 }
