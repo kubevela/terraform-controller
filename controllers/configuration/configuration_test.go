@@ -110,10 +110,12 @@ func TestRenderConfiguration(t *testing.T) {
 		configurationType types.ConfigurationType
 	}
 	type want struct {
-		cfg         string
-		backendConf *backend.Conf
-		errMsg      string
+		cfg              string
+		backendInterface backend.Backend
+		errMsg           string
 	}
+
+	k8sClient := fake.NewClientBuilder().Build()
 
 	testcases := []struct {
 		name string
@@ -143,9 +145,9 @@ terraform {
   }
 }
 `,
-				backendConf: &backend.Conf{
-					BackendType: "kubernetes",
-					HCL: `
+				backendInterface: &backend.K8SBackend{
+					Client: k8sClient,
+					HCLCode: `
 terraform {
   backend "kubernetes" {
     secret_suffix     = ""
@@ -154,7 +156,8 @@ terraform {
   }
 }
 `,
-					Secrets: nil,
+					SecretSuffix: "",
+					SecretNS:     "vela-system",
 				},
 			},
 		},
@@ -179,9 +182,9 @@ terraform {
   }
 }
 `,
-				backendConf: &backend.Conf{
-					BackendType: "kubernetes",
-					HCL: `
+				backendInterface: &backend.K8SBackend{
+					Client: k8sClient,
+					HCLCode: `
 terraform {
   backend "kubernetes" {
     secret_suffix     = ""
@@ -190,7 +193,8 @@ terraform {
   }
 }
 `,
-					Secrets: nil,
+					SecretSuffix: "",
+					SecretNS:     "vela-system",
 				},
 			},
 		},
@@ -210,7 +214,7 @@ terraform {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, backendConf, err := RenderConfiguration(tc.args.configuration, tc.args.ns, tc.args.configurationType)
+			got, backendConf, err := RenderConfiguration(tc.args.configuration, k8sClient, tc.args.configurationType)
 			if tc.want.errMsg != "" && !strings.Contains(err.Error(), tc.want.errMsg) {
 				t.Errorf("ValidConfigurationObject() error = %v, wantErr %v", err, tc.want.errMsg)
 				return
@@ -220,8 +224,8 @@ terraform {
 				return
 			}
 
-			if !reflect.DeepEqual(tc.want.backendConf, backendConf) {
-				t.Errorf("ValidBackendSecretList() = %#v, want %#v", backendConf, tc.want.backendConf)
+			if !reflect.DeepEqual(tc.want.backendInterface, backendConf) {
+				t.Errorf("ValidBackendSecretList() = %#v, want %#v", backendConf, tc.want.backendInterface)
 			}
 		})
 	}
