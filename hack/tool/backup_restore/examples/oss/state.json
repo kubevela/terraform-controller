@@ -1,0 +1,51 @@
+{
+  "version": 4,
+  "terraform_version": "1.1.9",
+  "serial": 4,
+  "lineage": "90bc822c-6da1-e2f8-db84-f6d9d3f33a0a",
+  "outputs": {
+    "BUCKET_NAME": {
+      "value": "restore-example.oss-cn-beijing.aliyuncs.com",
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "mode": "managed",
+      "type": "alicloud_oss_bucket",
+      "name": "bucket-acl",
+      "provider": "provider[\"registry.terraform.io/hashicorp/alicloud\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "acl": "private",
+            "bucket": "restore-example",
+            "cors_rule": [],
+            "creation_date": "2022-05-25",
+            "extranet_endpoint": "oss-cn-beijing.aliyuncs.com",
+            "force_destroy": false,
+            "id": "restore-example",
+            "intranet_endpoint": "oss-cn-beijing-internal.aliyuncs.com",
+            "lifecycle_rule": [],
+            "location": "oss-cn-beijing",
+            "logging": [],
+            "logging_isenable": null,
+            "owner": "1170540042370241",
+            "policy": "",
+            "redundancy_type": "LRS",
+            "referer_config": [],
+            "server_side_encryption_rule": [],
+            "storage_class": "Standard",
+            "tags": {},
+            "transfer_acceleration": [],
+            "versioning": [],
+            "website": []
+          },
+          "sensitive_attributes": [],
+          "private": "bnVsbA=="
+        }
+      ]
+    }
+  ]
+}

@@ -29,10 +29,11 @@ import (
 	"github.com/oam-dev/terraform-controller/api/v1beta2"
 	"github.com/oam-dev/terraform-controller/controllers/configuration/backend"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 	v1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/serializer/json"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -62,8 +63,8 @@ func newRestoreCmd(kubeFlags *genericclioptions.ConfigFlags) *cobra.Command {
 			return restore(context.Background())
 		},
 	}
-	restoreCmd.Flags().StringVar(&stateJSONPath, "state", "state.back.json", "the path of the backed up Terraform state file")
-	restoreCmd.Flags().StringVar(&configurationPath, "configuration", "configuration.back.yaml", "the path of the backed up configuration objcet yaml file")
+	restoreCmd.Flags().StringVar(&stateJSONPath, "state", "state.json", "the path of the backed up Terraform state file")
+	restoreCmd.Flags().StringVar(&configurationPath, "configuration", "configuration.yaml", "the path of the backed up configuration objcet yaml file")
 	return restoreCmd
 }
 
@@ -76,12 +77,8 @@ func buildClientSet(kubeFlags *genericclioptions.ConfigFlags) (client.Client, er
 }
 
 func restore(ctx context.Context) error {
-	configurationYamlBytes, err := os.ReadFile(configurationPath)
+	configuration, err := getConfiguration()
 	if err != nil {
-		return err
-	}
-	configuration := &v1beta2.Configuration{}
-	if err := yaml.Unmarshal(configurationYamlBytes, configuration); err != nil {
 		return err
 	}
 	backendInterface, err := backend.ParseConfigurationBackend(configuration, k8sClient)
@@ -95,12 +92,26 @@ func restore(ctx context.Context) error {
 	}
 
 	// apply the configuration yaml
-	// TODO (loheagn) use the restClient to do this
+	// FIXME (loheagn) use the restClient to do this
 	applyCmd := exec.Command("bash", "-c", fmt.Sprintf("kubectl apply -f %s", configurationPath))
 	if err := applyCmd.Run(); err != nil {
 		return err
 	}
 	return nil
+}
+
+func getConfiguration() (*v1beta2.Configuration, error) {
+	configurationYamlBytes, err := os.ReadFile(configurationPath)
+	if err != nil {
+		return nil, err
+	}
+	configuration := &v1beta2.Configuration{}
+	scheme := runtime.NewScheme()
+	serializer := json.NewSerializerWithOptions(json.DefaultMetaFactory, scheme, scheme, json.SerializerOptions{Yaml: true})
+	if _, _, err := serializer.Decode(configurationYamlBytes, nil, configuration); err != nil {
+		return nil, err
+	}
+	return configuration, nil
 }
 
 func resumeK8SBackend(ctx context.Context, backendInterface backend.Backend) error {
@@ -109,11 +120,31 @@ func resumeK8SBackend(ctx context.Context, backendInterface backend.Backend) err
 		log.Println("the configuration doesn't use the kubernetes backend, no need to restore the Terraform state")
 		return nil
 	}
+
 	tfState, err := compressedTFState()
 	if err != nil {
 		return err
 	}
+
 	var gotSecret v1.Secret
+
+	configureSecret := func() {
+		if gotSecret.Annotations == nil {
+			gotSecret.Annotations = make(map[string]string)
+		}
+		gotSecret.Annotations["encoding"] = "gzip"
+
+		if gotSecret.Labels == nil {
+			gotSecret.Labels = make(map[string]string)
+		}
+		gotSecret.Labels["app.kubernetes.io/managed-by"] = "terraform"
+		gotSecret.Labels["tfstate"] = "true"
+		gotSecret.Labels["tfstateSecretSuffix"] = k8sBackend.SecretSuffix
+		gotSecret.Labels["tfstateWorkspace"] = "default"
+
+		gotSecret.Type = v1.SecretTypeOpaque
+	}
+
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: "tfstate-default-" + k8sBackend.SecretSuffix, Namespace: k8sBackend.SecretNS}, &gotSecret); err != nil {
 		if !kerrors.IsNotFound(err) {
 			return err
@@ -121,15 +152,6 @@ func resumeK8SBackend(ctx context.Context, backendInterface backend.Backend) err
 		// is not found, create the secret
 		gotSecret = v1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
-				Annotations: map[string]string{
-					"encoding": "gzip",
-				},
-				Labels: map[string]string{
-					"app.kubernetes.io/managed-by": "terraform",
-					"tfstate":                      "true",
-					"tfstateSecretSuffix":          k8sBackend.SecretSuffix,
-					"tfstateWorkspace":             "default",
-				},
 				Name:      "tfstate-default-" + k8sBackend.SecretSuffix,
 				Namespace: k8sBackend.SecretNS,
 			},
@@ -138,17 +160,13 @@ func resumeK8SBackend(ctx context.Context, backendInterface backend.Backend) err
 				"tfstate": tfState,
 			},
 		}
+		configureSecret()
 		if err := k8sClient.Create(ctx, &gotSecret); err != nil {
 			return err
 		}
 	} else {
 		// update the secret
-		gotSecret.Annotations["encoding"] = "gzip"
-		gotSecret.Labels["app.kubernetes.io/managed-by"] = "terraform"
-		gotSecret.Labels["tfstate"] = "true"
-		gotSecret.Labels["tfstateSecretSuffix"] = k8sBackend.SecretSuffix
-		gotSecret.Labels["tfstateWorkspace"] = "default"
-		gotSecret.Type = v1.SecretTypeOpaque
+		configureSecret()
 		gotSecret.Data["tfstate"] = tfState
 		if err := k8sClient.Update(ctx, &gotSecret); err != nil {
 			return err
@@ -161,9 +179,11 @@ func compressedTFState() ([]byte, error) {
 	srcBytes, err := os.ReadFile(stateJSONPath)
 	var buf bytes.Buffer
 	writer := gzip.NewWriter(&buf)
-	defer writer.Close()
 	_, err = writer.Write(srcBytes)
 	if err != nil {
+		return nil, err
+	}
+	if err := writer.Close(); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil
