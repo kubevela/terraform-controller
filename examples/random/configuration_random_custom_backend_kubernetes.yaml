@@ -1,0 +1,25 @@
+apiVersion: terraform.core.oam.dev/v1beta2
+kind: Configuration
+metadata:
+  name: random-e2e-custom-backend-kubernetes
+spec:
+  hcl: |
+    resource "random_id" "server" {
+      byte_length = 8
+    }
+    
+    output "random_id" {
+      value = random_id.server.hex
+    }
+
+  backend:
+    backendType: kubernetes
+    kubernetes:
+      secret_suffix: custom-backend-kubernetes
+      namespace: a
+
+  inlineCredentials: true
+
+  writeConnectionSecretToRef:
+    name: random-conn-custom-backend-kubernetes
+    namespace: default

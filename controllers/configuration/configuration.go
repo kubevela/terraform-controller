@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/oam-dev/terraform-controller/controllers/configuration/backend"
 	"github.com/pkg/errors"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	apitypes "k8s.io/apimachinery/pkg/types"
@@ -50,32 +51,21 @@ func ValidConfigurationObject(configuration *v1beta2.Configuration) (types.Confi
 }
 
 // RenderConfiguration will compose the Terraform configuration with hcl/json and backend
-func RenderConfiguration(configuration *v1beta2.Configuration, terraformBackendNamespace string, configurationType types.ConfigurationType) (string, error) {
-	if configuration.Spec.Backend != nil {
-		if configuration.Spec.Backend.SecretSuffix == "" {
-			configuration.Spec.Backend.SecretSuffix = configuration.Name
-		}
-		configuration.Spec.Backend.InClusterConfig = true
-	} else {
-		configuration.Spec.Backend = &v1beta2.Backend{
-			SecretSuffix:    configuration.Name,
-			InClusterConfig: true,
-		}
-	}
-	backendTF, err := RenderTemplate(configuration.Spec.Backend, terraformBackendNamespace)
+func RenderConfiguration(configuration *v1beta2.Configuration, k8sClient client.Client, configurationType types.ConfigurationType) (string, backend.Backend, error) {
+	backendInterface, err := backend.ParseConfigurationBackend(configuration, k8sClient)
 	if err != nil {
-		return "", errors.Wrap(err, "failed to prepare Terraform backend configuration")
+		return "", nil, errors.Wrap(err, "failed to prepare Terraform backend configuration")
 	}
 
 	switch configurationType {
 	case types.ConfigurationHCL:
 		completedConfiguration := configuration.Spec.HCL
-		completedConfiguration += "\n" + backendTF
-		return completedConfiguration, nil
+		completedConfiguration += "\n" + backendInterface.HCL()
+		return completedConfiguration, backendInterface, nil
 	case types.ConfigurationRemote:
-		return backendTF, nil
+		return backendInterface.HCL(), backendInterface, nil
 	default:
-		return "", errors.New("Unsupported Configuration Type")
+		return "", nil, errors.New("Unsupported Configuration Type")
 	}
 }
 

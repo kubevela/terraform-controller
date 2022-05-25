@@ -188,16 +188,39 @@ spec:
             description: ConfigurationSpec defines the desired state of Configuration
             properties:
               backend:
-                description: Backend stores the state in a Kubernetes secret with
-                  locking done using a Lease resource. TODO(zzxwill) If a backend
-                  exists in HCL/JSON, this can be optional. Currently, if Backend
-                  is not set by users, it still will set by the controller, ignoring
-                  the settings in HCL/JSON backend
+                description: 'Backend describes the Terraform backend configuration.
+                  This field is needed if the users use a git repo to provide the
+                  hcl files or want to use their custom Terraform backend (instead
+                  of the default kubernetes backend type). Notice: This field may
+                  cause two backend blocks in the final Terraform module and make
+                  the executor job failed. So, please make sure that there are no
+                  backend configurations in your inline hcl code or the git repo.'
                 properties:
+                  backendType:
+                    description: BackendType indicates which backend type to use.
+                      This field is needed for custom backend configuration.
+                    enum:
+                    - kubernetes
+                    type: string
                   inClusterConfig:
                     description: InClusterConfig Used to authenticate to the cluster
                       from inside a pod. Only `true` is allowed
                     type: boolean
+                  inline:
+                    description: Inline allows users to use raw hcl code to specify
+                      their Terraform backend
+                    type: string
+                  kubernetes:
+                    description: Kubernetes is needed for the Terraform `kubernetes`
+                      backend type.
+                    properties:
+                      namespace:
+                        type: string
+                      secret_suffix:
+                        type: string
+                    required:
+                    - secret_suffix
+                    type: object
                   secretSuffix:
                     description: 'SecretSuffix used when creating secrets. Secrets
                       will be named in the format: tfstate-{workspace}-{secretSuffix}'

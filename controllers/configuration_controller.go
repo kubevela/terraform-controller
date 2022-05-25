@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/oam-dev/terraform-controller/controllers/configuration/backend"
 	"github.com/pkg/errors"
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
@@ -47,12 +48,10 @@ import (
 	tfcfg "github.com/oam-dev/terraform-controller/controllers/configuration"
 	"github.com/oam-dev/terraform-controller/controllers/provider"
 	"github.com/oam-dev/terraform-controller/controllers/terraform"
-	"github.com/oam-dev/terraform-controller/controllers/util"
 )
 
 const (
-	defaultNamespace   = "default"
-	terraformWorkspace = "default"
+	defaultNamespace = "default"
 	// WorkingVolumeMountPath is the mount path for working volume
 	WorkingVolumeMountPath = "/data"
 	// InputTFConfigurationVolumeName is the volume name for input Terraform Configuration
@@ -69,14 +68,10 @@ const (
 )
 
 const (
-	// TerraformStateNameInSecret is the key name to store Terraform state
-	TerraformStateNameInSecret = "tfstate"
 	// TFInputConfigMapName is the CM name for Terraform Input Configuration
 	TFInputConfigMapName = "tf-%s"
 	// TFVariableSecret is the Secret name for variables, including credentials from Provider
 	TFVariableSecret = "variable-%s"
-	// TFBackendSecret is the Secret name for Kubernetes backend
-	TFBackendSecret = "tfstate-%s-%s"
 )
 
 // TerraformExecutionType is the type for Terraform execution
@@ -206,7 +201,6 @@ type TFConfigurationMeta struct {
 	ConfigurationChanged  bool
 	EnvChanged            bool
 	ConfigurationCMName   string
-	BackendSecretName     string
 	ApplyJobName          string
 	DestroyJobName        string
 	Envs                  []v1.EnvVar
@@ -216,14 +210,15 @@ type TFConfigurationMeta struct {
 	DeleteResource        bool
 	Credentials           map[string]string
 
+	Backend backend.Backend
+
 	// JobNodeSelector Expose the node selector of job to the controller level
 	JobNodeSelector map[string]string
 
 	// TerraformImage is the Terraform image which can run `terraform init/plan/apply`
-	TerraformImage            string
-	TerraformBackendNamespace string
-	BusyboxImage              string
-	GitImage                  string
+	TerraformImage string
+	BusyboxImage   string
+	GitImage       string
 
 	// Resources series Variables are for Setting Compute Resources required by this container
 	ResourcesLimitsCPU              string
@@ -275,17 +270,6 @@ func initTFConfigurationMeta(req ctrl.Request, configuration v1beta2.Configurati
 	if !configuration.Spec.InlineCredentials {
 		meta.ProviderReference = tfcfg.GetProviderNamespacedName(configuration)
 	}
-
-	// Check the existence of Terraform state secret which is used to store TF state file. For detailed information,
-	// please refer to https://www.terraform.io/docs/language/settings/backends/kubernetes.html#configuration-variables
-	var backendSecretSuffix string
-	if configuration.Spec.Backend != nil && configuration.Spec.Backend.SecretSuffix != "" {
-		backendSecretSuffix = configuration.Spec.Backend.SecretSuffix
-	} else {
-		backendSecretSuffix = configuration.Name
-	}
-	// Secrets will be named in the format: tfstate-{workspace}-{secret_suffix}
-	meta.BackendSecretName = fmt.Sprintf(TFBackendSecret, terraformWorkspace, backendSecretSuffix)
 
 	return meta
 }
@@ -421,13 +405,12 @@ func (r *ConfigurationReconciler) cleanUpSubResources(ctx context.Context, names
 	}
 
 	// 6. delete Kubernetes backend secret
-	klog.InfoS("Deleting the secret which stores Kubernetes backend", "Name", meta.BackendSecretName)
-	var kubernetesBackendSecret v1.Secret
-	if err := r.Client.Get(ctx, client.ObjectKey{Name: meta.BackendSecretName, Namespace: meta.TerraformBackendNamespace}, &kubernetesBackendSecret); err == nil {
-		if err := r.Client.Delete(ctx, &kubernetesBackendSecret); err != nil {
+	if meta.Backend != nil {
+		if err := meta.Backend.CleanUp(ctx); err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -484,11 +467,6 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 		meta.TerraformImage = "oamdev/docker-terraform:1.1.2"
 	}
 
-	meta.TerraformBackendNamespace = os.Getenv("TERRAFORM_BACKEND_NAMESPACE")
-	if meta.TerraformBackendNamespace == "" {
-		meta.TerraformBackendNamespace = "vela-system"
-	}
-
 	meta.BusyboxImage = os.Getenv("BUSYBOX_IMAGE")
 	if meta.BusyboxImage == "" {
 		meta.BusyboxImage = "busybox:latest"
@@ -512,14 +490,12 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	}
 	meta.ConfigurationType = configurationType
 
-	// TODO(zzxwill) Need to find an alternative to check whether there is an state backend in the Configuration
-
 	// Render configuration with backend
-	completeConfiguration, err := tfcfg.RenderConfiguration(configuration, meta.TerraformBackendNamespace, configurationType)
+	completeConfiguration, backendConf, err := tfcfg.RenderConfiguration(configuration, r.Client, configurationType)
 	if err != nil {
 		return err
 	}
-	meta.CompleteConfiguration = completeConfiguration
+	meta.CompleteConfiguration, meta.Backend = completeConfiguration, backendConf
 
 	if configuration.ObjectMeta.DeletionTimestamp.IsZero() {
 		if err := meta.storeTFConfiguration(ctx, k8sClient); err != nil {
@@ -882,18 +858,13 @@ type TFState struct {
 
 //nolint:funlen
 func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient client.Client, configuration v1beta2.Configuration) (map[string]v1beta2.Property, error) {
-	var s = v1.Secret{}
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.BackendSecretName, Namespace: meta.TerraformBackendNamespace}, &s); err != nil {
-		return nil, errors.Wrap(err, "terraform state file backend secret is not generated")
-	}
-	tfStateData, ok := s.Data[TerraformStateNameInSecret]
-	if !ok {
-		return nil, fmt.Errorf("failed to get %s from Terraform State secret %s", TerraformStateNameInSecret, s.Name)
-	}
-
-	tfStateJSON, err := util.DecompressTerraformStateSecret(string(tfStateData))
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to decompress state secret data")
+	var tfStateJSON []byte
+	var err error
+	if meta.Backend != nil {
+		tfStateJSON, err = meta.Backend.GetTFStateJSON(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	var tfState TFState

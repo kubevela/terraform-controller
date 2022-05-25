@@ -35,9 +35,11 @@ type ConfigurationSpec struct {
 	// +kubebuilder:pruning:PreserveUnknownFields
 	Variable *runtime.RawExtension `json:"variable,omitempty"`
 
-	// Backend stores the state in a Kubernetes secret with locking done using a Lease resource.
-	// TODO(zzxwill) If a backend exists in HCL/JSON, this can be optional. Currently, if Backend is not set by users, it
-	// still will set by the controller, ignoring the settings in HCL/JSON backend
+	// Backend describes the Terraform backend configuration.
+	// This field is needed if the users use a git repo to provide the hcl files or
+	// want to use their custom Terraform backend (instead of the default kubernetes backend type).
+	// Notice: This field may cause two backend blocks in the final Terraform module and make the executor job failed.
+	// So, please make sure that there are no backend configurations in your inline hcl code or the git repo.
 	Backend *Backend `json:"backend,omitempty"`
 
 	// Path is the sub-directory of remote git repository.
@@ -104,12 +106,29 @@ type Property struct {
 	Value string `json:"value,omitempty"`
 }
 
-// Backend stores the state in a Kubernetes secret with locking done using a Lease resource.
+// Backend describes the Terraform backend configuration
 type Backend struct {
 	// SecretSuffix used when creating secrets. Secrets will be named in the format: tfstate-{workspace}-{secretSuffix}
 	SecretSuffix string `json:"secretSuffix,omitempty"`
 	// InClusterConfig Used to authenticate to the cluster from inside a pod. Only `true` is allowed
 	InClusterConfig bool `json:"inClusterConfig,omitempty"`
+
+	// Inline allows users to use raw hcl code to specify their Terraform backend
+	Inline string `json:"inline,omitempty"`
+
+	// BackendType indicates which backend type to use. This field is needed for custom backend configuration.
+	// +kubebuilder:validation:Enum=kubernetes
+	BackendType string `json:"backendType,omitempty"`
+
+	// Kubernetes is needed for the Terraform `kubernetes` backend type.
+	Kubernetes *KubernetesBackendConf `json:"kubernetes,omitempty"`
+}
+
+// KubernetesBackendConf defines all options supported by the Terraform `kubernetes` backend type.
+// You can refer to https://www.terraform.io/language/settings/backends/kubernetes for the usage of each option.
+type KubernetesBackendConf struct {
+	SecretSuffix string  `json:"secret_suffix" hcl:"secret_suffix"`
+	Namespace    *string `json:"namespace,omitempty" hcl:"namespace"`
 }
 
 // +kubebuilder:object:root=true
