@@ -51,8 +51,7 @@ import (
 )
 
 const (
-	defaultNamespace   = "default"
-	terraformWorkspace = "default"
+	defaultNamespace = "default"
 	// WorkingVolumeMountPath is the mount path for working volume
 	WorkingVolumeMountPath = "/data"
 	// InputTFConfigurationVolumeName is the volume name for input Terraform Configuration
