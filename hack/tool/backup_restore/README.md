@@ -6,7 +6,7 @@ It has two subcommands `backup` and `restore`.
 
 ## `restore`
 
-The main usage of the `restore` subcommand is to import an "outside" Terraform instance (maybe created by the terraform command line or managed by another terraform-controller before) to the terraform-controller in the target kubernetes without recreating the cloud resources.
+The main usage of the `restore` subcommand is to import an "outside" Terraform instance (maybe created by the terraform command line or managed by another terraform-controller before) to the terraform-controller in the target Kubernetes without recreating the cloud resources.
 
 To use the `restore` subcommand, you should:
 
