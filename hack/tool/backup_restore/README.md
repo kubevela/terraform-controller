@@ -168,24 +168,31 @@ Third, run the restore subcommand:
 go run main.go restore --configuration examples/oss/configuration.yaml --state examples/oss/state.json
 ```
 
-Finally, you can check the status of the configuration restored just now:
+Then, you will see the output of the command like the flowing:
 
-```shell
-$ kubectl get configuration.terraform.core.oam.dev
-NAME                                     STATE       AGE
-alibaba-oss-bucket-hcl-restore-example   Available   13m
-```
+```text
+2022/05/27 00:01:02 the Terraform backend was restored successfully
+2022/05/27 00:01:02 try to restore the configuration......
+2022/05/27 00:01:02 apply the configuration successfully, wait it to be available......
+2022/05/27 00:01:02 the state of configuration is , wait it to be available......
+2022/05/27 00:01:04 the state of configuration is ProvisioningAndChecking, wait it to be available......
+2022/05/27 00:01:06 the state of configuration is ProvisioningAndChecking, wait it to be available......
+2022/05/27 00:01:08 the state of configuration is ProvisioningAndChecking, wait it to be available......
+2022/05/27 00:01:10 the state of configuration is ProvisioningAndChecking, wait it to be available......
+2022/05/27 00:01:12 the state of configuration is ProvisioningAndChecking, wait it to be available......
+2022/05/27 00:01:14 the state of configuration is ProvisioningAndChecking, wait it to be available......
+2022/05/27 00:01:16 the configuration is available now
+2022/05/27 00:01:16 try to print the log of the `terraform apply`......
 
-And you can check the logs of the `terraform-executor` in the pod of the "terraform apply" job:
-
-```shell
-$ kubectl logs alibaba-oss-bucket-hcl-restore-example-apply--1-b29d6 terraform-executor
 alicloud_oss_bucket.bucket-acl: Refreshing state... [id=restore-example]
+
+─────────────────────────────────────────────────────────────────────────────
 
 No changes. Your infrastructure matches the configuration.
 
-Terraform has compared your real infrastructure against your configuration
-and found no differences, so no changes are needed.
+Your configuration already matches the changes detected above. If you'd like
+to update the Terraform state to match, create and apply a refresh-only plan:
+  terraform apply -refresh-only
 
 Apply complete! Resources: 0 added, 0 changed, 0 destroyed.
 
@@ -194,4 +201,6 @@ Outputs:
 BUCKET_NAME = "restore-example.oss-cn-beijing.aliyuncs.com"
 ```
 
-You can see the "No changes.". This shows that we did not recreate cloud resources during the restore process.
+The output is very clear, you can see the configuration is available.
+
+And, you can see the `No changes.` in the log of the `terraform apply`. This shows that we did not recreate cloud resources during the restore process.
