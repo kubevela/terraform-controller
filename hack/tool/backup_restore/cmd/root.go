@@ -34,6 +34,7 @@ func Execute() {
 	kubeConfigFlags := genericclioptions.NewConfigFlags(true)
 	kubeConfigFlags.AddFlags(rootCmd.PersistentFlags())
 	rootCmd.AddCommand(newRestoreCmd(kubeConfigFlags))
+	rootCmd.AddCommand(newBackupCmd(kubeConfigFlags))
 	err := rootCmd.Execute()
 	if err != nil {
 		os.Exit(1)

@@ -33,8 +33,6 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/serializer/json"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -95,14 +93,14 @@ func decodeConfigurationFromYAML() (*v1beta2.Configuration, error) {
 		return nil, err
 	}
 	configuration := &v1beta2.Configuration{}
-	scheme := runtime.NewScheme()
-	serializer := json.NewSerializerWithOptions(json.DefaultMetaFactory, scheme, scheme, json.SerializerOptions{Yaml: true})
+	serializer := buildSerializer()
 	if _, _, err := serializer.Decode(configurationYamlBytes, nil, configuration); err != nil {
 		return nil, err
 	}
 	if configuration.Namespace == "" {
-		configuration.Namespace = defaultNS
+		configuration.Namespace = currentNS
 	}
+	cleanUpConfiguration(configuration)
 	return configuration, nil
 }
 
@@ -166,10 +164,10 @@ func printExecutorLog(ctx context.Context, configuration *v1beta2.Configuration)
 	}
 	pod := podList.Items[0]
 	logReader, err := clientSet.CoreV1().Pods(configuration.Namespace).GetLogs(pod.Name, &v1.PodLogOptions{Container: "terraform-executor"}).Stream(ctx)
-	defer logReader.Close()
 	if err != nil {
 		return err
 	}
+	defer logReader.Close()
 	if _, err := io.Copy(os.Stdout, logReader); err != nil {
 		return err
 	}
@@ -207,14 +205,14 @@ func resumeK8SBackend(ctx context.Context, backendInterface backend.Backend) err
 		gotSecret.Type = v1.SecretTypeOpaque
 	}
 
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: "tfstate-default-" + k8sBackend.SecretSuffix, Namespace: k8sBackend.SecretNS}, &gotSecret); err != nil {
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: getSecretName(k8sBackend), Namespace: k8sBackend.SecretNS}, &gotSecret); err != nil {
 		if !kerrors.IsNotFound(err) {
 			return err
 		}
 		// is not found, create the secret
 		gotSecret = v1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "tfstate-default-" + k8sBackend.SecretSuffix,
+				Name:      getSecretName(k8sBackend),
 				Namespace: k8sBackend.SecretNS,
 			},
 			Type: v1.SecretTypeOpaque,

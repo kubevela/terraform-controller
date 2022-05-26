@@ -4,6 +4,20 @@ This go module is a command line tool to back up and restore the configuration a
 
 It has two subcommands `backup` and `restore`.
 
+## `backup`
+
+`backup` can be used to back up the Configuration object managed by terraform-controller and the Terraform state (if the configuration uses the Terraform Kubernetes backend).
+
+The main usage of the `backup` subcommand is:
+
+```shell
+go main.go backup --name <name of the Configuration> --namespace <namespace of the Configuration>
+```
+
+Then you will get the `cofiguration.yaml` and the `state.json` in the workdir.
+
+Next, you can restore the Configuration and the Terraform state in another Kubernetes cluster using the `restore` subcommand.
+
 ## `restore`
 
 The main usage of the `restore` subcommand is to import an "outside" Terraform instance (maybe created by the terraform command line or managed by another terraform-controller before) to the terraform-controller in the target Kubernetes without recreating the cloud resources.

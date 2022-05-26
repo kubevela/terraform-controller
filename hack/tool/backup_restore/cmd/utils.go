@@ -22,13 +22,17 @@ import (
 	"os"
 
 	"github.com/oam-dev/terraform-controller/api/v1beta2"
+	"github.com/oam-dev/terraform-controller/controllers/configuration/backend"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/serializer/json"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var (
-	defaultNS string
+	currentNS string
 	k8sClient client.Client
 	clientSet *kubernetes.Clientset
 )
@@ -38,9 +42,9 @@ func buildK8SClient(kubeFlags *genericclioptions.ConfigFlags) error {
 	if err != nil {
 		return err
 	}
-	defaultNS, _, err = kubeFlags.ToRawKubeConfigLoader().Namespace()
+	currentNS, _, err = kubeFlags.ToRawKubeConfigLoader().Namespace()
 	if err != nil {
-		defaultNS = "default"
+		currentNS = "default"
 	}
 
 	clientSet, err = kubernetes.NewForConfig(config)
@@ -58,6 +62,43 @@ func buildK8SClient(kubeFlags *genericclioptions.ConfigFlags) error {
 	return nil
 }
 
+func cleanUpConfiguration(configuration *v1beta2.Configuration) {
+	configuration.ManagedFields = nil
+	configuration.CreationTimestamp = v1.Time{}
+	configuration.Finalizers = nil
+	configuration.Generation = 0
+	configuration.ResourceVersion = ""
+	configuration.UID = ""
+}
+
+func getSecretName(k *backend.K8SBackend) string {
+	return "tfstate-default-" + k.SecretSuffix
+}
+
+func buildSerializer() *json.Serializer {
+	scheme := runtime.NewScheme()
+	return json.NewSerializerWithOptions(json.DefaultMetaFactory, scheme, scheme, json.SerializerOptions{Yaml: true})
+}
+
+// Modified based on Hashicorp code base https://github.com/hashicorp/terraform/blob/fabdf0bea1fa2bf6a9d56cc3ea0f28242bf5e812/backend/remote-state/kubernetes/client.go#L355
+// Licensed under Mozilla Public License 2.0
+func decompressTRState(data string) ([]byte, error) {
+	b := new(bytes.Buffer)
+	gz, err := gzip.NewReader(bytes.NewReader([]byte(data)))
+	if err != nil {
+		return nil, err
+	}
+	if _, err := b.ReadFrom(gz); err != nil {
+		return nil, err
+	}
+	if err := gz.Close(); err != nil {
+		return nil, err
+	}
+	return b.Bytes(), nil
+}
+
+// Modified based on Hashicorp code base https://github.com/hashicorp/terraform/blob/fabdf0bea1fa2bf6a9d56cc3ea0f28242bf5e812/backend/remote-state/kubernetes/client.go#L343
+// Licensed under Mozilla Public License 2.0
 func compressedTFState() ([]byte, error) {
 	srcBytes, err := os.ReadFile(stateJSONPath)
 	var buf bytes.Buffer
