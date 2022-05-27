@@ -17,23 +17,22 @@ limitations under the License.
 package cmd
 
 import (
-	"bytes"
-	"compress/gzip"
 	"context"
-	"fmt"
+	"io"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
+	"time"
 
+	"github.com/oam-dev/terraform-controller/api/types"
 	"github.com/oam-dev/terraform-controller/api/v1beta2"
 	"github.com/oam-dev/terraform-controller/controllers/configuration/backend"
 	"github.com/spf13/cobra"
+	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/serializer/json"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -41,7 +40,6 @@ import (
 var (
 	stateJSONPath     string
 	configurationPath string
-	k8sClient         client.Client
 )
 
 // newRestoreCmd represents the restore command
@@ -49,8 +47,7 @@ func newRestoreCmd(kubeFlags *genericclioptions.ConfigFlags) *cobra.Command {
 	restoreCmd := &cobra.Command{
 		Use: "restore",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			var err error
-			k8sClient, err = buildClientSet(kubeFlags)
+			err := buildK8SClient(kubeFlags)
 			if err != nil {
 				return err
 			}
@@ -68,16 +65,8 @@ func newRestoreCmd(kubeFlags *genericclioptions.ConfigFlags) *cobra.Command {
 	return restoreCmd
 }
 
-func buildClientSet(kubeFlags *genericclioptions.ConfigFlags) (client.Client, error) {
-	config, err := kubeFlags.ToRESTConfig()
-	if err != nil {
-		return nil, err
-	}
-	return client.New(config, client.Options{})
-}
-
 func restore(ctx context.Context) error {
-	configuration, err := getConfiguration()
+	configuration, err := decodeConfigurationFromYAML()
 	if err != nil {
 		return err
 	}
@@ -92,26 +81,97 @@ func restore(ctx context.Context) error {
 	}
 
 	// apply the configuration yaml
-	// FIXME (loheagn) use the restClient to do this
-	applyCmd := exec.Command("bash", "-c", fmt.Sprintf("kubectl apply -f %s", configurationPath))
-	if err := applyCmd.Run(); err != nil {
+	if err := applyConfiguration(ctx, configuration); err != nil {
 		return err
 	}
 	return nil
 }
 
-func getConfiguration() (*v1beta2.Configuration, error) {
+func decodeConfigurationFromYAML() (*v1beta2.Configuration, error) {
 	configurationYamlBytes, err := os.ReadFile(configurationPath)
 	if err != nil {
 		return nil, err
 	}
 	configuration := &v1beta2.Configuration{}
-	scheme := runtime.NewScheme()
-	serializer := json.NewSerializerWithOptions(json.DefaultMetaFactory, scheme, scheme, json.SerializerOptions{Yaml: true})
+	serializer := buildSerializer()
 	if _, _, err := serializer.Decode(configurationYamlBytes, nil, configuration); err != nil {
 		return nil, err
 	}
+	if configuration.Namespace == "" {
+		configuration.Namespace = currentNS
+	}
+	cleanUpConfiguration(configuration)
 	return configuration, nil
+}
+
+func applyConfiguration(ctx context.Context, configuration *v1beta2.Configuration) error {
+	log.Println("try to restore the configuration......")
+
+	if err := k8sClient.Create(ctx, configuration); err != nil {
+		return err
+	}
+
+	log.Println("apply the configuration successfully, wait it to be available......")
+
+	errCh := make(chan error)
+	timeoutCtx, cancel := context.WithTimeout(ctx, 20*time.Minute)
+	defer cancel()
+	go func() {
+		gotConf := &v1beta2.Configuration{}
+		for {
+			if err := k8sClient.Get(ctx, client.ObjectKey{Name: configuration.Name, Namespace: configuration.Namespace}, gotConf); err != nil {
+				errCh <- err
+				return
+			}
+			if gotConf.Status.Apply.State != types.Available {
+				log.Printf("the state of configuration is %s, wait it to be available......\n", gotConf.Status.Apply.State)
+				time.Sleep(2 * time.Second)
+			} else {
+				log.Println("the configuration is available now")
+				break
+			}
+		}
+		// refresh the configuration
+		configuration = gotConf
+		errCh <- nil
+	}()
+	select {
+	case err := <-errCh:
+		if err != nil {
+			return err
+		}
+
+	case <-timeoutCtx.Done():
+		log.Fatal("timeout waiting the configuration is available")
+	}
+
+	log.Printf("try to print the log of the `terraform apply`......\n\n")
+	if err := printExecutorLog(ctx, configuration); err != nil {
+		log.Fatalf("print the log of `terraform apply` error: %s\n", err.Error())
+	}
+
+	return nil
+}
+
+func printExecutorLog(ctx context.Context, configuration *v1beta2.Configuration) error {
+	job := &batchv1.Job{}
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: configuration.Name + "-apply", Namespace: configuration.Namespace}, job); err != nil {
+		return err
+	}
+	podList, err := clientSet.CoreV1().Pods(configuration.Namespace).List(ctx, metav1.ListOptions{LabelSelector: labels.FormatLabels(job.Spec.Selector.MatchLabels)})
+	if err != nil {
+		return err
+	}
+	pod := podList.Items[0]
+	logReader, err := clientSet.CoreV1().Pods(configuration.Namespace).GetLogs(pod.Name, &v1.PodLogOptions{Container: "terraform-executor"}).Stream(ctx)
+	if err != nil {
+		return err
+	}
+	defer logReader.Close()
+	if _, err := io.Copy(os.Stdout, logReader); err != nil {
+		return err
+	}
+	return nil
 }
 
 func resumeK8SBackend(ctx context.Context, backendInterface backend.Backend) error {
@@ -145,14 +205,14 @@ func resumeK8SBackend(ctx context.Context, backendInterface backend.Backend) err
 		gotSecret.Type = v1.SecretTypeOpaque
 	}
 
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: "tfstate-default-" + k8sBackend.SecretSuffix, Namespace: k8sBackend.SecretNS}, &gotSecret); err != nil {
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: getSecretName(k8sBackend), Namespace: k8sBackend.SecretNS}, &gotSecret); err != nil {
 		if !kerrors.IsNotFound(err) {
 			return err
 		}
 		// is not found, create the secret
 		gotSecret = v1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "tfstate-default-" + k8sBackend.SecretSuffix,
+				Name:      getSecretName(k8sBackend),
 				Namespace: k8sBackend.SecretNS,
 			},
 			Type: v1.SecretTypeOpaque,
@@ -172,19 +232,6 @@ func resumeK8SBackend(ctx context.Context, backendInterface backend.Backend) err
 			return err
 		}
 	}
+	log.Println("the Terraform backend was restored successfully")
 	return nil
-}
-
-func compressedTFState() ([]byte, error) {
-	srcBytes, err := os.ReadFile(stateJSONPath)
-	var buf bytes.Buffer
-	writer := gzip.NewWriter(&buf)
-	_, err = writer.Write(srcBytes)
-	if err != nil {
-		return nil, err
-	}
-	if err := writer.Close(); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
 }

@@ -4,6 +4,20 @@ This go module is a command line tool to back up and restore the configuration a
 
 It has two subcommands `backup` and `restore`.
 
+## `backup`
+
+`backup` can be used to back up the Configuration object managed by terraform-controller and the Terraform state (if the configuration uses the Terraform Kubernetes backend).
+
+The main usage of the `backup` subcommand is:
+
+```shell
+go main.go backup --name <name of the Configuration> --namespace <namespace of the Configuration>
+```
+
+Then you will get the `cofiguration.yaml` and the `state.json` in the workdir.
+
+Next, you can restore the Configuration and the Terraform state in another Kubernetes cluster using the `restore` subcommand.
+
 ## `restore`
 
 The main usage of the `restore` subcommand is to import an "outside" Terraform instance (maybe created by the terraform command line or managed by another terraform-controller before) to the terraform-controller in the target Kubernetes without recreating the cloud resources.
@@ -168,24 +182,31 @@ Third, run the restore subcommand:
 go run main.go restore --configuration examples/oss/configuration.yaml --state examples/oss/state.json
 ```
 
-Finally, you can check the status of the configuration restored just now:
+Then, you will see the output of the command like the flowing:
 
-```shell
-$ kubectl get configuration.terraform.core.oam.dev
-NAME                                     STATE       AGE
-alibaba-oss-bucket-hcl-restore-example   Available   13m
-```
+```text
+2022/05/27 00:01:02 the Terraform backend was restored successfully
+2022/05/27 00:01:02 try to restore the configuration......
+2022/05/27 00:01:02 apply the configuration successfully, wait it to be available......
+2022/05/27 00:01:02 the state of configuration is , wait it to be available......
+2022/05/27 00:01:04 the state of configuration is ProvisioningAndChecking, wait it to be available......
+2022/05/27 00:01:06 the state of configuration is ProvisioningAndChecking, wait it to be available......
+2022/05/27 00:01:08 the state of configuration is ProvisioningAndChecking, wait it to be available......
+2022/05/27 00:01:10 the state of configuration is ProvisioningAndChecking, wait it to be available......
+2022/05/27 00:01:12 the state of configuration is ProvisioningAndChecking, wait it to be available......
+2022/05/27 00:01:14 the state of configuration is ProvisioningAndChecking, wait it to be available......
+2022/05/27 00:01:16 the configuration is available now
+2022/05/27 00:01:16 try to print the log of the `terraform apply`......
 
-And you can check the logs of the `terraform-executor` in the pod of the "terraform apply" job:
-
-```shell
-$ kubectl logs alibaba-oss-bucket-hcl-restore-example-apply--1-b29d6 terraform-executor
 alicloud_oss_bucket.bucket-acl: Refreshing state... [id=restore-example]
+
+─────────────────────────────────────────────────────────────────────────────
 
 No changes. Your infrastructure matches the configuration.
 
-Terraform has compared your real infrastructure against your configuration
-and found no differences, so no changes are needed.
+Your configuration already matches the changes detected above. If you'd like
+to update the Terraform state to match, create and apply a refresh-only plan:
+  terraform apply -refresh-only
 
 Apply complete! Resources: 0 added, 0 changed, 0 destroyed.
 
@@ -194,4 +215,6 @@ Outputs:
 BUCKET_NAME = "restore-example.oss-cn-beijing.aliyuncs.com"
 ```
 
-You can see the "No changes.". This shows that we did not recreate cloud resources during the restore process.
+The output is very clear, you can see the configuration is available.
+
+And, you can see the `No changes.` in the log of the `terraform apply`. This shows that we did not recreate cloud resources during the restore process.
