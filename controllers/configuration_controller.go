@@ -491,33 +491,6 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	}
 	meta.ConfigurationType = configurationType
 
-	// Render configuration with backend
-	completeConfiguration, backendConf, err := tfcfg.RenderConfiguration(configuration, r.Client, configurationType)
-	if err != nil {
-		return err
-	}
-	meta.CompleteConfiguration, meta.Backend = completeConfiguration, backendConf
-
-	if configuration.ObjectMeta.DeletionTimestamp.IsZero() {
-		if err := meta.storeTFConfiguration(ctx, k8sClient); err != nil {
-			return err
-		}
-	}
-
-	// Check whether configuration(hcl/json) is changed
-	if err := meta.CheckWhetherConfigurationChanges(ctx, k8sClient, configurationType); err != nil {
-		return err
-	}
-
-	if meta.ConfigurationChanged {
-		klog.InfoS("Configuration hanged, reloading...")
-		if err := meta.updateApplyStatus(ctx, k8sClient, types.ConfigurationReloading, types.ConfigurationReloadingAsHCLChanged); err != nil {
-			return err
-		}
-		// store configuration to ConfigMap
-		return meta.storeTFConfiguration(ctx, k8sClient)
-	}
-
 	// Check provider
 	if !configuration.Spec.InlineCredentials {
 		p, err := provider.GetProviderFromConfiguration(ctx, k8sClient, meta.ProviderReference.Namespace, meta.ProviderReference.Name)
@@ -571,6 +544,33 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 		}
 	default:
 		return err
+	}
+
+	// Render configuration with backend
+	completeConfiguration, backendConf, err := tfcfg.RenderConfiguration(configuration, r.Client, configurationType, meta.Envs)
+	if err != nil {
+		return err
+	}
+	meta.CompleteConfiguration, meta.Backend = completeConfiguration, backendConf
+
+	if configuration.ObjectMeta.DeletionTimestamp.IsZero() {
+		if err := meta.storeTFConfiguration(ctx, k8sClient); err != nil {
+			return err
+		}
+	}
+
+	// Check whether configuration(hcl/json) is changed
+	if err := meta.CheckWhetherConfigurationChanges(ctx, k8sClient, configurationType); err != nil {
+		return err
+	}
+
+	if meta.ConfigurationChanged {
+		klog.InfoS("Configuration hanged, reloading...")
+		if err := meta.updateApplyStatus(ctx, k8sClient, types.ConfigurationReloading, types.ConfigurationReloadingAsHCLChanged); err != nil {
+			return err
+		}
+		// store configuration to ConfigMap
+		return meta.storeTFConfiguration(ctx, k8sClient)
 	}
 
 	// Apply ClusterRole
@@ -720,6 +720,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 			"terraform init",
 		},
 		VolumeMounts: initContainerVolumeMounts,
+		Env:          meta.Envs,
 	}
 	initContainers = append(initContainers, tfPreApplyInitContainer)
 
@@ -749,7 +750,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 		meta.ResourcesRequestsCPU != "" || meta.ResourcesRequestsMemory != "" {
 		resourceRequirements := v1.ResourceRequirements{}
 		if meta.ResourcesLimitsCPU != "" || meta.ResourcesLimitsMemory != "" {
-			resourceRequirements.Limits = v1.ResourceList(map[v1.ResourceName]resource.Quantity{})
+			resourceRequirements.Limits = map[v1.ResourceName]resource.Quantity{}
 			if meta.ResourcesLimitsCPU != "" {
 				resourceRequirements.Limits["cpu"] = meta.ResourcesLimitsCPUQuantity
 			}
@@ -758,7 +759,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 			}
 		}
 		if meta.ResourcesRequestsCPU != "" || meta.ResourcesLimitsMemory != "" {
-			resourceRequirements.Requests = v1.ResourceList(map[v1.ResourceName]resource.Quantity{})
+			resourceRequirements.Requests = map[v1.ResourceName]resource.Quantity{}
 			if meta.ResourcesRequestsCPU != "" {
 				resourceRequirements.Requests["cpu"] = meta.ResourcesRequestsCPUQuantity
 			}

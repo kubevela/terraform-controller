@@ -22,14 +22,11 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/hashicorp/hcl/v2/hclwrite"
 	"github.com/oam-dev/terraform-controller/api/v1beta2"
 	"github.com/pkg/errors"
-	"github.com/zclconf/go-cty/cty"
-	"github.com/zclconf/go-cty/cty/gocty"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -37,6 +34,10 @@ var backendInitFuncMap = map[string]*backendInitFunc{
 	"kubernetes": {
 		initFuncFromHCL:  newK8SBackendFromInline,
 		initFuncFromConf: newK8SBackendFromExplicit,
+	},
+	"s3": {
+		initFuncFromHCL:  newS3BackendFromInline,
+		initFuncFromConf: newS3BackendFromExplicit,
 	},
 }
 
@@ -54,48 +55,19 @@ type Backend interface {
 }
 
 type backendInitFunc struct {
-	initFuncFromHCL  func(*ParsedBackendConfig, client.Client) (Backend, error)
-	initFuncFromConf func(interface{}, client.Client) (Backend, error)
-}
-
-// ParsedBackendConfig is a struct parsed from the backend hcl block
-type ParsedBackendConfig struct {
-	// Name is the label of the backend hcl block
-	// It means which backend type the configuration will use
-	Name string `hcl:"name,label"`
-	// Attrs are the key-value pairs in the backend hcl block
-	Attrs hcl.Body `hcl:",remain"`
-}
-
-func (conf ParsedBackendConfig) getAttrValue(key string) (*cty.Value, error) {
-	attrs, diags := conf.Attrs.JustAttributes()
-	if diags.HasErrors() {
-		return nil, diags
-	}
-	attr := attrs[key]
-	if attr == nil {
-		return nil, fmt.Errorf("cannot find attr %s", key)
-	}
-	v, diags := attr.Expr.Value(nil)
-	if diags.HasErrors() {
-		return nil, diags
-	}
-	return &v, nil
-}
-
-func (conf ParsedBackendConfig) getAttrString(key string) (string, error) {
-	v, err := conf.getAttrValue(key)
-	if err != nil {
-		return "", err
-	}
-	result := ""
-	err = gocty.FromCtyValue(*v, &result)
-	return result, err
+	initFuncFromHCL  func(ctx k8sContext, backendConfig *ParsedBackendConfig, optionSource *OptionSource) (Backend, error)
+	initFuncFromConf func(ctx k8sContext, backendConfig interface{}, optionSource *OptionSource) (Backend, error)
 }
 
 // ParseConfigurationBackend parses backend Conf from the v1beta2.Configuration
-func ParseConfigurationBackend(configuration *v1beta2.Configuration, k8sClient client.Client) (Backend, error) {
+func ParseConfigurationBackend(configuration *v1beta2.Configuration, k8sClient client.Client, optionSource *OptionSource) (Backend, error) {
 	backend := configuration.Spec.Backend
+
+	ctx := k8sContext{
+		Context:   context.Background(),
+		k8sClient: k8sClient,
+		namespace: configuration.Namespace,
+	}
 
 	switch {
 
@@ -119,7 +91,7 @@ func ParseConfigurationBackend(configuration *v1beta2.Configuration, k8sClient c
 
 	case backend.Inline != "":
 		// In this case, use the inline custom backend
-		return handleInlineBackendHCL(backend.Inline, k8sClient)
+		return handleInlineBackendHCL(ctx, backend.Inline, optionSource)
 
 	case backend.BackendType != "":
 		// In this case, use the explicit custom backend
@@ -140,13 +112,13 @@ func ParseConfigurationBackend(configuration *v1beta2.Configuration, k8sClient c
 		backendConfValue := backendField.Interface()
 
 		// second, handle the backendConf
-		return handleExplicitBackend(backendConfValue, backendType, k8sClient)
+		return handleExplicitBackend(ctx, backendConfValue, backendType, optionSource)
 	}
 
 	return nil, nil
 }
 
-func handleInlineBackendHCL(code string, k8sClient client.Client) (Backend, error) {
+func handleInlineBackendHCL(ctx k8sContext, code string, optionSource *OptionSource) (Backend, error) {
 
 	type BackendConfigWrap struct {
 		Backend ParsedBackendConfig `hcl:"backend,block"`
@@ -185,10 +157,10 @@ func handleInlineBackendHCL(code string, k8sClient client.Client) (Backend, erro
 	if initFunc == nil || initFunc.initFuncFromHCL == nil {
 		return nil, fmt.Errorf("backend type (%s) is not supported", backendConfig.Name)
 	}
-	return initFunc.initFuncFromHCL(backendConfig, k8sClient)
+	return initFunc.initFuncFromHCL(ctx, backendConfig, optionSource)
 }
 
-func handleExplicitBackend(backendConf interface{}, backendType string, k8sClient client.Client) (Backend, error) {
+func handleExplicitBackend(ctx k8sContext, backendConf interface{}, backendType string, optionSource *OptionSource) (Backend, error) {
 	hclFile := hclwrite.NewEmptyFile()
 	gohcl.EncodeIntoBody(backendConf, hclFile.Body())
 
@@ -196,5 +168,5 @@ func handleExplicitBackend(backendConf interface{}, backendType string, k8sClien
 	if initFunc == nil || initFunc.initFuncFromConf == nil {
 		return nil, fmt.Errorf("backend type (%s) is not supported", backendType)
 	}
-	return initFunc.initFuncFromConf(backendConf, k8sClient)
+	return initFunc.initFuncFromConf(ctx, backendConf, optionSource)
 }

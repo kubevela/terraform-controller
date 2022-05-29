@@ -8,6 +8,7 @@ import (
 
 	"github.com/oam-dev/terraform-controller/controllers/configuration/backend"
 	"github.com/stretchr/testify/assert"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -108,6 +109,7 @@ func TestRenderConfiguration(t *testing.T) {
 		configuration     *v1beta2.Configuration
 		ns                string
 		configurationType types.ConfigurationType
+		envs              []v1.EnvVar
 	}
 	type want struct {
 		cfg              string
@@ -214,7 +216,7 @@ terraform {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, backendConf, err := RenderConfiguration(tc.args.configuration, k8sClient, tc.args.configurationType)
+			got, backendConf, err := RenderConfiguration(tc.args.configuration, k8sClient, tc.args.configurationType, tc.args.envs)
 			if tc.want.errMsg != "" && !strings.Contains(err.Error(), tc.want.errMsg) {
 				t.Errorf("ValidConfigurationObject() error = %v, wantErr %v", err, tc.want.errMsg)
 				return
@@ -282,8 +284,8 @@ func TestReplaceTerraformSource(t *testing.T) {
 func TestIsDeletable(t *testing.T) {
 	ctx := context.Background()
 	s := runtime.NewScheme()
-	v1beta1.AddToScheme(s)
-	v1beta2.AddToScheme(s)
+	_ = v1beta1.AddToScheme(s)
+	_ = v1beta2.AddToScheme(s)
 	provider2 := &v1beta1.Provider{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "default",
@@ -443,7 +445,7 @@ func TestIsDeletable(t *testing.T) {
 func TestSetRegion(t *testing.T) {
 	ctx := context.Background()
 	s := runtime.NewScheme()
-	v1beta2.AddToScheme(s)
+	_ = v1beta2.AddToScheme(s)
 	k8sClient := fake.NewClientBuilder().WithScheme(s).Build()
 	configuration1 := v1beta2.Configuration{
 		ObjectMeta: metav1.ObjectMeta{
