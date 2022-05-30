@@ -40,13 +40,13 @@ const (
 
 // S3Backend is used to interact with the Terraform s3 backend
 type S3Backend struct {
-	client    s3iface.S3API
-	AccessKey string
-	SecretKey string
-	Token     string
-	Region    string
-	Key       string
-	Bucket    string
+	client       s3iface.S3API
+	AccessKey    string
+	SecretKey    string
+	SessionToken string
+	Region       string
+	Key          string
+	Bucket       string
 }
 
 func newS3BackendFromInline(ctx k8sContext, backendConfig *ParsedBackendConfig, optionSource *OptionSource) (Backend, error) {
@@ -110,9 +110,9 @@ func (s *S3Backend) fillOptions(ctx k8sContext, optionSource *OptionSource) erro
 
 	token, ok, err := optionSource.getOption(ctx, s3SessionToken)
 	if err != nil || !ok {
-		s.Token = ""
+		s.SessionToken = ""
 	}
-	s.Token = token
+	s.SessionToken = token
 
 	return nil
 }
@@ -120,7 +120,7 @@ func (s *S3Backend) fillOptions(ctx k8sContext, optionSource *OptionSource) erro
 func (s *S3Backend) buildClient() error {
 	sessionOpts := session.Options{
 		Config: aws.Config{
-			Credentials: credentials.NewStaticCredentials(s.AccessKey, s.SecretKey, s.Token),
+			Credentials: credentials.NewStaticCredentials(s.AccessKey, s.SecretKey, s.SessionToken),
 			Region:      aws.String(s.Region),
 		},
 	}
