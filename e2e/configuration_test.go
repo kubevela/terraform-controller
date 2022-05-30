@@ -183,13 +183,13 @@ continueCheck:
 	if err == nil {
 		podlist, err := clientSet.CoreV1().Pods("default").List(ctx, v1.ListOptions{})
 		if err != nil {
-			fmt.Println("get error: " + err.Error())
+			klog.Info("get error: " + err.Error())
 		}
 		if podlist != nil {
-			fmt.Println(len(podlist.Items))
+			klog.Infof("got podList: %#v", podlist.Items)
 		}
 	} else {
-		fmt.Println(err.Error())
+		klog.Info(err.Error())
 	}
 	assert.Equal(t, kerrors.IsNotFound(err), true)
 
