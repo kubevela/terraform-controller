@@ -149,11 +149,11 @@ func handleInlineBackendHCL(hclCode string) (string, interface{}, error) {
 	default:
 		return "", nil, fmt.Errorf("backend type (%s) is not supported", backendType)
 	}
-
 	diags = gohcl.DecodeBody(config.Terraform.Backend.Attrs, nil, backendConf)
 	if diags.HasErrors() {
 		return "", nil, fmt.Errorf("the inline backend hcl code is not valid Terraform backend configuration: %w", diags)
 	}
+
 	return backendType, backendConf, nil
 }
 
