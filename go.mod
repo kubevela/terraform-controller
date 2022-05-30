@@ -78,4 +78,4 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.1.2 // indirect
 )
 
-replace github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af => github.com/cloud-native-application/go-jmespath v0.5.0
+replace github.com/jmespath/go-jmespath v0.4.0 => github.com/cloud-native-application/go-jmespath v0.5.0
