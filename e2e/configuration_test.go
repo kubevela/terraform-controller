@@ -180,20 +180,6 @@ continueCheck:
 	assert.Equal(t, kerrors.IsNotFound(err), true)
 
 	_, err = clientSet.CoreV1().Secrets("default").Get(ctx, configuration.VariableSecretName, v1.GetOptions{})
-	if err == nil {
-		podList, err := clientSet.CoreV1().Pods("default").List(ctx, v1.ListOptions{})
-		if err != nil {
-			klog.Info("get error: " + err.Error())
-		}
-		if podList != nil {
-			klog.Infof("got podList: %#v", podList.Items)
-		}
-		if err != nil && podList != nil {
-			klog.Info("both nil")
-		}
-	} else {
-		klog.Info(err.Error())
-	}
 	assert.Equal(t, kerrors.IsNotFound(err), true)
 
 	if !useCustomBackend {
