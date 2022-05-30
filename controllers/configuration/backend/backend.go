@@ -156,6 +156,7 @@ func handleInlineBackendHCL(hclCode string) (string, interface{}, error) {
 func handleExplicitBackend(backend *v1beta2.Backend) (string, interface{}, error) {
 	// check if is valid custom backend
 	backendType := backend.BackendType
+
 	// fetch backendConfValue using reflection
 	backendStructValue := reflect.ValueOf(backend)
 	if backendStructValue.Kind() == reflect.Ptr {
