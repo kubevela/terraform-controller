@@ -175,10 +175,11 @@ continueCheck:
 	}
 
 	klog.Info("6. Checking Secrets and ConfigMap which should all be deleted")
-	_, err = clientSet.CoreV1().Secrets("default").Get(ctx, configuration.VariableSecretName, v1.GetOptions{})
-	assert.Equal(t, kerrors.IsNotFound(err), true)
 
 	_, err = clientSet.CoreV1().Secrets("default").Get(ctx, configuration.OutputsSecretName, v1.GetOptions{})
+	assert.Equal(t, kerrors.IsNotFound(err), true)
+
+	_, err = clientSet.CoreV1().Secrets("default").Get(ctx, configuration.VariableSecretName, v1.GetOptions{})
 	assert.Equal(t, kerrors.IsNotFound(err), true)
 
 	if !useCustomBackend {
