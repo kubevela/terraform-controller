@@ -114,10 +114,7 @@ func handleInlineBackendHCL(hclCode string) (string, interface{}, error) {
 	type TerraformConfig struct {
 		Terraform struct {
 			Backend struct {
-				// Name is the label of the backend hcl block
-				// It means which backend type the configuration will use
-				Name string `hcl:"name,label"`
-				// Attrs are the key-value pairs in the backend hcl block
+				Name  string   `hcl:"name,label"`
 				Attrs hcl.Body `hcl:",remain"`
 			} `hcl:"backend,block"`
 		} `hcl:"terraform,block"`
