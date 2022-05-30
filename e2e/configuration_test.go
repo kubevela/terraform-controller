@@ -183,7 +183,7 @@ continueCheck:
 	if err == nil {
 		podlist, err := clientSet.CoreV1().Pods("default").List(ctx, v1.ListOptions{})
 		if err != nil {
-			fmt.Println(err.Error())
+			fmt.Println("get error: " + err.Error())
 		}
 		if podlist != nil {
 			fmt.Println(len(podlist.Items))
