@@ -188,6 +188,9 @@ continueCheck:
 		if podlist != nil {
 			klog.Infof("got podList: %#v", podlist.Items)
 		}
+		if err != nil && podlist != nil {
+			klog.Info("both nil")
+		}
 	} else {
 		klog.Info(err.Error())
 	}
