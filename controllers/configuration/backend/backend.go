@@ -110,7 +110,6 @@ func handleDefaultBackend(configuration *v1beta2.Configuration, k8sClient client
 }
 
 func handleInlineBackendHCL(hclCode string) (string, interface{}, error) {
-
 	type TerraformConfig struct {
 		Terraform struct {
 			Backend struct {
