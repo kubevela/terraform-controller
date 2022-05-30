@@ -145,7 +145,6 @@ terraform {
 	backend "kubernetes" {
 		secret_suffix     = ""
 		namespace         = "vela-system"
-		in_cluster_config = true
 	}
 }
 `,
@@ -180,7 +179,6 @@ terraform {
 							Inline: `backend "kubernetes" {
 	secret_suffix     = "tt"
 	namespace         = "vela-system"
-	in_cluster_config = true
 }`,
 						},
 					},

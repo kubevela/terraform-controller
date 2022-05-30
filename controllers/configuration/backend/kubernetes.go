@@ -68,30 +68,10 @@ func newDefaultK8SBackend(suffix string, client client.Client) *K8SBackend {
 	}
 }
 
-func newK8SBackendFromInline(ctx k8sContext, backendConfig *ParsedBackendConfig, _ *OptionSource) (Backend, error) {
-	suffix, err := backendConfig.getAttrString("secret_suffix")
-	if err != nil {
-		return nil, err
-	}
-	ns, err := backendConfig.getAttrString("namespace")
-	if err != nil {
-		return nil, err
-	}
-	if ns == "" {
-		ns = getDefaultK8sBackendSecretNS()
-	}
-	return &K8SBackend{
-		Client:       ctx.k8sClient,
-		HCLCode:      renderK8SBackendHCL(suffix, ns),
-		SecretSuffix: suffix,
-		SecretNS:     ns,
-	}, nil
-}
-
-func newK8SBackendFromExplicit(ctx k8sContext, backendConfig interface{}, _ *OptionSource) (Backend, error) {
-	conf, ok := backendConfig.(*v1beta2.KubernetesBackendConf)
+func newK8SBackend(_ context.Context, options *buildBackendOptions) (Backend, error) {
+	conf, ok := options.backendConf.(*v1beta2.KubernetesBackendConf)
 	if !ok || conf == nil {
-		return nil, errors.New("invalid backendConf")
+		return nil, fmt.Errorf("invalid backendConf, want *v1beta2.KubernetesBackendConf, but got %#v", options.backendConf)
 	}
 	ns := ""
 	if conf.Namespace != nil {
@@ -100,7 +80,7 @@ func newK8SBackendFromExplicit(ctx k8sContext, backendConfig interface{}, _ *Opt
 		ns = getDefaultK8sBackendSecretNS()
 	}
 	return &K8SBackend{
-		Client:       ctx.k8sClient,
+		Client:       options.k8sClient,
 		HCLCode:      renderK8SBackendHCL(conf.SecretSuffix, ns),
 		SecretSuffix: conf.SecretSuffix,
 		SecretNS:     ns,

@@ -29,7 +29,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/oam-dev/terraform-controller/api/v1beta2"
-	"github.com/pkg/errors"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -49,44 +49,17 @@ type S3Backend struct {
 	Bucket       string
 }
 
-func newS3BackendFromInline(ctx k8sContext, backendConfig *ParsedBackendConfig, optionSource *OptionSource) (Backend, error) {
-	region, err := backendConfig.getAttrString("region")
-	if err != nil {
-		return nil, err
-	}
-	key, err := backendConfig.getAttrString("key")
-	if err != nil {
-		return nil, err
-	}
-	bucket, err := backendConfig.getAttrString("bucket")
-	if err != nil {
-		return nil, err
-	}
-	s3Backend := &S3Backend{
-		Region: region,
-		Key:    key,
-		Bucket: bucket,
-	}
-	if err := s3Backend.fillOptions(ctx, optionSource); err != nil {
-		return nil, err
-	}
-	if err := s3Backend.buildClient(); err != nil {
-		return nil, err
-	}
-	return s3Backend, nil
-}
-
-func newS3BackendFromExplicit(ctx k8sContext, backendConfig interface{}, optionSource *OptionSource) (Backend, error) {
-	conf, ok := backendConfig.(*v1beta2.S3BackendConf)
+func newS3Backend(ctx context.Context, options *buildBackendOptions) (Backend, error) {
+	conf, ok := options.backendConf.(*v1beta2.S3BackendConf)
 	if !ok || conf == nil {
-		return nil, errors.New("invalid backendConf")
+		return nil, fmt.Errorf("invalid backendConf, want *v1beta2.S3BackendConf, but got %#v", options.backendConf)
 	}
 	s3Backend := &S3Backend{
 		Region: conf.Region,
 		Key:    conf.Key,
 		Bucket: conf.Bucket,
 	}
-	if err := s3Backend.fillOptions(ctx, optionSource); err != nil {
+	if err := s3Backend.fillOptions(ctx, options.k8sClient, options.configurationNS, options.extraOptionSource); err != nil {
 		return nil, err
 	}
 	if err := s3Backend.buildClient(); err != nil {
@@ -95,20 +68,20 @@ func newS3BackendFromExplicit(ctx k8sContext, backendConfig interface{}, optionS
 	return s3Backend, nil
 }
 
-func (s *S3Backend) fillOptions(ctx k8sContext, optionSource *OptionSource) error {
-	accessKey, ok, err := optionSource.getOption(ctx, s3AccessKey)
+func (s *S3Backend) fillOptions(ctx context.Context, k8sClient client.Client, namespace string, optionSource *OptionSource) error {
+	accessKey, ok, err := optionSource.getOption(ctx, k8sClient, namespace, s3AccessKey)
 	if err != nil || !ok {
 		return fmt.Errorf("get option %s error", s3AccessKey)
 	}
 	s.AccessKey = accessKey
 
-	secretKey, ok, err := optionSource.getOption(ctx, s3SecretKey)
+	secretKey, ok, err := optionSource.getOption(ctx, k8sClient, namespace, s3SecretKey)
 	if err != nil || !ok {
 		return fmt.Errorf("get option %s error", s3SecretKey)
 	}
 	s.SecretKey = secretKey
 
-	token, ok, err := optionSource.getOption(ctx, s3SessionToken)
+	token, ok, err := optionSource.getOption(ctx, k8sClient, namespace, s3SessionToken)
 	if err != nil || !ok {
 		s.SessionToken = ""
 	}

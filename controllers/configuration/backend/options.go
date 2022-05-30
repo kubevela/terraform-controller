@@ -18,20 +18,10 @@ package backend
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/hashicorp/hcl/v2"
-	"github.com/zclconf/go-cty/cty"
-	"github.com/zclconf/go-cty/cty/gocty"
 	v1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
-
-type k8sContext struct {
-	context.Context
-	k8sClient client.Client
-	namespace string
-}
 
 // OptionSource contains all the sources from where the backendInitFunc can get options to build the Backend
 type OptionSource struct {
@@ -39,42 +29,14 @@ type OptionSource struct {
 	// add more sources if needed
 }
 
-// ParsedBackendConfig is a struct parsed from the backend hcl block
-type ParsedBackendConfig struct {
-	// Name is the label of the backend hcl block
-	// It means which backend type the configuration will use
-	Name string `hcl:"name,label"`
-	// Attrs are the key-value pairs in the backend hcl block
-	Attrs hcl.Body `hcl:",remain"`
+type buildBackendOptions struct {
+	configurationNS   string
+	k8sClient         client.Client
+	backendConf       interface{}
+	extraOptionSource *OptionSource
 }
 
-func (conf ParsedBackendConfig) getAttrValue(key string) (*cty.Value, error) {
-	attrs, diags := conf.Attrs.JustAttributes()
-	if diags.HasErrors() {
-		return nil, diags
-	}
-	attr := attrs[key]
-	if attr == nil {
-		return nil, fmt.Errorf("cannot find attr %s", key)
-	}
-	v, diags := attr.Expr.Value(nil)
-	if diags.HasErrors() {
-		return nil, diags
-	}
-	return &v, nil
-}
-
-func (conf ParsedBackendConfig) getAttrString(key string) (string, error) {
-	v, err := conf.getAttrValue(key)
-	if err != nil {
-		return "", err
-	}
-	result := ""
-	err = gocty.FromCtyValue(*v, &result)
-	return result, err
-}
-
-func (source OptionSource) getOption(ctx k8sContext, key string) (string, bool, error) {
+func (source OptionSource) getOption(ctx context.Context, k8sClient client.Client, namespace string, key string) (string, bool, error) {
 	var (
 		option v1.EnvVar
 		found  bool
@@ -98,7 +60,7 @@ func (source OptionSource) getOption(ctx k8sContext, key string) (string, bool, 
 	case option.ValueFrom.SecretKeyRef != nil:
 		secretKeyRef := option.ValueFrom.SecretKeyRef
 		secret := &v1.Secret{}
-		if err := ctx.k8sClient.Get(ctx, client.ObjectKey{Name: secretKeyRef.Name, Namespace: ctx.namespace}, secret); err != nil {
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: secretKeyRef.Name, Namespace: namespace}, secret); err != nil {
 			return "", false, err
 		}
 		value := secret.Data[secretKeyRef.Key]
@@ -110,7 +72,7 @@ func (source OptionSource) getOption(ctx k8sContext, key string) (string, bool, 
 	case option.ValueFrom.ConfigMapKeyRef != nil:
 		configMapKeyRef := option.ValueFrom.ConfigMapKeyRef
 		configMap := &v1.ConfigMap{}
-		if err := ctx.k8sClient.Get(ctx, client.ObjectKey{Name: configMapKeyRef.Name, Namespace: ctx.namespace}, configMap); err != nil {
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: configMapKeyRef.Name, Namespace: namespace}, configMap); err != nil {
 			return "", false, err
 		}
 		value := configMap.Data[configMapKeyRef.Key]
