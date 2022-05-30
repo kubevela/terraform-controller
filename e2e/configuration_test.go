@@ -180,6 +180,17 @@ continueCheck:
 	assert.Equal(t, kerrors.IsNotFound(err), true)
 
 	_, err = clientSet.CoreV1().Secrets("default").Get(ctx, configuration.VariableSecretName, v1.GetOptions{})
+	if err == nil {
+		podlist, err := clientSet.CoreV1().Pods("default").List(ctx, v1.ListOptions{})
+		if err != nil {
+			fmt.Println(err.Error())
+		}
+		if podlist != nil {
+			fmt.Println(len(podlist.Items))
+		}
+	} else {
+		fmt.Println(err.Error())
+	}
 	assert.Equal(t, kerrors.IsNotFound(err), true)
 
 	if !useCustomBackend {
