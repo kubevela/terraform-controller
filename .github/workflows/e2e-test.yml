@@ -58,7 +58,7 @@ jobs:
 
       - name: E2E tests
         run: |
-          for i in 1 2 3 4 5; do `make configuration` && break ; done
+          make configuration
         env:
           TERRAFORM_BACKEND_NAMESPACE: terraform
 
