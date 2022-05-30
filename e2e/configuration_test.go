@@ -181,14 +181,14 @@ continueCheck:
 
 	_, err = clientSet.CoreV1().Secrets("default").Get(ctx, configuration.VariableSecretName, v1.GetOptions{})
 	if err == nil {
-		podlist, err := clientSet.CoreV1().Pods("default").List(ctx, v1.ListOptions{})
+		podList, err := clientSet.CoreV1().Pods("default").List(ctx, v1.ListOptions{})
 		if err != nil {
 			klog.Info("get error: " + err.Error())
 		}
-		if podlist != nil {
-			klog.Infof("got podList: %#v", podlist.Items)
+		if podList != nil {
+			klog.Infof("got podList: %#v", podList.Items)
 		}
-		if err != nil && podlist != nil {
+		if err != nil && podList != nil {
 			klog.Info("both nil")
 		}
 	} else {
