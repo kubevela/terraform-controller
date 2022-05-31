@@ -208,6 +208,7 @@ type TFConfigurationMeta struct {
 	VariableSecretName    string
 	VariableSecretData    map[string][]byte
 	DeleteResource        bool
+	Region                string
 	Credentials           map[string]string
 
 	Backend backend.Backend
@@ -582,6 +583,7 @@ func (meta *TFConfigurationMeta) updateApplyStatus(ctx context.Context, k8sClien
 		configuration.Status.Apply = v1beta2.ConfigurationApplyStatus{
 			State:   state,
 			Message: message,
+			Region:  meta.Region,
 		}
 		configuration.Status.ObservedGeneration = configuration.Generation
 		if state == types.Available {
@@ -1110,5 +1112,6 @@ func (meta *TFConfigurationMeta) getCredentials(ctx context.Context, k8sClient c
 		return errors.New(provider.ErrCredentialNotRetrieved)
 	}
 	meta.Credentials = credentials
+	meta.Region = region
 	return nil
 }

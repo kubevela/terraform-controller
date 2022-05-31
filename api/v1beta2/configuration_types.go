@@ -93,6 +93,9 @@ type ConfigurationApplyStatus struct {
 	State   state.ConfigurationState `json:"state,omitempty"`
 	Message string                   `json:"message,omitempty"`
 	Outputs map[string]Property      `json:"outputs,omitempty"`
+	// Region is the region for the cloud resources created by this Configuration. If spec.region is not empty, it's the
+	// value of it. Otherwise, it's the value of spec.providerReference.region.
+	Region string `json:"region,omitempty"`
 }
 
 // ConfigurationDestroyStatus is the status for Configuration destroy

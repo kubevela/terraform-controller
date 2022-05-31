@@ -307,6 +307,11 @@ spec:
                           type: string
                       type: object
                     type: object
+                  region:
+                    description: Region is the region for the cloud resources created
+                      by this Configuration. If spec.region is not empty, it's the
+                      value of it. Otherwise, it's the value of spec.providerReference.region.
+                    type: string
                   state:
                     description: A ConfigurationState represents the status of a resource
                     type: string
