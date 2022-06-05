@@ -510,6 +510,33 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 		}
 	}
 
+	// Render configuration with backend
+	completeConfiguration, backendConf, err := tfcfg.RenderConfiguration(configuration, r.Client, configurationType, meta.Credentials)
+	if err != nil {
+		return err
+	}
+	meta.CompleteConfiguration, meta.Backend = completeConfiguration, backendConf
+
+	if configuration.ObjectMeta.DeletionTimestamp.IsZero() {
+		if err := meta.storeTFConfiguration(ctx, k8sClient); err != nil {
+			return err
+		}
+	}
+
+	// Check whether configuration(hcl/json) is changed
+	if err := meta.CheckWhetherConfigurationChanges(ctx, k8sClient, configurationType); err != nil {
+		return err
+	}
+
+	if meta.ConfigurationChanged {
+		klog.InfoS("Configuration hanged, reloading...")
+		if err := meta.updateApplyStatus(ctx, k8sClient, types.ConfigurationReloading, types.ConfigurationReloadingAsHCLChanged); err != nil {
+			return err
+		}
+		// store configuration to ConfigMap
+		return meta.storeTFConfiguration(ctx, k8sClient)
+	}
+
 	// Check whether env changes
 	if err := meta.prepareTFVariables(configuration); err != nil {
 		return err
@@ -544,33 +571,6 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 		}
 	default:
 		return err
-	}
-
-	// Render configuration with backend
-	completeConfiguration, backendConf, err := tfcfg.RenderConfiguration(configuration, r.Client, configurationType, meta.Envs)
-	if err != nil {
-		return err
-	}
-	meta.CompleteConfiguration, meta.Backend = completeConfiguration, backendConf
-
-	if configuration.ObjectMeta.DeletionTimestamp.IsZero() {
-		if err := meta.storeTFConfiguration(ctx, k8sClient); err != nil {
-			return err
-		}
-	}
-
-	// Check whether configuration(hcl/json) is changed
-	if err := meta.CheckWhetherConfigurationChanges(ctx, k8sClient, configurationType); err != nil {
-		return err
-	}
-
-	if meta.ConfigurationChanged {
-		klog.InfoS("Configuration hanged, reloading...")
-		if err := meta.updateApplyStatus(ctx, k8sClient, types.ConfigurationReloading, types.ConfigurationReloadingAsHCLChanged); err != nil {
-			return err
-		}
-		// store configuration to ConfigMap
-		return meta.storeTFConfiguration(ctx, k8sClient)
 	}
 
 	// Apply ClusterRole

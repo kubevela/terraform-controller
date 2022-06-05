@@ -8,7 +8,6 @@ import (
 
 	"github.com/oam-dev/terraform-controller/controllers/configuration/backend"
 	"github.com/pkg/errors"
-	v1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	apitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
@@ -52,8 +51,8 @@ func ValidConfigurationObject(configuration *v1beta2.Configuration) (types.Confi
 }
 
 // RenderConfiguration will compose the Terraform configuration with hcl/json and backend
-func RenderConfiguration(configuration *v1beta2.Configuration, k8sClient client.Client, configurationType types.ConfigurationType, envs []v1.EnvVar) (string, backend.Backend, error) {
-	backendInterface, err := backend.ParseConfigurationBackend(configuration, k8sClient, &backend.OptionSource{Envs: envs})
+func RenderConfiguration(configuration *v1beta2.Configuration, k8sClient client.Client, configurationType types.ConfigurationType, credentials map[string]string) (string, backend.Backend, error) {
+	backendInterface, err := backend.ParseConfigurationBackend(configuration, k8sClient, credentials)
 	if err != nil {
 		return "", nil, errors.Wrap(err, "failed to prepare Terraform backend configuration")
 	}

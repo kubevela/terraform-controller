@@ -19,90 +19,61 @@ package backend
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/credentials"
+	awscredentials "github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/oam-dev/terraform-controller/api/v1beta2"
+	"github.com/oam-dev/terraform-controller/controllers/provider"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-)
-
-const (
-	s3AccessKey    = "AWS_ACCESS_KEY_ID"
-	s3SecretKey    = "AWS_SECRET_ACCESS_KEY"
-	s3SessionToken = "AWS_SESSION_TOKEN"
 )
 
 // S3Backend is used to interact with the Terraform s3 backend
 type S3Backend struct {
-	client       s3iface.S3API
-	AccessKey    string
-	SecretKey    string
-	SessionToken string
-	Region       string
-	Key          string
-	Bucket       string
+	client s3iface.S3API
+	Region string
+	Key    string
+	Bucket string
 }
 
-func newS3Backend(ctx context.Context, options *buildBackendOptions) (Backend, error) {
-	conf, ok := options.backendConf.(*v1beta2.S3BackendConf)
+func newS3Backend(_ client.Client, backendConf interface{}, credentials map[string]string) (Backend, error) {
+	conf, ok := backendConf.(*v1beta2.S3BackendConf)
 	if !ok || conf == nil {
-		return nil, fmt.Errorf("invalid backendConf, want *v1beta2.S3BackendConf, but got %#v", options.backendConf)
+		return nil, fmt.Errorf("invalid backendConf, want *v1beta2.S3BackendConf, but got %#v", backendConf)
 	}
 	s3Backend := &S3Backend{
 		Region: conf.Region,
 		Key:    conf.Key,
 		Bucket: conf.Bucket,
 	}
-	if err := s3Backend.fillOptions(ctx, options.k8sClient, options.configurationNS, options.extraOptionSource); err != nil {
-		return nil, err
-	}
-	if err := s3Backend.buildClient(); err != nil {
-		return nil, err
-	}
-	return s3Backend, nil
-}
 
-func (s *S3Backend) fillOptions(ctx context.Context, k8sClient client.Client, namespace string, optionSource *OptionSource) error {
-	accessKey, ok, err := optionSource.getOption(ctx, k8sClient, namespace, s3AccessKey)
-	if err != nil || !ok {
-		return fmt.Errorf("get option %s error", s3AccessKey)
+	accessKey := credentials[provider.EnvAWSAccessKeyID]
+	secretKey := credentials[provider.EnvAWSSecretAccessKey]
+	sessionToken := credentials[provider.EnvAWSSessionToken]
+	if accessKey == "" || secretKey == "" {
+		return nil, errors.New("fail to get credentials when build s3 backend")
 	}
-	s.AccessKey = accessKey
 
-	secretKey, ok, err := optionSource.getOption(ctx, k8sClient, namespace, s3SecretKey)
-	if err != nil || !ok {
-		return fmt.Errorf("get option %s error", s3SecretKey)
-	}
-	s.SecretKey = secretKey
-
-	token, ok, err := optionSource.getOption(ctx, k8sClient, namespace, s3SessionToken)
-	if err != nil || !ok {
-		s.SessionToken = ""
-	}
-	s.SessionToken = token
-
-	return nil
-}
-
-func (s *S3Backend) buildClient() error {
+	// build s3 client
 	sessionOpts := session.Options{
 		Config: aws.Config{
-			Credentials: credentials.NewStaticCredentials(s.AccessKey, s.SecretKey, s.SessionToken),
-			Region:      aws.String(s.Region),
+			Credentials: awscredentials.NewStaticCredentials(accessKey, secretKey, sessionToken),
+			Region:      aws.String(s3Backend.Region),
 		},
 	}
 	sess, err := session.NewSessionWithOptions(sessionOpts)
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("fial to build s3 backend: %w", err)
 	}
-	s.client = s3.New(sess)
-	return nil
+	s3Backend.client = s3.New(sess)
+
+	return s3Backend, nil
 }
 
 func (s *S3Backend) getObject() (*s3.GetObjectOutput, error) {

@@ -43,7 +43,7 @@ type Backend interface {
 	CleanUp(ctx context.Context) error
 }
 
-type backendInitFunc func(ctx context.Context, options *buildBackendOptions) (Backend, error)
+type backendInitFunc func(k8sClient client.Client, backendConf interface{}, credentials map[string]string) (Backend, error)
 
 var backendInitFuncMap = map[string]backendInitFunc{
 	"kubernetes": newK8SBackend,
@@ -51,7 +51,7 @@ var backendInitFuncMap = map[string]backendInitFunc{
 }
 
 // ParseConfigurationBackend parses backend Conf from the v1beta2.Configuration
-func ParseConfigurationBackend(configuration *v1beta2.Configuration, k8sClient client.Client, optionSource *OptionSource) (Backend, error) {
+func ParseConfigurationBackend(configuration *v1beta2.Configuration, k8sClient client.Client, credentials map[string]string) (Backend, error) {
 	backend := configuration.Spec.Backend
 
 	var (
@@ -81,17 +81,11 @@ func ParseConfigurationBackend(configuration *v1beta2.Configuration, k8sClient c
 		return nil, err
 	}
 
-	backendOpts := &buildBackendOptions{
-		configurationNS:   configuration.Namespace,
-		k8sClient:         k8sClient,
-		backendConf:       backendConf,
-		extraOptionSource: optionSource,
-	}
 	initFunc := backendInitFuncMap[backendType]
 	if initFunc == nil {
 		return nil, fmt.Errorf("backend type (%s) is not supported", backendType)
 	}
-	return initFunc(context.Background(), backendOpts)
+	return initFunc(k8sClient, backendConf, credentials)
 }
 
 func handleDefaultBackend(configuration *v1beta2.Configuration, k8sClient client.Client) (Backend, error) {

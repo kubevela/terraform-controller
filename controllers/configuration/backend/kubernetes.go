@@ -68,10 +68,10 @@ func newDefaultK8SBackend(suffix string, client client.Client) *K8SBackend {
 	}
 }
 
-func newK8SBackend(_ context.Context, options *buildBackendOptions) (Backend, error) {
-	conf, ok := options.backendConf.(*v1beta2.KubernetesBackendConf)
+func newK8SBackend(k8sClient client.Client, backendConf interface{}, _ map[string]string) (Backend, error) {
+	conf, ok := backendConf.(*v1beta2.KubernetesBackendConf)
 	if !ok || conf == nil {
-		return nil, fmt.Errorf("invalid backendConf, want *v1beta2.KubernetesBackendConf, but got %#v", options.backendConf)
+		return nil, fmt.Errorf("invalid backendConf, want *v1beta2.KubernetesBackendConf, but got %#v", backendConf)
 	}
 	ns := ""
 	if conf.Namespace != nil {
@@ -80,7 +80,7 @@ func newK8SBackend(_ context.Context, options *buildBackendOptions) (Backend, er
 		ns = getDefaultK8sBackendSecretNS()
 	}
 	return &K8SBackend{
-		Client:       options.k8sClient,
+		Client:       k8sClient,
 		HCLCode:      renderK8SBackendHCL(conf.SecretSuffix, ns),
 		SecretSuffix: conf.SecretSuffix,
 		SecretNS:     ns,

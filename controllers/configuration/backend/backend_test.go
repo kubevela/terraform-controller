@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/oam-dev/terraform-controller/api/v1beta2"
+	"github.com/oam-dev/terraform-controller/controllers/provider"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -14,7 +15,7 @@ import (
 func TestParseConfigurationBackend(t *testing.T) {
 	type args struct {
 		configuration *v1beta2.Configuration
-		optionSource  *OptionSource
+		credentials   map[string]string
 	}
 	type want struct {
 		backend Backend
@@ -302,22 +303,10 @@ terraform {
 		{
 			name: "inline s3 backend",
 			args: args{
-				optionSource: &OptionSource{
-					Envs: []v1.EnvVar{
-						{
-							Name: s3AccessKey,
-							ValueFrom: &v1.EnvVarSource{
-								SecretKeyRef: &v1.SecretKeySelector{
-									LocalObjectReference: v1.LocalObjectReference{Name: "secretref"},
-									Key:                  "access",
-								},
-							},
-						},
-						{
-							Name:  s3SecretKey,
-							Value: "secret",
-						},
-					},
+				credentials: map[string]string{
+					provider.EnvAWSAccessKeyID:     "a",
+					provider.EnvAWSSessionToken:    "token",
+					provider.EnvAWSSecretAccessKey: "secret",
 				},
 				configuration: &v1beta2.Configuration{
 					ObjectMeta: metav1.ObjectMeta{Namespace: "a"},
@@ -339,44 +328,20 @@ terraform {
 			want: want{
 				errMsg: "",
 				backend: &S3Backend{
-					client:       nil,
-					AccessKey:    "access_key",
-					SecretKey:    "secret",
-					SessionToken: "",
-					Region:       "us-east-1",
-					Key:          "test.tfstate",
-					Bucket:       "bucket1",
+					client: nil,
+					Region: "us-east-1",
+					Key:    "test.tfstate",
+					Bucket: "bucket1",
 				},
 			},
 		},
 		{
 			name: "explicit s3 backend",
 			args: args{
-				optionSource: &OptionSource{
-					Envs: []v1.EnvVar{
-						{
-							Name: s3AccessKey,
-							ValueFrom: &v1.EnvVarSource{
-								SecretKeyRef: &v1.SecretKeySelector{
-									LocalObjectReference: v1.LocalObjectReference{Name: "secretref"},
-									Key:                  "access",
-								},
-							},
-						},
-						{
-							Name: s3SessionToken,
-							ValueFrom: &v1.EnvVarSource{
-								ConfigMapKeyRef: &v1.ConfigMapKeySelector{
-									LocalObjectReference: v1.LocalObjectReference{Name: "configmapref"},
-									Key:                  "token",
-								},
-							},
-						},
-						{
-							Name:  s3SecretKey,
-							Value: "secret",
-						},
-					},
+				credentials: map[string]string{
+					provider.EnvAWSAccessKeyID:     "a",
+					provider.EnvAWSSessionToken:    "token",
+					provider.EnvAWSSecretAccessKey: "secret",
 				},
 				configuration: &v1beta2.Configuration{
 					ObjectMeta: metav1.ObjectMeta{Namespace: "a"},
@@ -395,13 +360,10 @@ terraform {
 			want: want{
 				errMsg: "",
 				backend: &S3Backend{
-					client:       nil,
-					AccessKey:    "access_key",
-					SecretKey:    "secret",
-					SessionToken: "token",
-					Region:       "us-east-1",
-					Key:          "test.tfstate",
-					Bucket:       "bucket1",
+					client: nil,
+					Region: "us-east-1",
+					Key:    "test.tfstate",
+					Bucket: "bucket1",
 				},
 			},
 		},
@@ -409,7 +371,7 @@ terraform {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := ParseConfigurationBackend(tc.args.configuration, k8sClient, tc.args.optionSource)
+			got, err := ParseConfigurationBackend(tc.args.configuration, k8sClient, tc.args.credentials)
 			if tc.want.errMsg != "" && !strings.Contains(err.Error(), tc.want.errMsg) {
 				t.Errorf("ValidConfigurationObject() error = %v, wantErr %v", err, tc.want.errMsg)
 				return

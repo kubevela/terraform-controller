@@ -8,7 +8,6 @@ import (
 
 	"github.com/oam-dev/terraform-controller/controllers/configuration/backend"
 	"github.com/stretchr/testify/assert"
-	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -109,7 +108,7 @@ func TestRenderConfiguration(t *testing.T) {
 		configuration     *v1beta2.Configuration
 		ns                string
 		configurationType types.ConfigurationType
-		envs              []v1.EnvVar
+		credentials       map[string]string
 	}
 	type want struct {
 		cfg              string
@@ -216,7 +215,7 @@ terraform {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, backendConf, err := RenderConfiguration(tc.args.configuration, k8sClient, tc.args.configurationType, tc.args.envs)
+			got, backendConf, err := RenderConfiguration(tc.args.configuration, k8sClient, tc.args.configurationType, tc.args.credentials)
 			if tc.want.errMsg != "" && !strings.Contains(err.Error(), tc.want.errMsg) {
 				t.Errorf("ValidConfigurationObject() error = %v, wantErr %v", err, tc.want.errMsg)
 				return
