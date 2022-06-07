@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"regexp"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -60,8 +61,13 @@ func getPodLog(ctx context.Context, client kubernetes.Interface, namespace, jobN
 	}(logs)
 
 	log, err := flushStream(logs, pod.Name)
+	if err != nil {
+		return stage, "", err
+	}
 
-	return stage, log, err
+	// To learn how it works, please refer to https://github.com/zzxwill/terraform-log-stripper.
+	strippedLog := stripColor(log)
+	return stage, strippedLog, nil
 }
 
 func flushStream(rc io.ReadCloser, podName string) (string, error) {
@@ -73,4 +79,10 @@ func flushStream(rc io.ReadCloser, podName string) (string, error) {
 	logContent := buf.String()
 	klog.V(4).Info("pod logs", "Pod", podName, "Logs", logContent)
 	return logContent, nil
+}
+
+func stripColor(log string) string {
+	var re = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+	str := re.ReplaceAllString(log, "")
+	return str
 }
