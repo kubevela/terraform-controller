@@ -30,6 +30,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+const (
+	backendTypeK8S = "kubernetes"
+	backendTypeS3  = "s3"
+)
+
 // Backend is an abstraction of what all backend types can do
 type Backend interface {
 	// HCL can get the hcl code string
@@ -46,8 +51,8 @@ type Backend interface {
 type backendInitFunc func(k8sClient client.Client, backendConf interface{}, credentials map[string]string) (Backend, error)
 
 var backendInitFuncMap = map[string]backendInitFunc{
-	"kubernetes": newK8SBackend,
-	"s3":         newS3Backend,
+	backendTypeK8S: newK8SBackend,
+	backendTypeS3:  newS3Backend,
 }
 
 // ParseConfigurationBackend parses backend Conf from the v1beta2.Configuration
@@ -61,7 +66,6 @@ func ParseConfigurationBackend(configuration *v1beta2.Configuration, k8sClient c
 	)
 
 	switch {
-
 	case backend == nil || (backend.Inline == "" && backend.BackendType == ""):
 		// use the default k8s backend
 		return handleDefaultBackend(configuration, k8sClient)
@@ -132,9 +136,9 @@ func handleInlineBackendHCL(hclCode string) (string, interface{}, error) {
 
 	var backendConf interface{}
 	switch strings.ToLower(backendType) {
-	case "kubernetes":
+	case backendTypeK8S:
 		backendConf = &v1beta2.KubernetesBackendConf{}
-	case "s3":
+	case backendTypeS3:
 		backendConf = &v1beta2.S3BackendConf{}
 	default:
 		return "", nil, fmt.Errorf("backend type (%s) is not supported", backendType)
@@ -159,7 +163,7 @@ func handleExplicitBackend(backend *v1beta2.Backend) (string, interface{}, error
 	backendField := backendStructValue.FieldByNameFunc(func(name string) bool {
 		return strings.EqualFold(name, backendType)
 	})
-	if backendField.IsNil() {
+	if backendField.Kind() != reflect.Ptr || backendField.IsNil() {
 		return "", nil, fmt.Errorf("there is no configuration for backendType %s", backend.BackendType)
 	}
 	return backendType, backendField.Interface(), nil

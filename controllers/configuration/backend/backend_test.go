@@ -209,7 +209,7 @@ terraform {
 				configuration: &v1beta2.Configuration{
 					Spec: v1beta2.ConfigurationSpec{
 						Backend: &v1beta2.Backend{
-							BackendType: "kubernetes",
+							BackendType: backendTypeK8S,
 							Kubernetes: &v1beta2.KubernetesBackendConf{
 								SecretSuffix: "suffix",
 							},
@@ -274,7 +274,7 @@ terraform {
 					ObjectMeta: metav1.ObjectMeta{Namespace: "a"},
 					Spec: v1beta2.ConfigurationSpec{
 						Backend: &v1beta2.Backend{
-							BackendType: "kubernetes",
+							BackendType: backendTypeK8S,
 						},
 					},
 				},
@@ -291,7 +291,7 @@ terraform {
 					Spec: v1beta2.ConfigurationSpec{
 						Backend: &v1beta2.Backend{
 							Inline:      `kkk`,
-							BackendType: "kubernetes",
+							BackendType: backendTypeK8S,
 						},
 					},
 				},
@@ -347,7 +347,7 @@ terraform {
 					ObjectMeta: metav1.ObjectMeta{Namespace: "a"},
 					Spec: v1beta2.ConfigurationSpec{
 						Backend: &v1beta2.Backend{
-							BackendType: "s3",
+							BackendType: backendTypeS3,
 							S3: &v1beta2.S3BackendConf{
 								Region: "us-east-1",
 								Bucket: "bucket1",
