@@ -141,3 +141,40 @@ func TestFlushStream(t *testing.T) {
 		})
 	}
 }
+
+func TestStripColor(t *testing.T) {
+	type args struct {
+		log string
+	}
+	type want struct {
+		newLog string
+	}
+
+	var testcases = map[string]struct {
+		args args
+		want want
+	}{
+		"without color": {
+			args: args{
+				log: "abc",
+			},
+			want: want{
+				newLog: "abc",
+			},
+		},
+		"with color": {
+			args: args{
+				log: `[1mFailed`,
+			},
+			want: want{
+				newLog: "Failed",
+			},
+		},
+	}
+	for name, tc := range testcases {
+		t.Run(name, func(t *testing.T) {
+			got := stripColor(tc.args.log)
+			assert.Equal(t, tc.want.newLog, got)
+		})
+	}
+}
