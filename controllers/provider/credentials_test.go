@@ -1012,6 +1012,15 @@ func TestGetProviderCredentials4AWS(t *testing.T) {
 		},
 	}
 
+	provider2 := v1beta1.Provider{
+		Spec: v1beta1.ProviderSpec{
+			Provider: string(aws),
+			Credentials: v1beta1.ProviderCredentials{
+				Source: "InjectedIdentity",
+			},
+		},
+	}
+
 	secret2 := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "wrong-data",
@@ -1024,6 +1033,9 @@ func TestGetProviderCredentials4AWS(t *testing.T) {
 	}
 	k8sClient2 := fake.NewClientBuilder().Build()
 	assert.Nil(t, k8sClient2.Create(ctx, secret2))
+
+	// k8sClient3 := fake.NewClientBuilder().Build()
+	// assert.Nil(t, k8sClient2.Create(ctx, &provider2))
 
 	var badProvider v1beta1.Provider
 	copier.CopyWithOption(&badProvider, &provider, copier.Option{DeepCopy: true})
@@ -1052,6 +1064,19 @@ func TestGetProviderCredentials4AWS(t *testing.T) {
 				envAWSSecretAccessKey: "b",
 				envAWSSessionToken:    "c",
 				envAWSDefaultRegion:   "bj",
+			},
+		},
+		{
+			name: "provider with injectd identity",
+			args: args{
+				k8sClient: k8sClient,
+				provider:  provider2,
+				region:    "bj",
+			},
+			want: map[string]string{
+				envAWSRoleArn:              "",
+				envAWSWebIdentityTokenFile: "",
+				envAWSDefaultRegion:        "bj",
 			},
 		},
 		{

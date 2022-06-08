@@ -115,12 +115,17 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, provid
 			klog.InfoS(errMsg, "Provider", provider.Spec.Provider)
 			return nil, errors.New(errMsg)
 		}
+	case "InjectedIdentity":
+		if provider.Spec.Provider == "aws" {
+			return getAWSCredentialsInjectedIdentity(region)
+		}
 	default:
 		errMsg := "the credentials type is not supported."
 		err := errors.New(errMsg)
 		klog.ErrorS(err, "", "CredentialType", provider.Spec.Credentials.Source)
 		return nil, err
 	}
+	return nil, nil
 }
 
 // GetProviderFromConfiguration gets provider object from Configuration

@@ -90,6 +90,8 @@ const (
 	ClusterRoleName = "tf-executor-clusterrole"
 	// ServiceAccountName is the name of the ServiceAccount for Terraform Job
 	ServiceAccountName = "tf-executor-service-account"
+	// ArnRoleName is the name of the ARN annotated in ServiceAccount for Terraform Job
+	arnrolename = "arn:aws:iam::001122334455:role/terraform-controller-sa"
 )
 
 // ConfigurationReconciler reconciles a Configuration object.
@@ -622,7 +624,7 @@ func (meta *TFConfigurationMeta) updateDestroyStatus(ctx context.Context, k8sCli
 
 func (meta *TFConfigurationMeta) assembleAndTriggerJob(ctx context.Context, k8sClient client.Client, executionType TerraformExecutionType) error {
 	// apply rbac
-	if err := createTerraformExecutorServiceAccount(ctx, k8sClient, meta.Namespace, ServiceAccountName); err != nil {
+	if err := createTerraformExecutorServiceAccount(ctx, k8sClient, meta.Namespace, ServiceAccountName, arnrolename); err != nil {
 		return err
 	}
 	if err := createTerraformExecutorClusterRoleBinding(ctx, k8sClient, meta.Namespace, fmt.Sprintf("%s-%s", meta.Namespace, ClusterRoleName), ServiceAccountName); err != nil {
