@@ -1222,7 +1222,7 @@ func TestTerraformDestroy(t *testing.T) {
 		want want
 	}{
 		{
-			name: "provider is not ready",
+			name: "directly clean resources",
 			args: args{
 				r:             r1,
 				configuration: &v1beta2.Configuration{},
@@ -1231,9 +1231,7 @@ func TestTerraformDestroy(t *testing.T) {
 					Namespace:           "default",
 				},
 			},
-			want: want{
-				errMsg: "jobs.batch \"\" not found",
-			},
+			want: want{},
 		},
 		{
 			name: "referenced provider is not available",

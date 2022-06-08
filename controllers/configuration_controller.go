@@ -353,10 +353,15 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, namespac
 		return nil
 	}
 	// When the deletion Job process succeeded, clean up work is starting.
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.DestroyJobName, Namespace: meta.Namespace}, &destroyJob); err != nil {
-		return err
+	if !deleteConfigurationDirectly {
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.DestroyJobName, Namespace: meta.Namespace}, &destroyJob); err != nil {
+			return err
+		}
+		if destroyJob.Status.Succeeded == int32(1) {
+			return r.cleanUpSubResources(ctx, namespace, configuration, meta)
+		}
 	}
-	if destroyJob.Status.Succeeded == int32(1) || deleteConfigurationDirectly {
+	if deleteConfigurationDirectly {
 		return r.cleanUpSubResources(ctx, namespace, configuration, meta)
 	}
 
