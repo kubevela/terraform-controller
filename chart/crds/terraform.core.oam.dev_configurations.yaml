@@ -201,6 +201,7 @@ spec:
                       This field is needed for custom backend configuration.
                     enum:
                     - kubernetes
+                    - s3
                     type: string
                   inClusterConfig:
                     description: InClusterConfig Used to authenticate to the cluster
@@ -220,6 +221,20 @@ spec:
                         type: string
                     required:
                     - secret_suffix
+                    type: object
+                  s3:
+                    description: S3 is needed for the Terraform `s3` backend type.
+                    properties:
+                      bucket:
+                        type: string
+                      key:
+                        type: string
+                      region:
+                        type: string
+                    required:
+                    - bucket
+                    - key
+                    - region
                     type: object
                   secretSuffix:
                     description: 'SecretSuffix used when creating secrets. Secrets

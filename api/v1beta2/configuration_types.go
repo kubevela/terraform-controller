@@ -120,11 +120,14 @@ type Backend struct {
 	Inline string `json:"inline,omitempty"`
 
 	// BackendType indicates which backend type to use. This field is needed for custom backend configuration.
-	// +kubebuilder:validation:Enum=kubernetes
+	// +kubebuilder:validation:Enum=kubernetes;s3
 	BackendType string `json:"backendType,omitempty"`
 
 	// Kubernetes is needed for the Terraform `kubernetes` backend type.
 	Kubernetes *KubernetesBackendConf `json:"kubernetes,omitempty"`
+
+	// S3 is needed for the Terraform `s3` backend type.
+	S3 *S3BackendConf `json:"s3,omitempty"`
 }
 
 // KubernetesBackendConf defines all options supported by the Terraform `kubernetes` backend type.
@@ -132,6 +135,14 @@ type Backend struct {
 type KubernetesBackendConf struct {
 	SecretSuffix string  `json:"secret_suffix" hcl:"secret_suffix"`
 	Namespace    *string `json:"namespace,omitempty" hcl:"namespace"`
+}
+
+// S3BackendConf defines all options supported by the Terraform `s3` backend type.
+// You can refer to https://www.terraform.io/language/settings/backends/s3 for the usage of each option.
+type S3BackendConf struct {
+	Region string `json:"region" hcl:"region"`
+	Bucket string `json:"bucket" hcl:"bucket"`
+	Key    string `json:"key" hcl:"key"`
 }
 
 // +kubebuilder:object:root=true

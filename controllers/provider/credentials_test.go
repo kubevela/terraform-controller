@@ -1048,10 +1048,10 @@ func TestGetProviderCredentials4AWS(t *testing.T) {
 				region:    "bj",
 			},
 			want: map[string]string{
-				envAWSAccessKeyID:     "a",
-				envAWSSecretAccessKey: "b",
-				envAWSSessionToken:    "c",
-				envAWSDefaultRegion:   "bj",
+				EnvAWSAccessKeyID:     "a",
+				EnvAWSSecretAccessKey: "b",
+				EnvAWSSessionToken:    "c",
+				EnvAWSDefaultRegion:   "bj",
 			},
 		},
 		{

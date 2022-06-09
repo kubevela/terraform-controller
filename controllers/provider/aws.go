@@ -7,10 +7,14 @@ import (
 )
 
 const (
-	envAWSAccessKeyID     = "AWS_ACCESS_KEY_ID"
-	envAWSSecretAccessKey = "AWS_SECRET_ACCESS_KEY"
-	envAWSDefaultRegion   = "AWS_DEFAULT_REGION"
-	envAWSSessionToken    = "AWS_SESSION_TOKEN"
+	// EnvAWSAccessKeyID is the name of the AWS_ACCESS_KEY_ID env
+	EnvAWSAccessKeyID = "AWS_ACCESS_KEY_ID"
+	// EnvAWSSecretAccessKey is the name of the AWS_SECRET_ACCESS_KEY env
+	EnvAWSSecretAccessKey = "AWS_SECRET_ACCESS_KEY"
+	// EnvAWSDefaultRegion is the name of the AWS_DEFAULT_REGION env
+	EnvAWSDefaultRegion = "AWS_DEFAULT_REGION"
+	// EnvAWSSessionToken is the name of the AWS_SESSION_TOKEN env
+	EnvAWSSessionToken = "AWS_SESSION_TOKEN"
 )
 
 // AWSCredentials are credentials for AWS
@@ -27,9 +31,9 @@ func getAWSCredentials(secretData []byte, name, namespace, region string) (map[s
 		return nil, errors.Wrap(err, errConvertCredentials)
 	}
 	return map[string]string{
-		envAWSAccessKeyID:     ak.AWSAccessKeyID,
-		envAWSSecretAccessKey: ak.AWSSecretAccessKey,
-		envAWSSessionToken:    ak.AWSSessionToken,
-		envAWSDefaultRegion:   region,
+		EnvAWSAccessKeyID:     ak.AWSAccessKeyID,
+		EnvAWSSecretAccessKey: ak.AWSSecretAccessKey,
+		EnvAWSSessionToken:    ak.AWSSessionToken,
+		EnvAWSDefaultRegion:   region,
 	}, nil
 }

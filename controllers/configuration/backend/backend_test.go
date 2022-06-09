@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/oam-dev/terraform-controller/api/v1beta2"
+	"github.com/oam-dev/terraform-controller/controllers/provider"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -13,13 +15,32 @@ import (
 func TestParseConfigurationBackend(t *testing.T) {
 	type args struct {
 		configuration *v1beta2.Configuration
+		credentials   map[string]string
 	}
 	type want struct {
 		backend Backend
 		errMsg  string
 	}
 
-	k8sClient := fake.NewClientBuilder().Build()
+	secret := &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "a",
+			Name:      "secretref",
+		},
+		Data: map[string][]byte{
+			"access": []byte("access_key"),
+		},
+	}
+	configMap := &v1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "a",
+			Name:      "configmapref",
+		},
+		Data: map[string]string{
+			"token": "token",
+		},
+	}
+	k8sClient := fake.NewClientBuilder().WithObjects(secret, configMap).Build()
 
 	testcases := []struct {
 		name string
@@ -125,7 +146,6 @@ terraform {
 	backend "kubernetes" {
 		secret_suffix     = ""
 		namespace         = "vela-system"
-		in_cluster_config = true
 	}
 }
 `,
@@ -160,7 +180,6 @@ terraform {
 							Inline: `backend "kubernetes" {
 	secret_suffix     = "tt"
 	namespace         = "vela-system"
-	in_cluster_config = true
 }`,
 						},
 					},
@@ -190,7 +209,7 @@ terraform {
 				configuration: &v1beta2.Configuration{
 					Spec: v1beta2.ConfigurationSpec{
 						Backend: &v1beta2.Backend{
-							BackendType: "kubernetes",
+							BackendType: backendTypeK8S,
 							Kubernetes: &v1beta2.KubernetesBackendConf{
 								SecretSuffix: "suffix",
 							},
@@ -255,7 +274,7 @@ terraform {
 					ObjectMeta: metav1.ObjectMeta{Namespace: "a"},
 					Spec: v1beta2.ConfigurationSpec{
 						Backend: &v1beta2.Backend{
-							BackendType: "kubernetes",
+							BackendType: backendTypeK8S,
 						},
 					},
 				},
@@ -272,7 +291,7 @@ terraform {
 					Spec: v1beta2.ConfigurationSpec{
 						Backend: &v1beta2.Backend{
 							Inline:      `kkk`,
-							BackendType: "kubernetes",
+							BackendType: backendTypeK8S,
 						},
 					},
 				},
@@ -281,14 +300,87 @@ terraform {
 				errMsg: "it's not allowed to set `spec.backend.inline` and `spec.backend.backendType` at the same time",
 			},
 		},
+		{
+			name: "inline s3 backend",
+			args: args{
+				credentials: map[string]string{
+					provider.EnvAWSAccessKeyID:     "a",
+					provider.EnvAWSSessionToken:    "token",
+					provider.EnvAWSSecretAccessKey: "secret",
+				},
+				configuration: &v1beta2.Configuration{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "a"},
+					Spec: v1beta2.ConfigurationSpec{
+						Backend: &v1beta2.Backend{
+							Inline: `
+terraform {
+  backend s3 {
+    bucket = "bucket1"
+    key    = "test.tfstate"
+    region = "us-east-1"
+  }
+}
+`,
+						},
+					},
+				},
+			},
+			want: want{
+				errMsg: "",
+				backend: &S3Backend{
+					client: nil,
+					Region: "us-east-1",
+					Key:    "test.tfstate",
+					Bucket: "bucket1",
+				},
+			},
+		},
+		{
+			name: "explicit s3 backend",
+			args: args{
+				credentials: map[string]string{
+					provider.EnvAWSAccessKeyID:     "a",
+					provider.EnvAWSSessionToken:    "token",
+					provider.EnvAWSSecretAccessKey: "secret",
+				},
+				configuration: &v1beta2.Configuration{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "a"},
+					Spec: v1beta2.ConfigurationSpec{
+						Backend: &v1beta2.Backend{
+							BackendType: backendTypeS3,
+							S3: &v1beta2.S3BackendConf{
+								Region: "us-east-1",
+								Bucket: "bucket1",
+								Key:    "test.tfstate",
+							},
+						},
+					},
+				},
+			},
+			want: want{
+				errMsg: "",
+				backend: &S3Backend{
+					client: nil,
+					Region: "us-east-1",
+					Key:    "test.tfstate",
+					Bucket: "bucket1",
+				},
+			},
+		},
 	}
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := ParseConfigurationBackend(tc.args.configuration, k8sClient)
+			got, err := ParseConfigurationBackend(tc.args.configuration, k8sClient, tc.args.credentials)
 			if tc.want.errMsg != "" && !strings.Contains(err.Error(), tc.want.errMsg) {
 				t.Errorf("ValidConfigurationObject() error = %v, wantErr %v", err, tc.want.errMsg)
 				return
+			}
+			if got != nil {
+				if b, ok := got.(*S3Backend); ok {
+					b.client = nil
+					got.(*S3Backend).client = nil
+				}
 			}
 			if !reflect.DeepEqual(tc.want.backend, got) {
 				t.Errorf("got %#v, want %#v", got, tc.want.backend)

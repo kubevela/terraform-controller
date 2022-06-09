@@ -496,8 +496,27 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	}
 	meta.ConfigurationType = configurationType
 
+	// Check provider
+	if !configuration.Spec.InlineCredentials {
+		p, err := provider.GetProviderFromConfiguration(ctx, k8sClient, meta.ProviderReference.Namespace, meta.ProviderReference.Name)
+		if p == nil {
+			msg := types.ErrProviderNotFound
+			if err != nil {
+				msg = err.Error()
+			}
+			if updateStatusErr := meta.updateApplyStatus(ctx, k8sClient, types.Authorizing, msg); updateStatusErr != nil {
+				return errors.Wrap(updateStatusErr, msg)
+			}
+			return errors.New(msg)
+		}
+
+		if err := meta.getCredentials(ctx, k8sClient, p); err != nil {
+			return err
+		}
+	}
+
 	// Render configuration with backend
-	completeConfiguration, backendConf, err := tfcfg.RenderConfiguration(configuration, r.Client, configurationType)
+	completeConfiguration, backendConf, err := tfcfg.RenderConfiguration(configuration, r.Client, configurationType, meta.Credentials)
 	if err != nil {
 		return err
 	}
@@ -521,25 +540,6 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 		}
 		// store configuration to ConfigMap
 		return meta.storeTFConfiguration(ctx, k8sClient)
-	}
-
-	// Check provider
-	if !configuration.Spec.InlineCredentials {
-		p, err := provider.GetProviderFromConfiguration(ctx, k8sClient, meta.ProviderReference.Namespace, meta.ProviderReference.Name)
-		if p == nil {
-			msg := types.ErrProviderNotFound
-			if err != nil {
-				msg = err.Error()
-			}
-			if updateStatusErr := meta.updateApplyStatus(ctx, k8sClient, types.Authorizing, msg); updateStatusErr != nil {
-				return errors.Wrap(updateStatusErr, msg)
-			}
-			return errors.New(msg)
-		}
-
-		if err := meta.getCredentials(ctx, k8sClient, p); err != nil {
-			return err
-		}
 	}
 
 	// Check whether env changes
@@ -725,6 +725,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 			"terraform init",
 		},
 		VolumeMounts: initContainerVolumeMounts,
+		Env:          meta.Envs,
 	}
 	initContainers = append(initContainers, tfPreApplyInitContainer)
 
@@ -754,7 +755,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 		meta.ResourcesRequestsCPU != "" || meta.ResourcesRequestsMemory != "" {
 		resourceRequirements := v1.ResourceRequirements{}
 		if meta.ResourcesLimitsCPU != "" || meta.ResourcesLimitsMemory != "" {
-			resourceRequirements.Limits = v1.ResourceList(map[v1.ResourceName]resource.Quantity{})
+			resourceRequirements.Limits = map[v1.ResourceName]resource.Quantity{}
 			if meta.ResourcesLimitsCPU != "" {
 				resourceRequirements.Limits["cpu"] = meta.ResourcesLimitsCPUQuantity
 			}
@@ -763,7 +764,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 			}
 		}
 		if meta.ResourcesRequestsCPU != "" || meta.ResourcesLimitsMemory != "" {
-			resourceRequirements.Requests = v1.ResourceList(map[v1.ResourceName]resource.Quantity{})
+			resourceRequirements.Requests = map[v1.ResourceName]resource.Quantity{}
 			if meta.ResourcesRequestsCPU != "" {
 				resourceRequirements.Requests["cpu"] = meta.ResourcesRequestsCPUQuantity
 			}
