@@ -102,7 +102,7 @@ func (s *S3Backend) checkBucketExists() error {
 			return nil
 		}
 	}
-	return fmt.Errorf("fail to get bucket (%s), please make sure the bucket exists ane the provider credentials have access to the bucket", s.Bucket)
+	return fmt.Errorf("fail to get bucket (%s), please make sure the bucket exists and the provider credentials have access to the bucket", s.Bucket)
 }
 
 func (s *S3Backend) getObject() (*s3.GetObjectOutput, error) {
