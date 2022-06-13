@@ -47,8 +47,19 @@ func newS3Backend(_ client.Client, backendConf interface{}, credentials map[stri
 	if !ok || conf == nil {
 		return nil, fmt.Errorf("invalid backendConf, want *v1beta2.S3BackendConf, but got %#v", backendConf)
 	}
+
+	var region string
+	if conf.Region != nil && *conf.Region != "" {
+		region = *conf.Region
+	} else {
+		region = credentials[provider.EnvAWSDefaultRegion]
+	}
+	if region == "" {
+		return nil, errors.New("fail to get region when build s3 backend")
+	}
+
 	s3Backend := &S3Backend{
-		Region: conf.Region,
+		Region: region,
 		Key:    conf.Key,
 		Bucket: conf.Bucket,
 	}

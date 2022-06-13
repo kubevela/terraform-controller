@@ -230,11 +230,12 @@ spec:
                       key:
                         type: string
                       region:
+                        description: Region is optional, default to the AWS_DEFAULT_REGION
+                          in the credentials of the provider
                         type: string
                     required:
                     - bucket
                     - key
-                    - region
                     type: object
                   secretSuffix:
                     description: 'SecretSuffix used when creating secrets. Secrets

@@ -140,9 +140,10 @@ type KubernetesBackendConf struct {
 // S3BackendConf defines all options supported by the Terraform `s3` backend type.
 // You can refer to https://www.terraform.io/language/settings/backends/s3 for the usage of each option.
 type S3BackendConf struct {
-	Region string `json:"region" hcl:"region"`
-	Bucket string `json:"bucket" hcl:"bucket"`
-	Key    string `json:"key" hcl:"key"`
+	// Region is optional, default to the AWS_DEFAULT_REGION in the credentials of the provider
+	Region *string `json:"region,omitempty" hcl:"region"`
+	Bucket string  `json:"bucket" hcl:"bucket"`
+	Key    string  `json:"key" hcl:"key"`
 }
 
 // +kubebuilder:object:root=true
