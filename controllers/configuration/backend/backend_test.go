@@ -5,9 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/aws/aws-sdk-go/aws"
 	"github.com/oam-dev/terraform-controller/api/v1beta2"
-	"github.com/oam-dev/terraform-controller/controllers/provider"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -301,130 +299,6 @@ terraform {
 				errMsg: "it's not allowed to set `spec.backend.inline` and `spec.backend.backendType` at the same time",
 			},
 		},
-		{
-			name: "inline s3 backend",
-			args: args{
-				credentials: map[string]string{
-					provider.EnvAWSAccessKeyID:     "a",
-					provider.EnvAWSSessionToken:    "token",
-					provider.EnvAWSSecretAccessKey: "secret",
-				},
-				configuration: &v1beta2.Configuration{
-					ObjectMeta: metav1.ObjectMeta{Namespace: "a"},
-					Spec: v1beta2.ConfigurationSpec{
-						Backend: &v1beta2.Backend{
-							Inline: `
-terraform {
-  backend s3 {
-    bucket = "bucket1"
-    key    = "test.tfstate"
-    region = "us-east-1"
-  }
-}
-`,
-						},
-					},
-				},
-			},
-			want: want{
-				errMsg: "",
-				backend: &S3Backend{
-					client: nil,
-					Region: "us-east-1",
-					Key:    "test.tfstate",
-					Bucket: "bucket1",
-				},
-			},
-		},
-		{
-			name: "explicit s3 backend",
-			args: args{
-				credentials: map[string]string{
-					provider.EnvAWSAccessKeyID:     "a",
-					provider.EnvAWSSessionToken:    "token",
-					provider.EnvAWSSecretAccessKey: "secret",
-				},
-				configuration: &v1beta2.Configuration{
-					ObjectMeta: metav1.ObjectMeta{Namespace: "a"},
-					Spec: v1beta2.ConfigurationSpec{
-						Backend: &v1beta2.Backend{
-							BackendType: backendTypeS3,
-							S3: &v1beta2.S3BackendConf{
-								Region: aws.String("us-east-1"),
-								Bucket: "bucket1",
-								Key:    "test.tfstate",
-							},
-						},
-					},
-				},
-			},
-			want: want{
-				errMsg: "",
-				backend: &S3Backend{
-					client: nil,
-					Region: "us-east-1",
-					Key:    "test.tfstate",
-					Bucket: "bucket1",
-				},
-			},
-		},
-		{
-			name: "explicit s3 backend, get token from credentials",
-			args: args{
-				credentials: map[string]string{
-					provider.EnvAWSDefaultRegion:   "us-east-1",
-					provider.EnvAWSAccessKeyID:     "a",
-					provider.EnvAWSSessionToken:    "token",
-					provider.EnvAWSSecretAccessKey: "secret",
-				},
-				configuration: &v1beta2.Configuration{
-					ObjectMeta: metav1.ObjectMeta{Namespace: "a"},
-					Spec: v1beta2.ConfigurationSpec{
-						Backend: &v1beta2.Backend{
-							BackendType: backendTypeS3,
-							S3: &v1beta2.S3BackendConf{
-								Bucket: "bucket1",
-								Key:    "test.tfstate",
-							},
-						},
-					},
-				},
-			},
-			want: want{
-				errMsg: "",
-				backend: &S3Backend{
-					client: nil,
-					Region: "us-east-1",
-					Key:    "test.tfstate",
-					Bucket: "bucket1",
-				},
-			},
-		},
-		{
-			name: "explicit s3 backend, fail to get region",
-			args: args{
-				credentials: map[string]string{
-					provider.EnvAWSAccessKeyID:     "a",
-					provider.EnvAWSSessionToken:    "token",
-					provider.EnvAWSSecretAccessKey: "secret",
-				},
-				configuration: &v1beta2.Configuration{
-					ObjectMeta: metav1.ObjectMeta{Namespace: "a"},
-					Spec: v1beta2.ConfigurationSpec{
-						Backend: &v1beta2.Backend{
-							BackendType: backendTypeS3,
-							S3: &v1beta2.S3BackendConf{
-								Bucket: "bucket1",
-								Key:    "test.tfstate",
-							},
-						},
-					},
-				},
-			},
-			want: want{
-				errMsg: "fail to get region when build s3 backend",
-			},
-		},
 	}
 
 	for _, tc := range testcases {
@@ -433,12 +307,6 @@ terraform {
 			if tc.want.errMsg != "" && !strings.Contains(err.Error(), tc.want.errMsg) {
 				t.Errorf("ValidConfigurationObject() error = %v, wantErr %v", err, tc.want.errMsg)
 				return
-			}
-			if got != nil {
-				if b, ok := got.(*S3Backend); ok {
-					b.client = nil
-					got.(*S3Backend).client = nil
-				}
 			}
 			if !reflect.DeepEqual(tc.want.backend, got) {
 				t.Errorf("got %#v, want %#v", got, tc.want.backend)

@@ -84,7 +84,25 @@ func newS3Backend(_ client.Client, backendConf interface{}, credentials map[stri
 	}
 	s3Backend.client = s3.New(sess)
 
+	// check if the bucket exists
+	if err := s3Backend.checkBucketExists(); err != nil {
+		return nil, err
+	}
+
 	return s3Backend, nil
+}
+
+func (s *S3Backend) checkBucketExists() error {
+	bucketListOutput, err := s.client.ListBuckets(&s3.ListBucketsInput{})
+	if err != nil {
+		return fmt.Errorf("fail to list bucket when check if the bucket(%s) exists: %w", s.Bucket, err)
+	}
+	for _, bucket := range bucketListOutput.Buckets {
+		if bucket.Name != nil && *bucket.Name == s.Bucket {
+			return nil
+		}
+	}
+	return fmt.Errorf("fail to get bucket (%s), please make sure the bucket exists ane the provider credentials have access to the bucket", s.Bucket)
 }
 
 func (s *S3Backend) getObject() (*s3.GetObjectOutput, error) {
