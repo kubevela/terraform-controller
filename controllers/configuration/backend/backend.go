@@ -104,7 +104,7 @@ func handleDefaultBackend(configuration *v1beta2.Configuration, k8sClient client
 			InClusterConfig: true,
 		}
 	}
-	return newDefaultK8SBackend(configuration.Spec.Backend.SecretSuffix, k8sClient), nil
+	return newDefaultK8SBackend(configuration.Spec.Backend.SecretSuffix, k8sClient, configuration.Namespace), nil
 }
 
 func handleInlineBackendHCL(hclCode string) (string, interface{}, error) {

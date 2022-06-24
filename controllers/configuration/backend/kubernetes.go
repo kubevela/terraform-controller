@@ -49,16 +49,11 @@ type K8SBackend struct {
 	SecretNS string
 }
 
-func getDefaultK8sBackendSecretNS() string {
+func newDefaultK8SBackend(suffix string, client client.Client, namespace string) *K8SBackend {
 	ns := os.Getenv("TERRAFORM_BACKEND_NAMESPACE")
 	if ns == "" {
-		ns = "vela-system"
+		ns = namespace
 	}
-	return ns
-}
-
-func newDefaultK8SBackend(suffix string, client client.Client) *K8SBackend {
-	ns := getDefaultK8sBackendSecretNS()
 	hcl := renderK8SBackendHCL(suffix, ns)
 	return &K8SBackend{
 		Client:       client,
@@ -77,7 +72,7 @@ func newK8SBackend(k8sClient client.Client, backendConf interface{}, _ map[strin
 	if conf.Namespace != nil {
 		ns = *conf.Namespace
 	} else {
-		ns = getDefaultK8sBackendSecretNS()
+		ns = os.Getenv("TERRAFORM_BACKEND_NAMESPACE")
 	}
 	return &K8SBackend{
 		Client:       k8sClient,
