@@ -7,7 +7,7 @@ spec:
   path: aws/s3
 
   variable:
-    bucket: "vela-website-aws-20220529"
+    bucket: "vela-website-aws-20220627-tt"
     acl: "private"
 
   backend:
@@ -15,7 +15,7 @@ spec:
     s3:
       region: ap-southeast-1
       bucket: terraform-controller-test
-      key: s3.bucket.tfstate
+      key: tt.s3.bucket.tfstate
 
   deleteResource: true
 

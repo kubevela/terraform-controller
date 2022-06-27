@@ -6,15 +6,27 @@ It has two subcommands `backup` and `restore`.
 
 ## `backup`
 
-`backup` can be used to back up the Configuration object managed by terraform-controller and the Terraform state (if the configuration uses the Terraform Kubernetes backend).
+`backup` can be used to back up the Configuration objects managed by terraform-controller and their Terraform states.
 
 The main usage of the `backup` subcommand is:
 
 ```shell
-go main.go backup --name <name of the Configuration> --namespace <namespace of the Configuration>
+go main.go backup --configuration <name of the Configuration> --namespace <namespace of the Configuration>
 ```
 
-Then you will get the `cofiguration.yaml` and the `state.json` in the workdir.
+Then you will get the `${configuration_name}_${configuration_namespace}_cofiguration.yaml` and the `${configuration_name}_${configuration_namespace}_state.json` in the workdir.
+
+What's more, you can also use the `backup` subcommand to back up the Configurations created by the KubeVela Application:
+
+```shell
+go main.go backup --application <name of the Application>
+```
+
+The above command will scan all the components of the Application to find the Configurations and try to back up them. If you just want to back up a specific few components of the Application, you can use the `--component` argument:
+
+```shell
+go main.go backup --application <name of the Application> --component <component_1> <component_2>
+```
 
 Next, you can restore the Configuration and the Terraform state in another Kubernetes cluster using the `restore` subcommand.
 
