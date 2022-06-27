@@ -106,7 +106,6 @@ func TestValidConfigurationObject(t *testing.T) {
 func TestRenderConfiguration(t *testing.T) {
 	type args struct {
 		configuration     *v1beta2.Configuration
-		ns                string
 		configurationType types.ConfigurationType
 		credentials       map[string]string
 	}
@@ -127,12 +126,14 @@ func TestRenderConfiguration(t *testing.T) {
 			name: "backend is not nil, configuration is hcl",
 			args: args{
 				configuration: &v1beta2.Configuration{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "n1",
+					},
 					Spec: v1beta2.ConfigurationSpec{
 						Backend: &v1beta2.Backend{},
 						HCL:     "image_id=123",
 					},
 				},
-				ns:                "vela-system",
 				configurationType: types.ConfigurationHCL,
 			},
 			want: want{
@@ -142,7 +143,7 @@ terraform {
   backend "kubernetes" {
     secret_suffix     = ""
     in_cluster_config = true
-    namespace         = "vela-system"
+    namespace         = "n1"
   }
 }
 `,
@@ -153,12 +154,12 @@ terraform {
   backend "kubernetes" {
     secret_suffix     = ""
     in_cluster_config = true
-    namespace         = "vela-system"
+    namespace         = "n1"
   }
 }
 `,
 					SecretSuffix: "",
-					SecretNS:     "vela-system",
+					SecretNS:     "n1",
 				},
 			},
 		},
@@ -166,11 +167,13 @@ terraform {
 			name: "backend is nil, configuration is remote",
 			args: args{
 				configuration: &v1beta2.Configuration{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "n2",
+					},
 					Spec: v1beta2.ConfigurationSpec{
 						Remote: "https://github.com/a/b.git",
 					},
 				},
-				ns:                "vela-system",
 				configurationType: types.ConfigurationRemote,
 			},
 			want: want{
@@ -179,7 +182,7 @@ terraform {
   backend "kubernetes" {
     secret_suffix     = ""
     in_cluster_config = true
-    namespace         = "vela-system"
+    namespace         = "n2"
   }
 }
 `,
@@ -190,12 +193,12 @@ terraform {
   backend "kubernetes" {
     secret_suffix     = ""
     in_cluster_config = true
-    namespace         = "vela-system"
+    namespace         = "n2"
   }
 }
 `,
 					SecretSuffix: "",
-					SecretNS:     "vela-system",
+					SecretNS:     "n2",
 				},
 			},
 		},
@@ -205,7 +208,6 @@ terraform {
 				configuration: &v1beta2.Configuration{
 					Spec: v1beta2.ConfigurationSpec{},
 				},
-				ns: "vela-system",
 			},
 			want: want{
 				errMsg: "Unsupported Configuration Type",
@@ -220,13 +222,10 @@ terraform {
 				t.Errorf("ValidConfigurationObject() error = %v, wantErr %v", err, tc.want.errMsg)
 				return
 			}
-			if got != tc.want.cfg {
-				t.Errorf("ValidConfigurationObject() = %v, want %v", got, tc.want.cfg)
-				return
-			}
+			assert.Equal(t, tc.want.cfg, got)
 
 			if !reflect.DeepEqual(tc.want.backendInterface, backendConf) {
-				t.Errorf("ValidBackendSecretList() = %#v, want %#v", backendConf, tc.want.backendInterface)
+				t.Errorf("backendInterface is not equal.\n got %#v\n, want %#v", backendConf, tc.want.backendInterface)
 			}
 		})
 	}
