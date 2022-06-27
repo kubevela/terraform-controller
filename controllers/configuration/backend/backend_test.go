@@ -65,12 +65,12 @@ terraform {
   backend "kubernetes" {
     secret_suffix     = ""
     in_cluster_config = true
-    namespace         = "vela-system"
+    namespace         = ""
   }
 }
 `,
 					SecretSuffix: "",
-					SecretNS:     "vela-system",
+					SecretNS:     "",
 				},
 			},
 		},
@@ -91,12 +91,12 @@ terraform {
   backend "kubernetes" {
     secret_suffix     = ""
     in_cluster_config = true
-    namespace         = "vela-system"
+    namespace         = ""
   }
 }
 `,
 					SecretSuffix: "",
-					SecretNS:     "vela-system",
+					SecretNS:     "",
 				},
 			},
 		},
@@ -226,12 +226,12 @@ terraform {
   backend "kubernetes" {
     secret_suffix     = "suffix"
     in_cluster_config = true
-    namespace         = "vela-system"
+    namespace         = ""
   }
 }
 `,
 					SecretSuffix: "suffix",
-					SecretNS:     "vela-system",
+					SecretNS:     "",
 				},
 			},
 		},
@@ -258,12 +258,12 @@ terraform {
   backend "kubernetes" {
     secret_suffix     = ""
     in_cluster_config = true
-    namespace         = "vela-system"
+    namespace         = "a"
   }
 }
 `,
 					SecretSuffix: "",
-					SecretNS:     "vela-system",
+					SecretNS:     "a",
 				},
 			},
 		},
