@@ -47,8 +47,19 @@ func newS3Backend(_ client.Client, backendConf interface{}, credentials map[stri
 	if !ok || conf == nil {
 		return nil, fmt.Errorf("invalid backendConf, want *v1beta2.S3BackendConf, but got %#v", backendConf)
 	}
+
+	var region string
+	if conf.Region != nil && *conf.Region != "" {
+		region = *conf.Region
+	} else {
+		region = credentials[provider.EnvAWSDefaultRegion]
+	}
+	if region == "" {
+		return nil, errors.New("fail to get region when build s3 backend")
+	}
+
 	s3Backend := &S3Backend{
-		Region: conf.Region,
+		Region: region,
 		Key:    conf.Key,
 		Bucket: conf.Bucket,
 	}
@@ -73,7 +84,25 @@ func newS3Backend(_ client.Client, backendConf interface{}, credentials map[stri
 	}
 	s3Backend.client = s3.New(sess)
 
+	// check if the bucket exists
+	if err := s3Backend.checkBucketExists(); err != nil {
+		return nil, err
+	}
+
 	return s3Backend, nil
+}
+
+func (s *S3Backend) checkBucketExists() error {
+	bucketListOutput, err := s.client.ListBuckets(&s3.ListBucketsInput{})
+	if err != nil {
+		return fmt.Errorf("fail to list bucket when check if the bucket(%s) exists: %w", s.Bucket, err)
+	}
+	for _, bucket := range bucketListOutput.Buckets {
+		if bucket.Name != nil && *bucket.Name == s.Bucket {
+			return nil
+		}
+	}
+	return fmt.Errorf("fail to get bucket (%s), please make sure the bucket exists and the provider credentials have access to the bucket", s.Bucket)
 }
 
 func (s *S3Backend) getObject() (*s3.GetObjectOutput, error) {
