@@ -17,17 +17,16 @@ limitations under the License.
 package app
 
 import (
+	"context"
+
+	crossplane "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
 	"github.com/oam-dev/terraform-controller/controllers/configuration/backend"
-	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // CloudResourceOwner is an object which create and manage cloud resources.
-// It may be a Configuration or an Application
+// It may be a Configuration or an Application Component
 type CloudResourceOwner interface {
-	GetName() string
-	GetDescription() string
-	GetObject() runtime.Object
-	ParseBackend() (map[string]backend.Backend, error)
-	CleanUp()
-	APIVersionKind() string
+	GetConfigurationNamespacedName() *crossplane.Reference
+	GetK8SBackend() (*backend.K8SBackend, error)
+	Apply(ctx context.Context) error
 }

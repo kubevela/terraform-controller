@@ -86,7 +86,7 @@ func backup(ctx context.Context) error {
 		if _, err := f.WriteString("apiVersion: terraform.core.oam.dev/v1beta2\nkind: Configuration\n"); err != nil {
 			return err
 		}
-		app.CleanUpConfiguration(configuration)
+		app.CleanUpObjectMeta(&configuration.ObjectMeta)
 		if err := serializer.Encode(configuration, f); err != nil {
 			return err
 		}

@@ -25,9 +25,9 @@ import (
 )
 
 var (
-	CurrentNS string
+	currentNS string
 	K8SClient client.Client
-	ClientSet *kubernetes.Clientset
+	clientSet *kubernetes.Clientset
 )
 
 func BuildK8SClient(kubeFlags *genericclioptions.ConfigFlags) error {
@@ -35,12 +35,12 @@ func BuildK8SClient(kubeFlags *genericclioptions.ConfigFlags) error {
 	if err != nil {
 		return err
 	}
-	CurrentNS, _, err = kubeFlags.ToRawKubeConfigLoader().Namespace()
+	currentNS, _, err = kubeFlags.ToRawKubeConfigLoader().Namespace()
 	if err != nil {
-		CurrentNS = "default"
+		currentNS = "default"
 	}
 
-	ClientSet, err = kubernetes.NewForConfig(config)
+	clientSet, err = kubernetes.NewForConfig(config)
 	if err != nil {
 		return err
 	}

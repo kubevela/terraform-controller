@@ -40,7 +40,7 @@ To use the `restore` subcommand, you should:
 
 2. Confirm that the environment variables set in terraform-controller are also set in the current execution environment.
 
-3. Run the `restore` command: `go run main.go restore --configuration <path/to/your/configuration.yaml> --state <path/to/your/state.json>`
+3. If you want to `resotre` the cloud resource managed by the Configuration explicitly, please run the `restore` command: `go run main.go restore --configuration <path/to/your/configuration.yaml> --state <path/to/your/state.json>`. On the other hand, ff you want to `resotre` the cloud resource managed by a KubeVela application, please run the `restore` command: `go run main.go restore --application <path/to/your/application.yaml> --component <the_cloud_resource_component_name> --state <path/to/your/state.json>`.
 
 To find more usages of the `restore` subcommand, please run `go run main.go restore -h` for help.
 
