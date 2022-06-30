@@ -6,15 +6,27 @@ It has two subcommands `backup` and `restore`.
 
 ## `backup`
 
-`backup` can be used to back up the Configuration object managed by terraform-controller and the Terraform state (if the configuration uses the Terraform Kubernetes backend).
+`backup` can be used to back up the Configuration objects managed by terraform-controller and their Terraform states.
 
 The main usage of the `backup` subcommand is:
 
 ```shell
-go main.go backup --name <name of the Configuration> --namespace <namespace of the Configuration>
+go main.go backup --configuration <name of the Configuration> --namespace <namespace of the Configuration>
 ```
 
-Then you will get the `cofiguration.yaml` and the `state.json` in the workdir.
+Then you will get the `${configuration_name}_${configuration_namespace}_cofiguration.yaml` and the `${configuration_name}_${configuration_namespace}_state.json` in the workdir.
+
+What's more, you can also use the `backup` subcommand to back up the Configurations created by the KubeVela Application:
+
+```shell
+go main.go backup --application <name of the Application>
+```
+
+The above command will scan all the components of the Application to find the Configurations and try to back up them. If you just want to back up a specific few components of the Application, you can use the `--component` argument:
+
+```shell
+go main.go backup --application <name of the Application> --component <component_1> <component_2>
+```
 
 Next, you can restore the Configuration and the Terraform state in another Kubernetes cluster using the `restore` subcommand.
 
@@ -28,7 +40,7 @@ To use the `restore` subcommand, you should:
 
 2. Confirm that the environment variables set in terraform-controller are also set in the current execution environment.
 
-3. Run the `restore` command: `go run main.go restore --configuration <path/to/your/configuration.yaml> --state <path/to/your/state.json>`
+3. If you want to `resotre` the cloud resource managed by the Configuration explicitly, please run the `restore` command: `go run main.go restore --configuration <path/to/your/configuration.yaml> --state <path/to/your/state.json>`. On the other hand, ff you want to `resotre` the cloud resource managed by a KubeVela application, please run the `restore` command: `go run main.go restore --application <path/to/your/application.yaml> --component <the_cloud_resource_component_name> --state <path/to/your/state.json>`.
 
 To find more usages of the `restore` subcommand, please run `go run main.go restore -h` for help.
 
