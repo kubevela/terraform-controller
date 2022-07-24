@@ -15,7 +15,6 @@ import (
 
 	"github.com/agiledragon/gomonkey/v2"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/sts"
-	"github.com/oam-dev/terraform-controller/controllers/configuration/backend"
 	"github.com/stretchr/testify/assert"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -37,6 +36,7 @@ import (
 	crossplane "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
 	"github.com/oam-dev/terraform-controller/api/v1beta2"
+	"github.com/oam-dev/terraform-controller/controllers/configuration/backend"
 	"github.com/oam-dev/terraform-controller/controllers/provider"
 )
 
@@ -492,6 +492,7 @@ func TestConfigurationReconcile(t *testing.T) {
 			HCL: "c",
 		},
 	}
+
 	namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "builds"}}
 	r6 := &ConfigurationReconciler{ControllerNamespace: "builds"}
 	r6.Client = fake.NewClientBuilder().
@@ -560,7 +561,7 @@ func TestConfigurationReconcile(t *testing.T) {
 			},
 			check: func(t *testing.T, cc client.Client) {
 				job := &batchv1.Job{}
-				err := cc.Get(context.TODO(), k8stypes.NamespacedName{Name: "a-12345-apply", Namespace: "builds"}, job)
+				err := cc.Get(context.TODO(), k8stypes.NamespacedName{Name: "12345-apply", Namespace: "builds"}, job)
 				if err != nil {
 					t.Error("Failed to retrieve jobs from builds namespace")
 				}
@@ -1169,16 +1170,8 @@ func TestTerraformDestroy(t *testing.T) {
 			Namespace: "default",
 			Name:      "b",
 		},
-		Spec: v1beta2.ConfigurationSpec{
-			BaseConfigurationSpec: v1beta2.BaseConfigurationSpec{
-				ProviderReference: &runtimetypes.Reference{
-					Name:      "not_there",
-					Namespace: "not_there",
-				},
-			},
-		},
 	}
-	k8sClient2 := fake.NewClientBuilder().WithScheme(s).WithObjects(provider1, configuration).Build()
+	k8sClient2 := fake.NewClientBuilder().WithScheme(s).WithObjects(configuration).Build()
 	r2.Client = k8sClient2
 
 	r4 := &ConfigurationReconciler{}
@@ -1333,7 +1326,7 @@ func TestTerraformDestroy(t *testing.T) {
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.args.r.terraformDestroy(ctx, *tc.args.configuration, tc.args.meta)
-			if err != nil || tc.want.errMsg != "" {
+			if err != nil && tc.want.errMsg != "" {
 				if !strings.Contains(err.Error(), tc.want.errMsg) {
 					t.Errorf("terraformDestroy() error = %v, wantErr %v", err, tc.want.errMsg)
 					return

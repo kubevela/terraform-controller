@@ -27,7 +27,6 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/go-logr/logr"
 	"github.com/oam-dev/terraform-controller/controllers/configuration/backend"
 	"github.com/pkg/errors"
@@ -124,7 +123,6 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		// @step: since we are using a single namespace to run these, we must ensure the names
 		// are unique across the namespace
 		meta.ApplyJobName = uid + "-" + string(TerraformApply)
-		meta.BackendSecretName = fmt.Sprintf(TFBackendSecret, terraformWorkspace, uid)
 		meta.ConfigurationCMName = fmt.Sprintf(TFInputConfigMapName, uid)
 		meta.DestroyJobName = uid + "-" + string(TerraformDestroy)
 		meta.ControllerNamespace = r.ControllerNamespace
@@ -217,26 +215,26 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 // TFConfigurationMeta is all the metadata of a Configuration
 type TFConfigurationMeta struct {
-	Name                    string
-	Namespace               string
-	ControllerNamespace     string
-	ConfigurationType       types.ConfigurationType
-	CompleteConfiguration   string
-	RemoteGit               string
-	RemoteGitPath           string
-	ConfigurationChanged    bool
-	EnvChanged              bool
-	ConfigurationCMName     string
-	ApplyJobName            string
-	DestroyJobName          string
-	Envs                    []v1.EnvVar
-	ProviderReference       *crossplane.Reference
-	VariableSecretName      string
-	VariableSecretData      map[string][]byte
-	DeleteResource          bool
+	Name                  string
+	Namespace             string
+	ControllerNamespace   string
+	ConfigurationType     types.ConfigurationType
+	CompleteConfiguration string
+	RemoteGit             string
+	RemoteGitPath         string
+	ConfigurationChanged  bool
+	EnvChanged            bool
+	ConfigurationCMName   string
+	ApplyJobName          string
+	DestroyJobName        string
+	Envs                  []v1.EnvVar
+	ProviderReference     *crossplane.Reference
+	VariableSecretName    string
+	VariableSecretData    map[string][]byte
+	DeleteResource        bool
 	Region                string
-	Credentials             map[string]string
-	
+	Credentials           map[string]string
+
 	Backend backend.Backend
 	// JobNodeSelector Expose the node selector of job to the controller level
 	JobNodeSelector map[string]string
@@ -374,7 +372,7 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, configur
 
 	if configuration.Spec.ForceDelete != nil && *configuration.Spec.ForceDelete {
 		// Try to clean up more sub-resources as possible. Ignore the issues if it hit any.
-		if err := r.cleanUpSubResources(ctx, namespace, configuration, meta); err != nil {
+		if err := r.cleanUpSubResources(ctx, meta.ControllerNamespace, configuration, meta); err != nil {
 			klog.Warningf("Failed to clean up sub-resources, but it's ignored as the resources are being forced to delete: %s", err)
 		}
 		return nil
@@ -385,11 +383,11 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, configur
 			return err
 		}
 		if destroyJob.Status.Succeeded == int32(1) {
-			return r.cleanUpSubResources(ctx, namespace, configuration, meta)
+			return r.cleanUpSubResources(ctx, meta.ControllerNamespace, configuration, meta)
 		}
 	}
 	if deleteConfigurationDirectly {
-		return r.cleanUpSubResources(ctx, namespace, configuration, meta)
+		return r.cleanUpSubResources(ctx, meta.ControllerNamespace, configuration, meta)
 	}
 
 	return errors.New(types.MessageDestroyJobNotCompleted)
@@ -657,8 +655,6 @@ func (meta *TFConfigurationMeta) assembleAndTriggerJob(ctx context.Context, k8sC
 
 	job := meta.assembleTerraformJob(executionType)
 
-	fmt.Println("NAME", spew.Sdump(job.Name))
-
 	return k8sClient.Create(ctx, job)
 }
 
@@ -806,7 +802,6 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 
 	name := meta.ApplyJobName
 	if executionType == TerraformDestroy {
-		fmt.Println("HERE")
 		name = meta.DestroyJobName
 	}
 
@@ -1074,20 +1069,25 @@ func deleteConnectionSecret(ctx context.Context, k8sClient client.Client, name, 
 func (meta *TFConfigurationMeta) createOrUpdateConfigMap(ctx context.Context, k8sClient client.Client, data map[string]string) error {
 	var gotCM v1.ConfigMap
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.ConfigurationCMName, Namespace: meta.ControllerNamespace}, &gotCM); err != nil {
-		if kerrors.IsNotFound(err) {
-			cm := v1.ConfigMap{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      meta.ConfigurationCMName,
-					Namespace: meta.ControllerNamespace,
-				},
-				Data: data,
-			}
-			err := k8sClient.Create(ctx, &cm)
+		if !kerrors.IsNotFound(err) {
+			return err
+		}
+		cm := v1.ConfigMap{
+			TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      meta.ConfigurationCMName,
+				Namespace: meta.ControllerNamespace,
+			},
+			Data: data,
+		}
+
+		if err := k8sClient.Create(ctx, &cm); err != nil {
 			return errors.Wrap(err, "failed to create TF configuration ConfigMap")
 		}
-		return err
+
+		return nil
 	}
+
 	if !reflect.DeepEqual(gotCM.Data, data) {
 		gotCM.Data = data
 
