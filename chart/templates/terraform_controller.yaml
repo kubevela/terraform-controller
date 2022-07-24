@@ -20,6 +20,10 @@ spec:
         - name: terraform-controller
           image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            {{- if .Values.controllerNamespace }}
+            - --controller-namespace={{ .Values.controllerNamespace }}
+            {{- end }}
           env:
             - name: CONTROLLER_NAMESPACE
               valueFrom:

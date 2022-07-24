@@ -380,7 +380,7 @@ func TestGetProviderCredentials(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := GetProviderCredentials(ctx, tt.args.k8sClient, &tt.args.provider, tt.args.region)
 			if tt.errMsg != "" && err != nil && !strings.Contains(err.Error(), tt.errMsg) {
-				t.Errorf("GetProviderCredentials() error = %v, wantErr %v", err, err.Error())
+				t.Errorf("GetProviderCredentials() error = %q, wantErr %q", err, err.Error())
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) {

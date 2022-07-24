@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
+	crossplanetypes "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
 	"github.com/pkg/errors"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -61,26 +62,36 @@ func (r *ProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
-	if _, err := providercred.GetProviderCredentials(ctx, r.Client, &provider, provider.Spec.Region); err != nil {
-		provider.Status.State = types.ProviderIsNotReady
-		provider.Status.Message = fmt.Sprintf("%s: %s", errGetCredentials, err.Error())
-		klog.ErrorS(err, errGetCredentials, "Provider", req.NamespacedName)
-		if updateErr := r.Status().Update(ctx, &provider); updateErr != nil {
-			klog.ErrorS(updateErr, errSettingStatus, "Provider", req.NamespacedName)
-			return ctrl.Result{}, errors.Wrap(updateErr, errSettingStatus)
+	err := func() error {
+		switch provider.Spec.Credentials.Source {
+		case crossplanetypes.CredentialsSourceInjectedIdentity:
+			break
+		case crossplanetypes.CredentialsSourceSecret:
+			_, err := providercred.GetProviderCredentials(ctx, r.Client, &provider, provider.Spec.Region)
+			return err
+		default:
+			return errors.Errorf("unsupported credentials source: %s", provider.Spec.Credentials.Source)
 		}
-		return ctrl.Result{}, errors.Wrap(err, errGetCredentials)
+
+		return nil
+	}()
+	if err != nil {
+		klog.ErrorS(err, errGetCredentials, "Provider", req.NamespacedName)
+
+		provider.Status.Message = fmt.Sprintf("%s: %s", errGetCredentials, err.Error())
+		provider.Status = terraformv1beta1.ProviderStatus{State: types.ProviderIsNotReady}
+	} else {
+		provider.Status.Message = "Provider ready"
+		provider.Status = terraformv1beta1.ProviderStatus{State: types.ProviderIsReady}
 	}
 
-	provider.Status = terraformv1beta1.ProviderStatus{
-		State: types.ProviderIsReady,
-	}
 	if updateErr := r.Status().Update(ctx, &provider); updateErr != nil {
 		klog.ErrorS(updateErr, errSettingStatus, "Provider", req.NamespacedName)
+
 		return ctrl.Result{}, errors.Wrap(updateErr, errSettingStatus)
 	}
 
-	return ctrl.Result{}, nil
+	return ctrl.Result{}, err
 }
 
 // SetupWithManager setups with a manager

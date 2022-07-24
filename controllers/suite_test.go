@@ -27,6 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
+
 	// +kubebuilder:scaffold:imports
 
 	terraformv1beta1 "github.com/oam-dev/terraform-controller/api/v1beta1"

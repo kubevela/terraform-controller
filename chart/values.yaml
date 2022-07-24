@@ -8,6 +8,7 @@ image:
 gitImage: alpine/git:latest
 busyboxImage: busybox:latest
 terraformImage: oamdev/docker-terraform:1.1.2
+controllerNamespace: ""
 
 # "{\"nat\": \"true\"}"
 jobNodeSelector: ""
