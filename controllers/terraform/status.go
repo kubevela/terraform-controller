@@ -12,7 +12,7 @@ import (
 )
 
 // GetTerraformStatus will get Terraform execution status
-func GetTerraformStatus(ctx context.Context, namespace, jobName, containerName, initContainerName string) (types.ConfigurationState, error) {
+func GetTerraformStatus(ctx context.Context, namespace, jobName, jobNamespace, containerName, initContainerName string) (types.ConfigurationState, error) {
 	klog.InfoS("checking Terraform init and execution status", "Namespace", namespace, "Job", jobName)
 	clientSet, err := client.Init()
 	if err != nil {
@@ -21,8 +21,7 @@ func GetTerraformStatus(ctx context.Context, namespace, jobName, containerName, 
 	}
 
 	// check the stage of the pod
-
-	stage, logs, err := getPodLog(ctx, clientSet, namespace, jobName, containerName, initContainerName)
+	stage, logs, err := getPodLog(ctx, clientSet, jobNamespace, jobName, containerName, initContainerName)
 	if err != nil {
 		klog.ErrorS(err, "failed to get pod logs")
 		return types.ConfigurationProvisioningAndChecking, err
@@ -52,5 +51,6 @@ func analyzeTerraformLog(logs string, stage types.Stage) (bool, types.Configurat
 			}
 		}
 	}
+
 	return true, types.ConfigurationProvisioningAndChecking, ""
 }

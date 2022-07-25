@@ -40,7 +40,6 @@ var (
 
 func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
-
 	_ = terraformv1beta1.AddToScheme(scheme)
 	_ = v1beta2.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
@@ -50,12 +49,15 @@ func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
 	var syncPeriod time.Duration
+	var namespace string
+	var controllerNamespace string
+
+	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false, "Enable leader election for controller manager, this will ensure there is only one active controller manager.")
+	flag.DurationVar(&syncPeriod, "informer-re-sync-interval", 10*time.Second, "controller shared informer lister full re-sync period")
 	flag.StringVar(&metricsAddr, "metrics-addr", ":38080", "The address the metric endpoint binds to.")
-	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
-		"Enable leader election for controller manager. "+
-			"Enabling this will ensure there is only one active controller manager.")
-	flag.DurationVar(&syncPeriod, "informer-re-sync-interval", 10*time.Second,
-		"controller shared informer lister full re-sync period")
+	flag.StringVar(&namespace, "namespace", "", "Namespace to watch for resources, defaults to all namespaces")
+	flag.StringVar(&controllerNamespace, "controller-namespace", "", "Namespace to run the terraform jobs")
+
 	// embed klog
 	klog.InitFlags(nil)
 	flag.Parse()
@@ -63,11 +65,12 @@ func main() {
 	ctrl.SetLogger(klogr.New())
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:             scheme,
-		MetricsBindAddress: metricsAddr,
-		Port:               9443,
 		LeaderElection:     enableLeaderElection,
 		LeaderElectionID:   "ce329a9c.core.oam.dev",
+		MetricsBindAddress: metricsAddr,
+		Namespace:          namespace,
+		Port:               9443,
+		Scheme:             scheme,
 		SyncPeriod:         &syncPeriod,
 	})
 	if err != nil {
@@ -76,9 +79,10 @@ func main() {
 	}
 
 	if err = (&controllers.ConfigurationReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("Configuration"),
-		Scheme: mgr.GetScheme(),
+		Client:              mgr.GetClient(),
+		ControllerNamespace: controllerNamespace,
+		Log:                 ctrl.Log.WithName("controllers").WithName("Configuration"),
+		Scheme:              mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Configuration")
 		os.Exit(1)

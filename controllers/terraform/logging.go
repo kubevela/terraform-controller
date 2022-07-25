@@ -20,8 +20,10 @@ func getPods(ctx context.Context, client kubernetes.Interface, namespace, jobNam
 	pods, err := client.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: label})
 	if err != nil {
 		klog.InfoS("pods are not found", "Label", label, "Error", err)
+
 		return nil, err
 	}
+
 	return pods, nil
 }
 

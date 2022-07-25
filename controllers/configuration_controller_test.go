@@ -15,7 +15,6 @@ import (
 
 	"github.com/agiledragon/gomonkey/v2"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/sts"
-	"github.com/oam-dev/terraform-controller/controllers/configuration/backend"
 	"github.com/stretchr/testify/assert"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -37,6 +36,7 @@ import (
 	crossplane "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
 	"github.com/oam-dev/terraform-controller/api/v1beta2"
+	"github.com/oam-dev/terraform-controller/controllers/configuration/backend"
 	"github.com/oam-dev/terraform-controller/controllers/provider"
 )
 
@@ -76,6 +76,7 @@ func TestInitTFConfigurationMeta(t *testing.T) {
 			},
 			want: &TFConfigurationMeta{
 				Namespace:           "default",
+				ControllerNamespace: "default",
 				Name:                "abc",
 				ConfigurationCMName: "tf-abc",
 				VariableSecretName:  "variable-abc",
@@ -94,6 +95,7 @@ func TestInitTFConfigurationMeta(t *testing.T) {
 			configuration: completeConfiguration,
 			want: &TFConfigurationMeta{
 				Namespace:           "default",
+				ControllerNamespace: "default",
 				Name:                "abc",
 				ConfigurationCMName: "tf-abc",
 				VariableSecretName:  "variable-abc",
@@ -478,6 +480,26 @@ func TestConfigurationReconcile(t *testing.T) {
 	r5 := &ConfigurationReconciler{}
 	r5.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(secret, provider, configuration5, destroyJob5).Build()
 
+	// @step: create the setup for the job namespace tests
+	configuration6 := &v1beta2.Configuration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "a",
+			Namespace:  "b",
+			Finalizers: []string{configurationFinalizer},
+			UID:        "12345",
+		},
+		Spec: v1beta2.ConfigurationSpec{
+			HCL: "c",
+		},
+	}
+
+	namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "builds"}}
+	r6 := &ConfigurationReconciler{ControllerNamespace: "builds"}
+	r6.Client = fake.NewClientBuilder().
+		WithScheme(s).
+		WithObjects(namespace, secret, provider, configuration6).
+		Build()
+
 	type args struct {
 		req reconcile.Request
 		r   *ConfigurationReconciler
@@ -488,9 +510,10 @@ func TestConfigurationReconcile(t *testing.T) {
 	}
 
 	testcases := []struct {
-		name string
-		args args
-		want want
+		name  string
+		args  args
+		want  want
+		check func(t *testing.T, cc client.Client)
 	}{
 		{
 			name: "Configuration is not found",
@@ -530,6 +553,20 @@ func TestConfigurationReconcile(t *testing.T) {
 				r:   r5,
 			},
 		},
+		{
+			name: "Builds should be run in the controller namespace when defined",
+			args: args{
+				req: req,
+				r:   r6,
+			},
+			check: func(t *testing.T, cc client.Client) {
+				job := &batchv1.Job{}
+				err := cc.Get(context.TODO(), k8stypes.NamespacedName{Name: "12345-apply", Namespace: "builds"}, job)
+				if err != nil {
+					t.Error("Failed to retrieve jobs from builds namespace")
+				}
+			},
+		},
 	}
 
 	for _, tc := range testcases {
@@ -539,6 +576,9 @@ func TestConfigurationReconcile(t *testing.T) {
 					!strings.Contains(err.Error(), tc.want.errMsg) {
 					t.Errorf("Reconcile() error = %v, wantErr %v", err, tc.want.errMsg)
 				}
+			}
+			if tc.check != nil {
+				tc.check(t, tc.args.r.Client)
 			}
 		})
 	}
@@ -1131,7 +1171,7 @@ func TestTerraformDestroy(t *testing.T) {
 			Name:      "b",
 		},
 	}
-	k8sClient2 := fake.NewClientBuilder().WithScheme(s).WithObjects(provider1, configuration).Build()
+	k8sClient2 := fake.NewClientBuilder().WithScheme(s).WithObjects(configuration).Build()
 	r2.Client = k8sClient2
 
 	r4 := &ConfigurationReconciler{}
@@ -1179,9 +1219,10 @@ func TestTerraformDestroy(t *testing.T) {
 	k8sClient4 := fake.NewClientBuilder().WithScheme(s).WithObjects(provider1, job4, secret4, variableSecret4, configuration4).Build()
 	r4.Client = k8sClient4
 	meta4 := &TFConfigurationMeta{
-		DestroyJobName: "a",
-		Namespace:      "default",
-		DeleteResource: true,
+		DestroyJobName:      "a",
+		Namespace:           "default",
+		ControllerNamespace: "default",
+		DeleteResource:      true,
 		ProviderReference: &crossplane.Reference{
 			Name:      "b",
 			Namespace: "default",
@@ -1234,14 +1275,30 @@ func TestTerraformDestroy(t *testing.T) {
 			want: want{},
 		},
 		{
+			name: "provider is not ready",
+			args: args{
+				r:             r1,
+				configuration: &v1beta2.Configuration{},
+				meta: &TFConfigurationMeta{
+					ConfigurationCMName: "tf-abc",
+					Namespace:           "default",
+					ControllerNamespace: "default",
+				},
+			},
+			want: want{
+				errMsg: "jobs.batch \"\" not found",
+			},
+		},
+		{
 			name: "referenced provider is not available",
 			args: args{
 				r:             r2,
 				configuration: configuration,
 				meta: &TFConfigurationMeta{
 					ConfigurationCMName: "tf-abc",
-					Namespace:           "default",
+					ControllerNamespace: "default",
 					DeleteResource:      true,
+					Namespace:           "default",
 				},
 			},
 			want: want{
@@ -1268,8 +1325,8 @@ func TestTerraformDestroy(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := tc.args.r.terraformDestroy(ctx, tc.args.namespace, *tc.args.configuration, tc.args.meta)
-			if err != nil || tc.want.errMsg != "" {
+			err := tc.args.r.terraformDestroy(ctx, *tc.args.configuration, tc.args.meta)
+			if err != nil && tc.want.errMsg != "" {
 				if !strings.Contains(err.Error(), tc.want.errMsg) {
 					t.Errorf("terraformDestroy() error = %v, wantErr %v", err, tc.want.errMsg)
 					return
@@ -1935,6 +1992,7 @@ func TestCheckWhetherConfigurationChanges(t *testing.T) {
 				meta: &TFConfigurationMeta{
 					ConfigurationCMName: "a",
 					Namespace:           "b",
+					ControllerNamespace: "b",
 				},
 				configurationType: "xxx",
 			},
@@ -1947,6 +2005,7 @@ func TestCheckWhetherConfigurationChanges(t *testing.T) {
 				meta: &TFConfigurationMeta{
 					ConfigurationCMName: "aaa",
 					Namespace:           "b",
+					ControllerNamespace: "b",
 				},
 				configurationType: "xxx",
 			},
