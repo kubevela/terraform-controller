@@ -1,0 +1,76 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch: { }
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    name: build
+    strategy:
+      matrix:
+        TARGETS: [ linux/amd64, darwin/amd64, windows/amd64, linux/arm64, darwin/arm64 ]
+    env:
+      TERRAFORM_CONTROLLER_VERSION_KEY: github.com/kubevela/terraform-controller/version.TerraformControllerVersion
+      GIT_VERSION_KEY: github.com/oam-dev/kubevela/version.GitRevision
+      GO_BUILD_ENV: GO111MODULE=on CGO_ENABLED=0
+      DIST_DIRS: find * -type d -exec
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.17
+      - name: Get release
+        id: get_release
+        uses: bruceadams/get-release@v1.2.2
+      - name: Get version
+        run: echo "TERRAFORM_CONTROLLER_VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+      - name: Get matrix
+        id: get_matrix
+        run: |
+          TARGETS=${{matrix.TARGETS}}
+          echo ::set-output name=OS::${TARGETS%/*}
+          echo ::set-output name=ARCH::${TARGETS#*/}
+      - name: Get ldflags
+        id: get_ldflags
+        run: |
+          LDFLAGS="-s -w -X ${{ env.TERRAFORM_CONTROLLER_VERSION_KEY }}=${{ env.TERRAFORM_CONTROLLER_VERSION }} -X ${{ env.GIT_VERSION_KEY }}=git-$(git rev-parse --short HEAD)"
+          echo "LDFLAGS=${LDFLAGS}" >> $GITHUB_ENV
+      - name: Build
+        run: |
+          ${{ env.GO_BUILD_ENV }} GOOS=${{ steps.get_matrix.outputs.OS }} GOARCH=${{ steps.get_matrix.outputs.ARCH }} \
+            go build -ldflags "${{ env.LDFLAGS }}" \
+            -o _bin/backup_restore/${{ steps.get_matrix.outputs.OS }}-${{ steps.get_matrix.outputs.ARCH }}/backup_restore -v \
+            ./hack/tool/backup_restore/main.go
+      - name: Compress
+        run: |
+          cd _bin/backup_restore && \
+          ${{ env.DIST_DIRS }} cp ../../LICENSE {} \; && \
+          ${{ env.DIST_DIRS }} cp ../../README.md {} \; && \
+          ${{ env.DIST_DIRS }} tar -zcf backup-restore-{}.tar.gz {} \; && \
+          ${{ env.DIST_DIRS }} zip -r backup-restore-{}.zip {} \; && \
+          cd .. && \
+          sha256sum backup_restore/backup-restore-* >> sha256-${{ steps.get_matrix.outputs.OS }}-${{ steps.get_matrix.outputs.ARCH }}.txt \
+      - name: Upload backup-restore tar.gz
+        uses: actions/upload-release-asset@v1.0.2
+        with:
+          upload_url: ${{ steps.get_release.outputs.upload_url }}
+          asset_path: ./_bin/backup_restore/backup-restore-${{ steps.get_matrix.outputs.OS }}-${{ steps.get_matrix.outputs.ARCH }}.tar.gz
+          asset_name: backup-restore-${{ env.TERRAFORM_CONTROLLER_VERSION }}-${{ steps.get_matrix.outputs.OS }}-${{ steps.get_matrix.outputs.ARCH }}.tar.gz
+          asset_content_type: binary/octet-stream
+      - name: Upload Vela zip
+        uses: actions/upload-release-asset@v1.0.2
+        with:
+          upload_url: ${{ steps.get_release.outputs.upload_url }}
+          asset_path: ./_bin/backup_restore/backup-restore-${{ steps.get_matrix.outputs.OS }}-${{ steps.get_matrix.outputs.ARCH }}.zip
+          asset_name: backup-restore-${{ env.TERRAFORM_CONTROLLER_VERSION }}-${{ steps.get_matrix.outputs.OS }}-${{ steps.get_matrix.outputs.ARCH }}.zip
+          asset_content_type: binary/octet-stream
