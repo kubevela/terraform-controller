@@ -72,9 +72,9 @@ func newRestoreCmd(kubeFlags *genericclioptions.ConfigFlags) *cobra.Command {
 		},
 	}
 	restoreCmd.Flags().StringVar(&stateJSONPath, "state", "state.json", "the path of the backed up Terraform state file")
-	restoreCmd.Flags().StringVar(&configurationPath, "configuration", "configuration.yaml", "the path of the backed up configuration object yaml file. This argument should not be used with `--application`")
-	restoreCmd.Flags().StringVar(&applicationPath, "application", "application.yaml", "the path of the backed up application object yaml file. This argument should not be used with `--configuration`")
-	restoreCmd.Flags().StringVar(&componentName, "component", "cloud-resource", "the component which should be restored in the application. This argument should be used with `--application`")
+	restoreCmd.Flags().StringVar(&configurationPath, "configuration", "", "the path of the backed up configuration object yaml file. This argument should not be used with `--application`")
+	restoreCmd.Flags().StringVar(&applicationPath, "application", "", "the path of the backed up application object yaml file. This argument should not be used with `--configuration`")
+	restoreCmd.Flags().StringVar(&componentName, "component", "", "the component which should be restored in the application. This argument should be used with `--application`")
 	return restoreCmd
 }
 
