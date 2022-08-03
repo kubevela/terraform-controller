@@ -404,12 +404,7 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, configur
 func (r *ConfigurationReconciler) cleanUpSubResources(ctx context.Context, configuration v1beta2.Configuration, meta *TFConfigurationMeta) error {
 	var k8sClient = r.Client
 
-	// 1. delete Terraform input Configuration ConfigMap
-	if err := meta.deleteConfigMap(ctx, k8sClient); err != nil {
-		return err
-	}
-
-	// 2. delete connectionSecret
+	// 1. delete connectionSecret
 	if configuration.Spec.WriteConnectionSecretToReference != nil {
 		secretName := configuration.Spec.WriteConnectionSecretToReference.Name
 		secretNameSpace := configuration.Spec.WriteConnectionSecretToReference.Namespace
@@ -418,19 +413,18 @@ func (r *ConfigurationReconciler) cleanUpSubResources(ctx context.Context, confi
 		}
 	}
 
-	// 3. delete apply job
-	if err := meta.deleteApplyJob(ctx, k8sClient); err != nil {
-		return err
+	// 2~5. delete the jobs, variable secrets, configuration configmaps
+	type cleanupResourceFunc func(meta *TFConfigurationMeta, ctx context.Context, k8sClient client.Client) error
+	resourceToCleanup := []cleanupResourceFunc{
+		deleteApplyJob,
+		deleteDestroyJob,
+		deleteVariableSecret,
+		deleteConfigMap,
 	}
-
-	// 4. delete destroy job
-	if err := meta.deleteDestroyJob(ctx, k8sClient); err != nil {
-		return err
-	}
-
-	// 5. delete secret which stores variables
-	if err := meta.deleteVariableSecret(ctx, k8sClient); err != nil {
-		return err
+	for _, clean := range resourceToCleanup {
+		if err := clean(meta, ctx, k8sClient); err != nil {
+			return err
+		}
 	}
 
 	// 6. delete Kubernetes backend secret
@@ -1039,7 +1033,7 @@ func getTerraformJSONVariable(tfVariables *runtime.RawExtension) (map[string]int
 	return environments, nil
 }
 
-func (meta *TFConfigurationMeta) deleteConfigMap(ctx context.Context, k8sClient client.Client) error {
+func deleteConfigMap(meta *TFConfigurationMeta, ctx context.Context, k8sClient client.Client) error {
 	var cm v1.ConfigMap
 	// We have four cases when upgrading. There are three combinations of name and namespace.
 	// TODO compatible for case 4
@@ -1063,7 +1057,7 @@ func (meta *TFConfigurationMeta) deleteConfigMap(ctx context.Context, k8sClient 
 	return nil
 }
 
-func (meta *TFConfigurationMeta) deleteVariableSecret(ctx context.Context, k8sClient client.Client) error {
+func deleteVariableSecret(meta *TFConfigurationMeta, ctx context.Context, k8sClient client.Client) error {
 	var variableSecret v1.Secret
 	// see TFConfigurationMeta.deleteConfigMap
 	possibleCombination := [][2]string{
@@ -1082,7 +1076,7 @@ func (meta *TFConfigurationMeta) deleteVariableSecret(ctx context.Context, k8sCl
 	return nil
 }
 
-func (meta *TFConfigurationMeta) deleteApplyJob(ctx context.Context, k8sClient client.Client) error {
+func deleteApplyJob(meta *TFConfigurationMeta, ctx context.Context, k8sClient client.Client) error {
 	var job batchv1.Job
 	// see TFConfigurationMeta.deleteConfigMap
 	possibleCombination := [][2]string{
@@ -1101,7 +1095,7 @@ func (meta *TFConfigurationMeta) deleteApplyJob(ctx context.Context, k8sClient c
 	return nil
 }
 
-func (meta *TFConfigurationMeta) deleteDestroyJob(ctx context.Context, k8sClient client.Client) error {
+func deleteDestroyJob(meta *TFConfigurationMeta, ctx context.Context, k8sClient client.Client) error {
 	var job batchv1.Job
 	// see TFConfigurationMeta.deleteConfigMap
 	possibleCombination := [][2]string{
