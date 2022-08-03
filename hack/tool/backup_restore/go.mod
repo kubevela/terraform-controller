@@ -5,6 +5,7 @@ go 1.17
 require (
 	github.com/oam-dev/kubevela v1.1.8
 	github.com/oam-dev/terraform-controller v0.7.4
+	github.com/pkg/errors v0.9.1
 	github.com/spf13/cobra v1.5.0
 	k8s.io/api v0.24.2
 	k8s.io/apimachinery v0.24.2
@@ -52,7 +53,6 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/onsi/gomega v1.19.0 // indirect
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
-	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/client_golang v1.12.2 // indirect
 	github.com/prometheus/common v0.35.0 // indirect
 	github.com/rogpeppe/go-internal v1.8.1 // indirect

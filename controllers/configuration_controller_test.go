@@ -19,7 +19,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -131,7 +131,7 @@ func TestInitTFConfigurationMetaWithDeleteResource(t *testing.T) {
 		meta          *TFConfigurationMeta
 	}{
 		{
-			name: "DeleteResource is false",
+			name: "DeleteResource is true",
 			configuration: v1beta2.Configuration{
 				ObjectMeta: v1.ObjectMeta{
 					Name: "abc",
@@ -145,7 +145,7 @@ func TestInitTFConfigurationMetaWithDeleteResource(t *testing.T) {
 			},
 		},
 		{
-			name: "DeleteResource is true",
+			name: "DeleteResource is false",
 			configuration: v1beta2.Configuration{
 				ObjectMeta: v1.ObjectMeta{
 					Name: "abc",
@@ -1143,7 +1143,19 @@ func TestPreCheckWhenConfigurationIsChanged(t *testing.T) {
 }
 
 func TestTerraformDestroy(t *testing.T) {
-	r1 := &ConfigurationReconciler{}
+	const (
+		// secrets/configmaps are dispatched to this ns
+		controllerNamespace = "tf-controller-namespace"
+		legacyNamespace     = "legacy-namespace"
+		configurationCMName = "tf-config-cm"
+		secretSuffix        = "secret-suffix"
+		secretNS            = "default"
+		destroyJobName      = "destroy-job"
+		applyJobName        = "apply-job"
+
+		connectionSecretName = "conn"
+		connectionSecretNS   = "conn-ns"
+	)
 	ctx := context.Background()
 	s := runtime.NewScheme()
 	v1beta1.AddToScheme(s)
@@ -1151,105 +1163,107 @@ func TestTerraformDestroy(t *testing.T) {
 	corev1.AddToScheme(s)
 	batchv1.AddToScheme(s)
 	rbacv1.AddToScheme(s)
-	provider1 := &v1beta1.Provider{
+	// this is default provider if not specified in configuration.spec.providerRef
+	baseProvider := &v1beta1.Provider{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "default",
 			Namespace: "default",
 		},
-		Status: v1beta1.ProviderStatus{
-			State: types.ProviderIsNotReady,
-		},
 	}
-	k8sClient1 := fake.NewClientBuilder().WithScheme(s).WithObjects(provider1).Build()
-	r1.Client = k8sClient1
+	readyProvider := baseProvider.DeepCopy()
+	readyProvider.Status.State = types.ProviderIsReady
+	notReadyProvider := baseProvider.DeepCopy()
+	notReadyProvider.Status.State = types.ProviderIsNotReady
 
-	r2 := &ConfigurationReconciler{}
-	provider1.Status.State = types.ProviderIsReady
-	configuration := &v1beta2.Configuration{
+	baseApplyJob := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "default",
-			Name:      "b",
+			Name:      applyJobName,
+			Namespace: controllerNamespace,
 		},
 	}
-	k8sClient2 := fake.NewClientBuilder().WithScheme(s).WithObjects(configuration).Build()
-	r2.Client = k8sClient2
+	applyJobInLegacyNS := baseApplyJob.DeepCopy()
+	applyJobInLegacyNS.Namespace = legacyNamespace
 
-	r4 := &ConfigurationReconciler{}
-	provider1.Status.State = types.ProviderIsReady
-	job4 := &batchv1.Job{
+	baseDestroyJob := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "a",
-			Namespace: "default",
-		},
-		Status: batchv1.JobStatus{
-			Succeeded: int32(1),
+			Name:      destroyJobName,
+			Namespace: controllerNamespace,
 		},
 	}
-	data, _ := json.Marshal(map[string]interface{}{
-		"name": "abc",
-	})
-	variables := &runtime.RawExtension{Raw: data}
-	configuration4 := &v1beta2.Configuration{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "default",
-			Name:      "b",
+	completeDestroyJob := baseDestroyJob.DeepCopy()
+	completeDestroyJob.Status.Succeeded = int32(1)
+
+	// Resources to be GC
+	baseConfigurationCM := &corev1.ConfigMap{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ConfigMap",
+			APIVersion: "v1",
 		},
-		Spec: v1beta2.ConfigurationSpec{
-			Variable: variables,
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      configurationCMName,
+			Namespace: controllerNamespace,
 		},
 	}
-	configuration4.Spec.WriteConnectionSecretToReference = &crossplane.SecretReference{
-		Name:      "b",
+	baseVariableSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf(TFVariableSecret, secretSuffix),
+			Namespace: controllerNamespace,
+		},
+		Type: corev1.SecretTypeOpaque,
+	}
+	connectionSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      connectionSecretName,
+			Namespace: connectionSecretNS,
+		},
+		Type: corev1.SecretTypeOpaque,
+	}
+	ConfigurationCMInLegacyNS := baseConfigurationCM.DeepCopy()
+	ConfigurationCMInLegacyNS.Namespace = legacyNamespace
+	variableSecretInLegacyNS := baseVariableSecret.DeepCopy()
+	variableSecretInLegacyNS.Namespace = legacyNamespace
+
+	baseMeta := TFConfigurationMeta{
+		DestroyJobName:      destroyJobName,
+		ControllerNamespace: controllerNamespace,
+		ProviderReference: &crossplane.Reference{
+			Name:      baseProvider.Name,
+			Namespace: baseProvider.Namespace,
+		},
+		VariableSecretName:  fmt.Sprintf(TFVariableSecret, secretSuffix),
+		ConfigurationCMName: configurationCMName,
+	}
+	metaWithDeleteResource := baseMeta
+	metaWithDeleteResource.DeleteResource = true
+	metaWithLegacyResource := baseMeta
+	metaWithLegacyResource.LegacySubResources = LegacySubResources{
+		Namespace:           legacyNamespace,
+		ApplyJobName:        applyJobName,
+		DestroyJobName:      destroyJobName,
+		ConfigurationCMName: configurationCMName,
+		VariableSecretName:  fmt.Sprintf(TFVariableSecret, secretSuffix),
+	}
+
+	baseConfiguration := &v1beta2.Configuration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "base-conf",
+			Namespace: "default",
+		},
+	}
+	configurationWithConnSecret := baseConfiguration.DeepCopy()
+	configurationWithConnSecret.Spec.WriteConnectionSecretToReference = &crossplane.SecretReference{
+		Name:      connectionSecretName,
+		Namespace: connectionSecretNS,
+	}
+	configurationPrdNotFound := baseConfiguration.DeepCopy()
+	configurationPrdNotFound.Spec.ProviderReference = &crossplane.Reference{
+		Name:      "not-exist",
 		Namespace: "default",
 	}
-	secret4 := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "b",
-			Namespace: "default",
-		},
-		Type: corev1.SecretTypeOpaque,
-	}
-	variableSecret4 := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "c",
-			Namespace: "default",
-		},
-		Type: corev1.SecretTypeOpaque,
-	}
-	k8sClient4 := fake.NewClientBuilder().WithScheme(s).WithObjects(provider1, job4, secret4, variableSecret4, configuration4).Build()
-	r4.Client = k8sClient4
-	meta4 := &TFConfigurationMeta{
-		DestroyJobName:      "a",
-		Namespace:           "default",
-		ControllerNamespace: "default",
-		DeleteResource:      true,
-		ProviderReference: &crossplane.Reference{
-			Name:      "b",
-			Namespace: "default",
-		},
-		VariableSecretName: "c",
-		Backend: &backend.K8SBackend{
-			Client:       k8sClient4,
-			SecretSuffix: "a",
-			SecretNS:     "default",
-		},
-	}
-
-	r5 := &ConfigurationReconciler{}
-	forceDeleteConfig5 := &v1beta2.Configuration{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "default",
-			Name:      "force-delete-config-5",
-		},
-		Spec: v1beta2.ConfigurationSpec{},
-	}
-	var forceDelete = true
-	forceDeleteConfig5.Spec.ForceDelete = &forceDelete
-	k8sClient5 := fake.NewClientBuilder().WithScheme(s).WithObjects(forceDeleteConfig5).Build()
-	r5.Client = k8sClient5
+	forceDeleteConfiguration := baseConfiguration.DeepCopy()
+	forceDeleteConfiguration.Spec.ForceDelete = pointer.Bool(true)
 
 	type args struct {
-		r             *ConfigurationReconciler
 		namespace     string
 		configuration *v1beta2.Configuration
 		meta          *TFConfigurationMeta
@@ -1257,80 +1271,119 @@ func TestTerraformDestroy(t *testing.T) {
 	type want struct {
 		errMsg string
 	}
-	testcases := []struct {
-		name string
-		args args
-		want want
+	var testcases = []struct {
+		name             string
+		args             args
+		want             want
+		objects          []client.Object
+		deletedResources []client.Object
+		keptResources    []client.Object
 	}{
 		{
-			name: "directly clean resources",
+			name: "dispatch destroy job, subresource not cleanup, job not completed",
 			args: args{
-				r:             r1,
-				configuration: &v1beta2.Configuration{},
-				meta: &TFConfigurationMeta{
-					ConfigurationCMName: "tf-abc",
-					Namespace:           "default",
-				},
-			},
-			want: want{},
-		},
-		{
-			name: "provider is not ready",
-			args: args{
-				r:             r1,
-				configuration: &v1beta2.Configuration{},
-				meta: &TFConfigurationMeta{
-					ConfigurationCMName: "tf-abc",
-					Namespace:           "default",
-					ControllerNamespace: "default",
-				},
+				configuration: baseConfiguration,
+				meta:          &baseMeta,
 			},
 			want: want{
-				errMsg: "jobs.batch \"\" not found",
+				errMsg: types.MessageDestroyJobNotCompleted,
 			},
+			objects:       []client.Object{readyProvider, baseConfiguration, baseConfigurationCM},
+			keptResources: []client.Object{baseConfigurationCM},
 		},
 		{
-			name: "referenced provider is not available",
+			name: "set DeleteResource, directly clean resources",
 			args: args{
-				r:             r2,
-				configuration: configuration,
-				meta: &TFConfigurationMeta{
-					ConfigurationCMName: "tf-abc",
-					ControllerNamespace: "default",
-					DeleteResource:      true,
-					Namespace:           "default",
-				},
+				configuration: baseConfiguration,
+				meta:          &metaWithDeleteResource,
 			},
-			want: want{
-				errMsg: "jobs.batch \"\" not found",
-			},
+			want:             want{},
+			objects:          []client.Object{readyProvider, baseConfiguration, baseConfigurationCM},
+			deletedResources: []client.Object{baseConfigurationCM},
 		},
 		{
-			name: "could not directly remove resources, and destroy job completes",
+			name: "provider is not ready, cloud resource couldn't be created, delete directly",
 			args: args{
-				r:             r4,
-				configuration: configuration4,
-				meta:          meta4,
+				configuration: baseConfiguration,
+				meta:          &baseMeta,
 			},
-			want: want{},
+			objects:          []client.Object{notReadyProvider, baseConfiguration, baseConfigurationCM},
+			deletedResources: []client.Object{baseConfigurationCM},
+			want:             want{},
+		},
+		{
+			name: "referenced provider not exist, allow to delete directly",
+			args: args{
+				configuration: configurationPrdNotFound,
+				meta:          &baseMeta,
+			},
+			objects:          []client.Object{readyProvider, baseConfiguration, baseConfigurationCM, baseVariableSecret},
+			want:             want{},
+			deletedResources: []client.Object{baseConfigurationCM, baseVariableSecret},
+		},
+		{
+			name: "destroy job has completes, cleanup resources",
+			args: args{
+				configuration: configurationWithConnSecret,
+				meta:          &baseMeta,
+			},
+			want:             want{},
+			objects:          []client.Object{readyProvider, configurationWithConnSecret, baseConfigurationCM, completeDestroyJob, baseVariableSecret, connectionSecret},
+			deletedResources: []client.Object{baseConfigurationCM, completeDestroyJob, baseVariableSecret, connectionSecret},
 		},
 		{
 			name: "force delete configuration",
 			args: args{
-				r:             r5,
-				configuration: forceDeleteConfig5,
-				meta:          &TFConfigurationMeta{},
+				configuration: forceDeleteConfiguration,
+				meta:          &baseMeta,
 			},
+			objects:          []client.Object{readyProvider, forceDeleteConfiguration, baseConfigurationCM, completeDestroyJob, baseVariableSecret},
+			deletedResources: []client.Object{baseConfigurationCM, completeDestroyJob, baseVariableSecret},
+		},
+		{
+			name: "compatible to clean up resources when upgrade controller with --controller-namespace",
+			args: args{
+				configuration: baseConfiguration,
+				meta:          &metaWithLegacyResource,
+			},
+			objects:          []client.Object{baseConfiguration, variableSecretInLegacyNS, ConfigurationCMInLegacyNS, applyJobInLegacyNS},
+			deletedResources: []client.Object{variableSecretInLegacyNS, ConfigurationCMInLegacyNS, applyJobInLegacyNS},
+			want:             want{},
 		},
 	}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := tc.args.r.terraformDestroy(ctx, *tc.args.configuration, tc.args.meta)
-			if err != nil && tc.want.errMsg != "" {
-				if !strings.Contains(err.Error(), tc.want.errMsg) {
-					t.Errorf("terraformDestroy() error = %v, wantErr %v", err, tc.want.errMsg)
-					return
+			// Prepare for test. 1. Build reconciler with fake client
+			k8sClient := fake.NewClientBuilder().WithScheme(s).WithObjects(tc.objects...).Build()
+			reconciler := &ConfigurationReconciler{
+				Client: k8sClient,
+			}
+			// 2. Set meta backend
+			tc.args.meta.Backend = &backend.K8SBackend{
+				Client:       k8sClient,
+				SecretSuffix: secretSuffix,
+				SecretNS:     secretNS,
+			}
+
+			err := reconciler.terraformDestroy(ctx, *tc.args.configuration, tc.args.meta)
+			if tc.want.errMsg != "" {
+				if err == nil {
+					t.Errorf("expected error: %s, got nil", tc.want.errMsg)
+				} else if !strings.Contains(err.Error(), tc.want.errMsg) {
+					t.Errorf("expected error containing %q, got %q", tc.want.errMsg, err.Error())
 				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			}
+			for _, rsc := range tc.keptResources {
+				err = k8sClient.Get(ctx, client.ObjectKey{Namespace: rsc.GetNamespace(), Name: rsc.GetName()}, rsc)
+				assert.NoError(t, err, "resource should be kept %s/%s", rsc.GetNamespace(), rsc.GetName())
+			}
+			for _, rsc := range tc.deletedResources {
+				err = k8sClient.Get(ctx, client.ObjectKey{Namespace: rsc.GetNamespace(), Name: rsc.GetName()}, rsc)
+				assert.True(t, apierrors.IsNotFound(err), "resource %s/%s should be deleted", rsc.GetNamespace(), rsc.GetName())
 			}
 		})
 	}
@@ -1933,7 +1986,7 @@ func TestAssembleAndTriggerJob(t *testing.T) {
 	}
 
 	patches := gomonkey.ApplyFunc(apiutil.GVKForObject, func(obj runtime.Object, scheme *runtime.Scheme) (schema.GroupVersionKind, error) {
-		return schema.GroupVersionKind{}, kerrors.NewNotFound(schema.GroupResource{}, "")
+		return schema.GroupVersionKind{}, apierrors.NewNotFound(schema.GroupResource{}, "")
 	})
 	defer patches.Reset()
 
