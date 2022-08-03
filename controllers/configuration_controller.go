@@ -414,7 +414,7 @@ func (r *ConfigurationReconciler) cleanUpSubResources(ctx context.Context, confi
 	}
 
 	// 2~5. delete the jobs, variable secrets, configuration configmaps
-	type cleanupResourceFunc func(meta *TFConfigurationMeta, ctx context.Context, k8sClient client.Client) error
+	type cleanupResourceFunc func(ctx context.Context, meta *TFConfigurationMeta, k8sClient client.Client) error
 	resourceToCleanup := []cleanupResourceFunc{
 		deleteApplyJob,
 		deleteDestroyJob,
@@ -1033,7 +1033,7 @@ func getTerraformJSONVariable(tfVariables *runtime.RawExtension) (map[string]int
 	return environments, nil
 }
 
-func deleteConfigMap(meta *TFConfigurationMeta, ctx context.Context, k8sClient client.Client) error {
+func deleteConfigMap(ctx context.Context, meta *TFConfigurationMeta, k8sClient client.Client) error {
 	var cm v1.ConfigMap
 	// We have four cases when upgrading. There are three combinations of name and namespace.
 	// TODO compatible for case 4
@@ -1057,7 +1057,7 @@ func deleteConfigMap(meta *TFConfigurationMeta, ctx context.Context, k8sClient c
 	return nil
 }
 
-func deleteVariableSecret(meta *TFConfigurationMeta, ctx context.Context, k8sClient client.Client) error {
+func deleteVariableSecret(ctx context.Context, meta *TFConfigurationMeta, k8sClient client.Client) error {
 	var variableSecret v1.Secret
 	// see TFConfigurationMeta.deleteConfigMap
 	possibleCombination := [][2]string{
@@ -1076,7 +1076,7 @@ func deleteVariableSecret(meta *TFConfigurationMeta, ctx context.Context, k8sCli
 	return nil
 }
 
-func deleteApplyJob(meta *TFConfigurationMeta, ctx context.Context, k8sClient client.Client) error {
+func deleteApplyJob(ctx context.Context, meta *TFConfigurationMeta, k8sClient client.Client) error {
 	var job batchv1.Job
 	// see TFConfigurationMeta.deleteConfigMap
 	possibleCombination := [][2]string{
@@ -1095,7 +1095,7 @@ func deleteApplyJob(meta *TFConfigurationMeta, ctx context.Context, k8sClient cl
 	return nil
 }
 
-func deleteDestroyJob(meta *TFConfigurationMeta, ctx context.Context, k8sClient client.Client) error {
+func deleteDestroyJob(ctx context.Context, meta *TFConfigurationMeta, k8sClient client.Client) error {
 	var job batchv1.Job
 	// see TFConfigurationMeta.deleteConfigMap
 	possibleCombination := [][2]string{
