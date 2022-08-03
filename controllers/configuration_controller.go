@@ -422,7 +422,7 @@ func (r *ConfigurationReconciler) cleanUpSubResources(ctx context.Context, confi
 		deleteConfigMap,
 	}
 	for _, clean := range resourceToCleanup {
-		if err := clean(meta, ctx, k8sClient); err != nil {
+		if err := clean(ctx, meta, k8sClient); err != nil {
 			return err
 		}
 	}
