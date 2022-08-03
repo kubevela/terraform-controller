@@ -68,14 +68,10 @@ const (
 )
 
 const (
-	// TerraformStateNameInSecret is the key name to store Terraform state
-	TerraformStateNameInSecret = "tfstate"
 	// TFInputConfigMapName is the CM name for Terraform Input Configuration
 	TFInputConfigMapName = "tf-%s"
 	// TFVariableSecret is the Secret name for variables, including credentials from Provider
 	TFVariableSecret = "variable-%s"
-	// TFBackendSecret is the Secret name for Kubernetes backend
-	TFBackendSecret = "tfstate-%s-%s"
 )
 
 // TerraformExecutionType is the type for Terraform execution
@@ -122,12 +118,12 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		uid := string(configuration.GetUID())
 		// @step: since we are using a single namespace to run these, we must ensure the names
 		// are unique across the namespace
+		meta.KeepLegacySubResourceMetas()
 		meta.ApplyJobName = uid + "-" + string(TerraformApply)
-		meta.ConfigurationCMName = fmt.Sprintf(TFInputConfigMapName, uid)
 		meta.DestroyJobName = uid + "-" + string(TerraformDestroy)
-		meta.ControllerNamespace = r.ControllerNamespace
-		meta.TerraformBackendNamespace = r.ControllerNamespace
+		meta.ConfigurationCMName = fmt.Sprintf(TFInputConfigMapName, uid)
 		meta.VariableSecretName = fmt.Sprintf(TFVariableSecret, uid)
+		meta.ControllerNamespace = r.ControllerNamespace
 
 		configuration.Spec.Backend = &v1beta2.Backend{
 			InClusterConfig: true,
@@ -213,6 +209,17 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	return ctrl.Result{}, nil
 }
 
+// LegacySubResources if user specify ControllerNamespace when re-staring controller, there are some sub-resources like Secret
+// and ConfigMap that are in the namespace of the Configuration. We need to GC these sub-resources when Configuration is deleted.
+type LegacySubResources struct {
+	// Namespace is the namespace of the Configuration, also the namespace of the sub-resources.
+	Namespace           string
+	ApplyJobName        string
+	DestroyJobName      string
+	ConfigurationCMName string
+	VariableSecretName  string
+}
+
 // TFConfigurationMeta is all the metadata of a Configuration
 type TFConfigurationMeta struct {
 	Name                  string
@@ -240,10 +247,9 @@ type TFConfigurationMeta struct {
 	JobNodeSelector map[string]string
 
 	// TerraformImage is the Terraform image which can run `terraform init/plan/apply`
-	TerraformImage            string
-	TerraformBackendNamespace string
-	BusyboxImage              string
-	GitImage                  string
+	TerraformImage string
+	BusyboxImage   string
+	GitImage       string
 
 	// Resources series Variables are for Setting Compute Resources required by this container
 	ResourcesLimitsCPU              string
@@ -254,6 +260,8 @@ type TFConfigurationMeta struct {
 	ResourcesRequestsCPUQuantity    resource.Quantity
 	ResourcesRequestsMemory         string
 	ResourcesRequestsMemoryQuantity resource.Quantity
+
+	LegacySubResources LegacySubResources
 }
 
 func initTFConfigurationMeta(req ctrl.Request, configuration v1beta2.Configuration) *TFConfigurationMeta {
@@ -347,7 +355,7 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, configur
 		return err
 	}
 
-	deleteConfigurationDirectly := deletable || !meta.DeleteResource
+	deleteConfigurationDirectly := deletable || meta.DeleteResource
 
 	if !deleteConfigurationDirectly {
 		if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.DestroyJobName, Namespace: meta.ControllerNamespace}, &destroyJob); err != nil {
@@ -372,7 +380,7 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, configur
 
 	if configuration.Spec.ForceDelete != nil && *configuration.Spec.ForceDelete {
 		// Try to clean up more sub-resources as possible. Ignore the issues if it hit any.
-		if err := r.cleanUpSubResources(ctx, meta.ControllerNamespace, configuration, meta); err != nil {
+		if err := r.cleanUpSubResources(ctx, configuration, meta); err != nil {
 			klog.Warningf("Failed to clean up sub-resources, but it's ignored as the resources are being forced to delete: %s", err)
 		}
 		return nil
@@ -383,17 +391,17 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, configur
 			return err
 		}
 		if destroyJob.Status.Succeeded == int32(1) {
-			return r.cleanUpSubResources(ctx, meta.ControllerNamespace, configuration, meta)
+			return r.cleanUpSubResources(ctx, configuration, meta)
 		}
 	}
 	if deleteConfigurationDirectly {
-		return r.cleanUpSubResources(ctx, meta.ControllerNamespace, configuration, meta)
+		return r.cleanUpSubResources(ctx, configuration, meta)
 	}
 
 	return errors.New(types.MessageDestroyJobNotCompleted)
 }
 
-func (r *ConfigurationReconciler) cleanUpSubResources(ctx context.Context, namespace string, configuration v1beta2.Configuration, meta *TFConfigurationMeta) error {
+func (r *ConfigurationReconciler) cleanUpSubResources(ctx context.Context, configuration v1beta2.Configuration, meta *TFConfigurationMeta) error {
 	var k8sClient = r.Client
 
 	// 1. delete Terraform input Configuration ConfigMap
@@ -411,28 +419,18 @@ func (r *ConfigurationReconciler) cleanUpSubResources(ctx context.Context, names
 	}
 
 	// 3. delete apply job
-	var applyJob batchv1.Job
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.ApplyJobName, Namespace: namespace}, &applyJob); err == nil {
-		if err := k8sClient.Delete(ctx, &applyJob, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
-			return err
-		}
+	if err := meta.deleteApplyJob(ctx, k8sClient); err != nil {
+		return err
 	}
 
 	// 4. delete destroy job
-	var j batchv1.Job
-	if err := r.Client.Get(ctx, client.ObjectKey{Name: meta.DestroyJobName, Namespace: meta.Namespace}, &j); err == nil {
-		if err := r.Client.Delete(ctx, &j, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
-			return err
-		}
+	if err := meta.deleteDestroyJob(ctx, k8sClient); err != nil {
+		return err
 	}
 
 	// 5. delete secret which stores variables
-	klog.InfoS("Deleting the secret which stores variables", "Name", meta.VariableSecretName)
-	var variableSecret v1.Secret
-	if err := r.Client.Get(ctx, client.ObjectKey{Name: meta.VariableSecretName, Namespace: meta.Namespace}, &variableSecret); err == nil {
-		if err := r.Client.Delete(ctx, &variableSecret); err != nil {
-			return err
-		}
+	if err := meta.deleteVariableSecret(ctx, k8sClient); err != nil {
+		return err
 	}
 
 	// 6. delete Kubernetes backend secret
@@ -1043,9 +1041,80 @@ func getTerraformJSONVariable(tfVariables *runtime.RawExtension) (map[string]int
 
 func (meta *TFConfigurationMeta) deleteConfigMap(ctx context.Context, k8sClient client.Client) error {
 	var cm v1.ConfigMap
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.ConfigurationCMName, Namespace: meta.ControllerNamespace}, &cm); err == nil {
-		if err := k8sClient.Delete(ctx, &cm); err != nil {
-			return err
+	// We have four cases when upgrading. There are three combinations of name and namespace.
+	// TODO compatible for case 4
+	// 1. no "controller-namespace" -> specify "controller-namespace"
+	// 2. no "controller-namespace" -> no "controller-namespace"
+	// 3. specify "controller-namespace" -> specify "controller-namespace"
+	// 4. specify "controller-namespace" -> no "controller-namespace" (NOT SUPPORTED)
+	possibleCombination := [][2]string{
+		{meta.LegacySubResources.ConfigurationCMName, meta.LegacySubResources.Namespace},
+		{meta.ConfigurationCMName, meta.ControllerNamespace},
+		{meta.ConfigurationCMName, meta.Namespace},
+	}
+	klog.InfoS("Deleting the ConfigMap which stores configuration", "Name", meta.ConfigurationCMName)
+	for _, combination := range possibleCombination {
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: combination[0], Namespace: combination[1]}, &cm); err == nil {
+			if err := k8sClient.Delete(ctx, &cm); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (meta *TFConfigurationMeta) deleteVariableSecret(ctx context.Context, k8sClient client.Client) error {
+	var variableSecret v1.Secret
+	// see TFConfigurationMeta.deleteConfigMap
+	possibleCombination := [][2]string{
+		{meta.LegacySubResources.VariableSecretName, meta.LegacySubResources.Namespace},
+		{meta.VariableSecretName, meta.ControllerNamespace},
+		{meta.VariableSecretName, meta.Namespace},
+	}
+	klog.InfoS("Deleting the secret which stores variables", "Name", meta.VariableSecretName)
+	for _, combination := range possibleCombination {
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: combination[0], Namespace: combination[1]}, &variableSecret); err == nil {
+			if err := k8sClient.Delete(ctx, &variableSecret); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (meta *TFConfigurationMeta) deleteApplyJob(ctx context.Context, k8sClient client.Client) error {
+	var job batchv1.Job
+	// see TFConfigurationMeta.deleteConfigMap
+	possibleCombination := [][2]string{
+		{meta.LegacySubResources.ApplyJobName, meta.LegacySubResources.Namespace},
+		{meta.ApplyJobName, meta.ControllerNamespace},
+		{meta.ApplyJobName, meta.Namespace},
+	}
+	klog.InfoS("Deleting the apply job", "Name", meta.ApplyJobName)
+	for _, combination := range possibleCombination {
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: combination[0], Namespace: combination[1]}, &job); err == nil {
+			if err := k8sClient.Delete(ctx, &job); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (meta *TFConfigurationMeta) deleteDestroyJob(ctx context.Context, k8sClient client.Client) error {
+	var job batchv1.Job
+	// see TFConfigurationMeta.deleteConfigMap
+	possibleCombination := [][2]string{
+		{meta.LegacySubResources.DestroyJobName, meta.LegacySubResources.Namespace},
+		{meta.DestroyJobName, meta.ControllerNamespace},
+		{meta.DestroyJobName, meta.Namespace},
+	}
+	klog.InfoS("Deleting the destroy job", "Name", meta.DestroyJobName)
+	for _, combination := range possibleCombination {
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: combination[0], Namespace: combination[1]}, &job); err == nil {
+			if err := k8sClient.Delete(ctx, &job); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -1157,4 +1226,12 @@ func (meta *TFConfigurationMeta) getCredentials(ctx context.Context, k8sClient c
 	meta.Credentials = credentials
 	meta.Region = region
 	return nil
+}
+
+func (meta *TFConfigurationMeta) KeepLegacySubResourceMetas() {
+	meta.LegacySubResources.Namespace = meta.Namespace
+	meta.LegacySubResources.ApplyJobName = meta.ApplyJobName
+	meta.LegacySubResources.DestroyJobName = meta.DestroyJobName
+	meta.LegacySubResources.ConfigurationCMName = meta.ConfigurationCMName
+	meta.LegacySubResources.VariableSecretName = meta.VariableSecretName
 }
