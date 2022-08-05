@@ -91,7 +91,7 @@ func GetProviderCredentials(ctx context.Context, k8sClient client.Client, provid
 				envAliCloudStsToken:  ak.SecurityToken,
 			}, nil
 		case string(ucloud):
-			return getUCloudCredentials(secretData, name, namespace)
+			return getUCloudCredentials(secretData, name, namespace, region)
 		case string(aws):
 			return getAWSCredentials(secretData, name, namespace, region)
 		case string(gcp):

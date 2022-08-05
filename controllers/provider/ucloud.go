@@ -21,7 +21,7 @@ type UCloudCredentials struct {
 	ProjectID  string `yaml:"projectID"`
 }
 
-func getUCloudCredentials(secretData []byte, name, namespace string) (map[string]string, error) {
+func getUCloudCredentials(secretData []byte, name, namespace, region string) (map[string]string, error) {
 	var ak UCloudCredentials
 	if err := yaml.Unmarshal(secretData, &ak); err != nil {
 		klog.ErrorS(err, errConvertCredentials, "Name", name, "Namespace", namespace)
@@ -30,7 +30,7 @@ func getUCloudCredentials(secretData []byte, name, namespace string) (map[string
 	return map[string]string{
 		envUCloudPublicKey:  ak.PublicKey,
 		envUCloudPrivateKey: ak.PrivateKey,
-		envUCloudRegion:     ak.Region,
+		envUCloudRegion:     region,
 		envUCloudProjectID:  ak.ProjectID,
 	}, nil
 }
