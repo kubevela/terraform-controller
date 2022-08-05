@@ -39,11 +39,15 @@ var (
 func newBackupCmd(kubeFlags *genericclioptions.ConfigFlags) *cobra.Command {
 	backupCmd := &cobra.Command{
 		Use: "backup",
-		PreRunE: func(cmd *cobra.Command, args []string) error {
-			return app.BuildK8SClient(kubeFlags)
+		PreRun: func(cmd *cobra.Command, args []string) {
+			if err := app.BuildK8SClient(kubeFlags); err != nil {
+				log.Fatal(err)
+			}
 		},
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return backup(context.Background())
+		Run: func(cmd *cobra.Command, args []string) {
+			if err := backup(context.Background()); err != nil {
+				log.Fatal(err)
+			}
 		},
 	}
 	backupCmd.Flags().StringArrayVar(&configurationNameList, "configuration", []string{}, "the name of the configurations which need to be backed up")

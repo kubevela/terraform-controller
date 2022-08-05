@@ -113,6 +113,11 @@ func WaitConfiguration(ctx context.Context, namespacedName *crossplane.Reference
 		gotConf := &v1beta2.Configuration{}
 		for {
 			if err := K8SClient.Get(ctx, client.ObjectKey{Name: namespacedName.Name, Namespace: namespacedName.Namespace}, gotConf); err != nil {
+				if kerrors.IsNotFound(err) {
+					log.Printf("can not find the configuration({Name: %s, Namespace: %s}), waiting......", namespacedName.Name, namespacedName.Namespace)
+					time.Sleep(500 * time.Millisecond)
+					continue
+				}
 				errCh <- err
 				return
 			}
