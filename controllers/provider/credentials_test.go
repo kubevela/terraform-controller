@@ -777,7 +777,7 @@ func TestGetProviderCredentials4UCloud(t *testing.T) {
 	creds, _ := yaml.Marshal(&UCloudCredentials{
 		PublicKey:  "a",
 		PrivateKey: "b",
-		Region:     "bj",
+		Region:     "bj1",
 		ProjectID:  "c",
 	})
 	secret := &v1.Secret{
