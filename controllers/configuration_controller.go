@@ -118,7 +118,7 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		uid := string(configuration.GetUID())
 		// @step: since we are using a single namespace to run these, we must ensure the names
 		// are unique across the namespace
-		meta.KeepLegacySubResourceMetas(*configuration.Spec.Backend)
+		meta.KeepLegacySubResourceMetas()
 		meta.ApplyJobName = uid + "-" + string(TerraformApply)
 		meta.DestroyJobName = uid + "-" + string(TerraformDestroy)
 		meta.ConfigurationCMName = fmt.Sprintf(TFInputConfigMapName, uid)
@@ -218,7 +218,6 @@ type LegacySubResources struct {
 	DestroyJobName      string
 	ConfigurationCMName string
 	VariableSecretName  string
-	Backend             v1beta2.Backend
 }
 
 // TFConfigurationMeta is all the metadata of a Configuration
@@ -1223,13 +1222,12 @@ func (meta *TFConfigurationMeta) getCredentials(ctx context.Context, k8sClient c
 	return nil
 }
 
-func (meta *TFConfigurationMeta) KeepLegacySubResourceMetas(backend v1beta2.Backend) {
+func (meta *TFConfigurationMeta) KeepLegacySubResourceMetas() {
 	meta.LegacySubResources.Namespace = meta.Namespace
 	meta.LegacySubResources.ApplyJobName = meta.ApplyJobName
 	meta.LegacySubResources.DestroyJobName = meta.DestroyJobName
 	meta.LegacySubResources.ConfigurationCMName = meta.ConfigurationCMName
 	meta.LegacySubResources.VariableSecretName = meta.VariableSecretName
-	meta.LegacySubResources.Backend = backend
 }
 
 func (meta *TFConfigurationMeta) getApplyJob(ctx context.Context, k8sClient client.Client, job *batchv1.Job) error {
