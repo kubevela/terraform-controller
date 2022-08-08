@@ -12,8 +12,8 @@ import (
 )
 
 // GetTerraformStatus will get Terraform execution status
-func GetTerraformStatus(ctx context.Context, namespace, jobName, jobNamespace, containerName, initContainerName string) (types.ConfigurationState, error) {
-	klog.InfoS("checking Terraform init and execution status", "Namespace", namespace, "Job", jobName)
+func GetTerraformStatus(ctx context.Context, jobNamespace, jobName, containerName, initContainerName string) (types.ConfigurationState, error) {
+	klog.InfoS("checking Terraform init and execution status", "Namespace", jobNamespace, "Job", jobName)
 	clientSet, err := client.Init()
 	if err != nil {
 		klog.ErrorS(err, "failed to init clientSet")
