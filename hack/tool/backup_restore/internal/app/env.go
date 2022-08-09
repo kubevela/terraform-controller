@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -43,8 +44,19 @@ func GetTFBackendNSFromDeployment() string {
 		log.Printf("WARN: get terraform-controller deployment in the vela-system namesapce failed, %v", err)
 		return ""
 	}
-	envs := deployment.Spec.Template.Spec.Containers[0].Env
-	for _, env := range envs {
+	var tfContainer *corev1.Container
+	containers := deployment.Spec.Template.Spec.Containers
+	for _, container := range containers {
+		if container.Name == "terraform-controller" {
+			tfContainer = &container
+			break
+		}
+	}
+	if tfContainer == nil {
+		log.Println("WARN: terraform-controller container not found in the terraform-controller deployment")
+		return ""
+	}
+	for _, env := range tfContainer.Env {
 		if env.Name == "TERRAFORM_BACKEND_NAMESPACE" {
 			return env.Value
 		}
