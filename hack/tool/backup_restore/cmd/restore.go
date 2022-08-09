@@ -115,16 +115,15 @@ func restore(ctx context.Context) error {
 func presetTFBackendNS() {
 	backendNS := os.Getenv(app.TFBackendNS)
 	if backendNS != "" {
-		goto end
+		log.Printf("use the `TERRAFORM_BACKEND_NAMESPACE` environment variable: %s", backendNS)
 	}
 
-	// if user don't set the "TERRAFORM_BACKEND_NAMESPACE" environment variable,
+	// if user doesn't set the "TERRAFORM_BACKEND_NAMESPACE" environment variable,
 	// we try to fetch the environment variable from the terraform-controller deployment
 	// and set it in the local environment to make sure the consistency
 	backendNS = app.GetTFBackendNSFromDeployment()
 	if backendNS != "" {
 		_ = os.Setenv(app.TFBackendNS, backendNS)
 	}
-end:
 	log.Printf("use the `TERRAFORM_BACKEND_NAMESPACE` environment variable: %s", backendNS)
 }
