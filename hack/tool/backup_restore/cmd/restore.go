@@ -38,14 +38,10 @@ var (
 func newRestoreCmd(kubeFlags *genericclioptions.ConfigFlags) *cobra.Command {
 	restoreCmd := &cobra.Command{
 		Use: "restore",
-		PreRunE: func(cmd *cobra.Command, args []string) error {
-			err := app.BuildK8SClient(kubeFlags)
-			if err != nil {
-				return err
-			}
+		PreRun: func(cmd *cobra.Command, args []string) {
 			pwd, err := os.Getwd()
 			if err != nil {
-				return err
+				log.Fatal(err)
 			}
 			if stateJSONPath == "" {
 				log.Fatal("`--state` should not be empty")
@@ -65,10 +61,15 @@ func newRestoreCmd(kubeFlags *genericclioptions.ConfigFlags) *cobra.Command {
 					log.Print("WARN: `--component` is empty. Will take the first component of the Application as the cloud resource which should be restored")
 				}
 			}
-			return nil
+			if err := app.BuildK8SClient(kubeFlags); err != nil {
+				log.Fatal(err)
+			}
+			presetTFBackendNS()
 		},
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return restore(context.Background())
+		Run: func(cmd *cobra.Command, args []string) {
+			if err := restore(context.Background()); err != nil {
+				log.Fatal(err)
+			}
 		},
 	}
 	restoreCmd.Flags().StringVar(&stateJSONPath, "state", "state.json", "the path of the backed up Terraform state file")
@@ -108,4 +109,22 @@ func restore(ctx context.Context) error {
 	}
 
 	return app.WaitConfiguration(ctx, resourceOwner.GetConfigurationNamespacedName())
+}
+
+// presetTFBackendNS try to set the "TERRAFORM_BACKEND_NAMESPACE" environment variable
+func presetTFBackendNS() {
+	backendNS := os.Getenv(app.TFBackendNS)
+	if backendNS != "" {
+		log.Printf("use the `TERRAFORM_BACKEND_NAMESPACE` environment variable: %s", backendNS)
+		return
+	}
+
+	// if user doesn't set the "TERRAFORM_BACKEND_NAMESPACE" environment variable,
+	// we try to fetch the environment variable from the terraform-controller deployment
+	// and set it in the local environment to make sure the consistency
+	backendNS = app.GetTFBackendNSFromDeployment()
+	if backendNS != "" {
+		_ = os.Setenv(app.TFBackendNS, backendNS)
+	}
+	log.Printf("use the `TERRAFORM_BACKEND_NAMESPACE` environment variable: %s", backendNS)
 }
