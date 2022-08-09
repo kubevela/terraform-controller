@@ -116,6 +116,7 @@ func presetTFBackendNS() {
 	backendNS := os.Getenv(app.TFBackendNS)
 	if backendNS != "" {
 		log.Printf("use the `TERRAFORM_BACKEND_NAMESPACE` environment variable: %s", backendNS)
+		return
 	}
 
 	// if user doesn't set the "TERRAFORM_BACKEND_NAMESPACE" environment variable,
