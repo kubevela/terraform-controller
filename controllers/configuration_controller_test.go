@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/pkg/errors"
 	"os"
 	"reflect"
 	"strings"
@@ -2073,6 +2074,101 @@ func TestCheckWhetherConfigurationChanges(t *testing.T) {
 			if tc.want.errMsg != "" || err != nil {
 				if !strings.Contains(err.Error(), tc.want.errMsg) {
 					t.Errorf("CheckWhetherConfigurationChanges() error = %v, wantErr %v", err, tc.want.errMsg)
+				}
+			}
+		})
+	}
+}
+
+func TestGetApplyJob(t *testing.T) {
+	const (
+		applyJobNameWithUID = "xxxx-xxxx-xxxx"
+		controllerNamespace = "ctrl-ns"
+		applyJobName        = "configuraion-apply"
+		jobNamespace        = "configuration-ns"
+		//legacyApplyJobName  = "legacy-job-name"
+		//legacyJobNamespace  = "legacy-job-ns"
+	)
+
+	ctx := context.Background()
+	s := runtime.NewScheme()
+	v1beta1.AddToScheme(s)
+	v1beta2.AddToScheme(s)
+	batchv1.AddToScheme(s)
+	baseMeta := TFConfigurationMeta{
+		ApplyJobName:        applyJobName,
+		ControllerNamespace: jobNamespace,
+	}
+	baseJob := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      applyJobName,
+			Namespace: jobNamespace,
+		},
+	}
+	jobInCtrlNS := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      applyJobNameWithUID,
+			Namespace: controllerNamespace,
+		},
+	}
+	legacyJob := baseJob.DeepCopy()
+
+	testCases := []struct {
+		name string
+
+		objects []client.Object
+		wantErr error
+		meta    TFConfigurationMeta
+	}{
+		{
+			name:    "get job successfully",
+			objects: []client.Object{baseJob},
+			meta:    baseMeta,
+		},
+		{name: "get legacy job successfully",
+			objects: []client.Object{legacyJob},
+			meta: TFConfigurationMeta{LegacySubResources: LegacySubResources{
+				Namespace:    jobNamespace,
+				ApplyJobName: applyJobName,
+			}},
+		},
+		{
+			name:    "get job in controller namespace",
+			objects: []client.Object{jobInCtrlNS},
+			meta: TFConfigurationMeta{
+				ControllerNamespace: controllerNamespace,
+				ApplyJobName:        applyJobNameWithUID,
+			},
+		},
+		{
+			name:    "not get any job",
+			objects: []client.Object{},
+			meta: TFConfigurationMeta{
+				ControllerNamespace: controllerNamespace,
+				ApplyJobName:        applyJobNameWithUID,
+				LegacySubResources: LegacySubResources{
+					Namespace:    jobNamespace,
+					ApplyJobName: applyJobName,
+				},
+			},
+			wantErr: errors.New("not found"),
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var job batchv1.Job
+			k8sClient := fake.NewClientBuilder().WithScheme(s).WithObjects(tc.objects...).Build()
+
+			err := tc.meta.getApplyJob(ctx, k8sClient, &job)
+			if tc.wantErr != nil {
+				if err == nil {
+					t.Errorf("expected error: %s, got nil", tc.wantErr)
+				} else if !strings.Contains(err.Error(), tc.wantErr.Error()) {
+					t.Errorf("expected error containing %q, got %q", tc.wantErr, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
 				}
 			}
 		})
