@@ -21,12 +21,14 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/oam-dev/terraform-controller/api/v1beta2"
-	"github.com/oam-dev/terraform-controller/controllers/util"
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/oam-dev/terraform-controller/api/v1beta2"
+	"github.com/oam-dev/terraform-controller/controllers/util"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -47,19 +49,31 @@ type K8SBackend struct {
 	SecretSuffix string
 	// SecretNS is the namespace of the Terraform backend secret
 	SecretNS string
+	// LegacySecretSuffix is the same as SecretSuffix, but only used when `--controller-namespace` is specified
+	LegacySecretSuffix string
 }
 
-func newDefaultK8SBackend(suffix string, client client.Client, namespace string) *K8SBackend {
+func newDefaultK8SBackend(configuration *v1beta2.Configuration, client client.Client, controllerNSSpecified bool) *K8SBackend {
 	ns := os.Getenv("TERRAFORM_BACKEND_NAMESPACE")
 	if ns == "" {
-		ns = namespace
+		ns = configuration.GetNamespace()
+	}
+
+	var (
+		suffix       = configuration.Spec.Backend.SecretSuffix
+		legacySuffix string
+	)
+	if controllerNSSpecified {
+		legacySuffix = suffix
+		suffix = string(configuration.GetUID())
 	}
 	hcl := renderK8SBackendHCL(suffix, ns)
 	return &K8SBackend{
-		Client:       client,
-		HCLCode:      hcl,
-		SecretSuffix: suffix,
-		SecretNS:     ns,
+		Client:             client,
+		HCLCode:            hcl,
+		SecretSuffix:       suffix,
+		SecretNS:           ns,
+		LegacySecretSuffix: legacySuffix,
 	}
 }
 
@@ -95,15 +109,23 @@ terraform {
 	return fmt.Sprintf(fmtStr, suffix, ns)
 }
 
-func (k K8SBackend) secretName() string {
+func (k *K8SBackend) secretName() string {
 	return fmt.Sprintf(TFBackendSecret, terraformWorkspace, k.SecretSuffix)
+}
+
+func (k *K8SBackend) legacySecretName() string {
+	return fmt.Sprintf(TFBackendSecret, terraformWorkspace, k.LegacySecretSuffix)
 }
 
 // GetTFStateJSON gets Terraform state json from the Terraform kubernetes backend
 func (k *K8SBackend) GetTFStateJSON(ctx context.Context) ([]byte, error) {
 	var s = v1.Secret{}
-	if err := k.Client.Get(ctx, client.ObjectKey{Name: k.secretName(), Namespace: k.SecretNS}, &s); err != nil {
-		return nil, errors.Wrap(err, "terraform state file backend secret is not generated")
+	// Try to get legacy secret first, if it doesn't exist, try to get new secret
+	err := k.Client.Get(ctx, client.ObjectKey{Name: k.legacySecretName(), Namespace: k.SecretNS}, &s)
+	if err != nil {
+		if err = k.Client.Get(ctx, client.ObjectKey{Name: k.secretName(), Namespace: k.SecretNS}, &s); err != nil {
+			return nil, errors.Wrap(err, "terraform state file backend secret is not generated")
+		}
 	}
 	tfStateData, ok := s.Data[TerraformStateNameInSecret]
 	if !ok {
@@ -119,8 +141,15 @@ func (k *K8SBackend) GetTFStateJSON(ctx context.Context) ([]byte, error) {
 
 // CleanUp will delete the Terraform kubernetes backend secret when deleting the configuration object
 func (k *K8SBackend) CleanUp(ctx context.Context) error {
-	klog.InfoS("Deleting the secret which stores Kubernetes backend", "Name", k.secretName())
+	klog.InfoS("Deleting the legacy secret which stores Kubernetes backend", "Name", k.legacySecretName())
 	var kubernetesBackendSecret v1.Secret
+	if err := k.Client.Get(ctx, client.ObjectKey{Name: k.legacySecretName(), Namespace: k.SecretNS}, &kubernetesBackendSecret); err == nil {
+		if err := k.Client.Delete(ctx, &kubernetesBackendSecret); err != nil {
+			return err
+		}
+	}
+
+	klog.InfoS("Deleting the secret which stores Kubernetes backend", "Name", k.secretName())
 	if err := k.Client.Get(ctx, client.ObjectKey{Name: k.secretName(), Namespace: k.SecretNS}, &kubernetesBackendSecret); err == nil {
 		if err := k.Client.Delete(ctx, &kubernetesBackendSecret); err != nil {
 			return err
@@ -131,8 +160,40 @@ func (k *K8SBackend) CleanUp(ctx context.Context) error {
 
 // HCL returns the backend hcl code string
 func (k *K8SBackend) HCL() string {
+	if k.LegacySecretSuffix != "" {
+		err := k.migrateLegacySecret()
+		if err != nil {
+			klog.ErrorS(err, "Failed to migrate legacy secret")
+		}
+	}
+
 	if k.HCLCode == "" {
 		k.HCLCode = renderK8SBackendHCL(k.SecretSuffix, k.SecretNS)
 	}
 	return k.HCLCode
+}
+
+// migrateLegacySecret will migrate the legacy secret to the new secret if the legacy secret exists
+// This is needed when the --controller-namespace is specified and restart the controller
+func (k *K8SBackend) migrateLegacySecret() error {
+	ctx := context.TODO()
+	s := v1.Secret{}
+	if err := k.Client.Get(ctx, client.ObjectKey{Name: k.legacySecretName(), Namespace: k.SecretNS}, &s); err == nil {
+		klog.InfoS("Migrating legacy secret to new secret", "LegacyName", k.legacySecretName(), "NewName", k.secretName(), "Namespace", k.SecretNS)
+		newSecret := v1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      k.secretName(),
+				Namespace: k.SecretNS,
+			},
+			Data: s.Data,
+		}
+		err = k.Client.Create(ctx, &newSecret)
+		if err != nil {
+			return errors.Wrapf(err, "Fail to create new secret, Name: %s, Namespace: %s", k.secretName(), k.SecretNS)
+		} else if err = k.Client.Delete(ctx, &s); err != nil {
+			// Only delete the legacy secret if the new secret is successfully created
+			return errors.Wrapf(err, "Fail to delete legacy secret, Name: %s, Namespace: %s", k.legacySecretName(), k.SecretNS)
+		}
+	}
+	return nil
 }

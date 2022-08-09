@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/oam-dev/terraform-controller/controllers/configuration/backend"
 	"github.com/pkg/errors"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	apitypes "k8s.io/apimachinery/pkg/types"
@@ -48,25 +47,6 @@ func ValidConfigurationObject(configuration *v1beta2.Configuration) (types.Confi
 		return types.ConfigurationRemote, nil
 	}
 	return "", nil
-}
-
-// RenderConfiguration will compose the Terraform configuration with hcl/json and backend
-func RenderConfiguration(configuration *v1beta2.Configuration, k8sClient client.Client, configurationType types.ConfigurationType, credentials map[string]string) (string, backend.Backend, error) {
-	backendInterface, err := backend.ParseConfigurationBackend(configuration, k8sClient, credentials)
-	if err != nil {
-		return "", nil, errors.Wrap(err, "failed to prepare Terraform backend configuration")
-	}
-
-	switch configurationType {
-	case types.ConfigurationHCL:
-		completedConfiguration := configuration.Spec.HCL
-		completedConfiguration += "\n" + backendInterface.HCL()
-		return completedConfiguration, backendInterface, nil
-	case types.ConfigurationRemote:
-		return backendInterface.HCL(), backendInterface, nil
-	default:
-		return "", nil, errors.New("Unsupported Configuration Type")
-	}
 }
 
 // SetRegion will set the region for Configuration

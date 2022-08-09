@@ -13,8 +13,9 @@ import (
 
 func TestParseConfigurationBackend(t *testing.T) {
 	type args struct {
-		configuration *v1beta2.Configuration
-		credentials   map[string]string
+		configuration         *v1beta2.Configuration
+		credentials           map[string]string
+		controllerNSSpecified bool
 	}
 	type want struct {
 		backend Backend
@@ -299,17 +300,46 @@ terraform {
 				errMsg: "it's not allowed to set `spec.backend.inline` and `spec.backend.backendType` at the same time",
 			},
 		},
+		{
+			name: "backend is nil, specify controller namespace, generate backend with legacy secret suffix",
+			args: args{
+				configuration: &v1beta2.Configuration{
+					ObjectMeta: metav1.ObjectMeta{Name: "name", Namespace: "ns", UID: "xxxx-xxxx"},
+					Spec: v1beta2.ConfigurationSpec{
+						Backend: nil,
+					},
+				},
+				controllerNSSpecified: true,
+			},
+			want: want{
+				backend: &K8SBackend{
+					LegacySecretSuffix: "name",
+					SecretNS:           "ns",
+					SecretSuffix:       "xxxx-xxxx",
+					Client:             k8sClient,
+					HCLCode: `
+terraform {
+  backend "kubernetes" {
+    secret_suffix     = "xxxx-xxxx"
+    in_cluster_config = true
+    namespace         = "ns"
+  }
+}
+`,
+				},
+			},
+		},
 	}
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := ParseConfigurationBackend(tc.args.configuration, k8sClient, tc.args.credentials)
+			got, err := ParseConfigurationBackend(tc.args.configuration, k8sClient, tc.args.credentials, tc.args.controllerNSSpecified)
 			if tc.want.errMsg != "" && !strings.Contains(err.Error(), tc.want.errMsg) {
 				t.Errorf("ValidConfigurationObject() error = %v, wantErr %v", err, tc.want.errMsg)
 				return
 			}
 			if !reflect.DeepEqual(tc.want.backend, got) {
-				t.Errorf("got %#v, want %#v", got, tc.want.backend)
+				t.Errorf("\ngot  %#v,\nwant %#v", got, tc.want.backend)
 			}
 		})
 	}

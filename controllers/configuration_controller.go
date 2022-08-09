@@ -113,7 +113,7 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	meta := initTFConfigurationMeta(req, configuration)
+	meta := initTFConfigurationMeta(req, configuration, r.Client)
 	if r.ControllerNamespace != "" {
 		uid := string(configuration.GetUID())
 		// @step: since we are using a single namespace to run these, we must ensure the names
@@ -124,11 +124,7 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		meta.ConfigurationCMName = fmt.Sprintf(TFInputConfigMapName, uid)
 		meta.VariableSecretName = fmt.Sprintf(TFVariableSecret, uid)
 		meta.ControllerNamespace = r.ControllerNamespace
-
-		configuration.Spec.Backend = &v1beta2.Backend{
-			InClusterConfig: true,
-			SecretSuffix:    uid,
-		}
+		meta.ControllerNSSpecified = true
 	}
 
 	// add finalizer
@@ -145,15 +141,6 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	// pre-check Configuration
 	if err := r.preCheck(ctx, &configuration, meta); err != nil && !isDeleting {
 		return ctrl.Result{}, err
-	}
-
-	var tfExecutionJob = &batchv1.Job{}
-	if err := r.Client.Get(ctx, client.ObjectKey{Name: meta.ApplyJobName, Namespace: meta.ControllerNamespace}, tfExecutionJob); err == nil {
-		if !meta.EnvChanged && tfExecutionJob.Status.Succeeded == int32(1) {
-			if err := meta.updateApplyStatus(ctx, r.Client, types.Available, types.MessageCloudResourceDeployed); err != nil {
-				return ctrl.Result{}, err
-			}
-		}
 	}
 
 	if isDeleting {
@@ -188,6 +175,14 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, nil
 	}
 
+	var tfExecutionJob = &batchv1.Job{}
+	if err := meta.getApplyJob(ctx, r.Client, tfExecutionJob); err == nil {
+		if !meta.EnvChanged && tfExecutionJob.Status.Succeeded == int32(1) {
+			err = meta.updateApplyStatus(ctx, r.Client, types.Available, types.MessageCloudResourceDeployed)
+			return ctrl.Result{}, err
+		}
+	}
+
 	// Terraform apply (create or update)
 	klog.InfoS("performing Terraform Apply (cloud resource create/update)", "Namespace", req.Namespace, "Name", req.Name)
 	if err := r.terraformApply(ctx, configuration, meta); err != nil {
@@ -218,6 +213,17 @@ type LegacySubResources struct {
 	DestroyJobName      string
 	ConfigurationCMName string
 	VariableSecretName  string
+}
+
+type ResourceQuota struct {
+	ResourcesLimitsCPU              string
+	ResourcesLimitsCPUQuantity      resource.Quantity
+	ResourcesLimitsMemory           string
+	ResourcesLimitsMemoryQuantity   resource.Quantity
+	ResourcesRequestsCPU            string
+	ResourcesRequestsCPUQuantity    resource.Quantity
+	ResourcesRequestsMemory         string
+	ResourcesRequestsMemoryQuantity resource.Quantity
 }
 
 // TFConfigurationMeta is all the metadata of a Configuration
@@ -251,20 +257,16 @@ type TFConfigurationMeta struct {
 	BusyboxImage   string
 	GitImage       string
 
-	// Resources series Variables are for Setting Compute Resources required by this container
-	ResourcesLimitsCPU              string
-	ResourcesLimitsCPUQuantity      resource.Quantity
-	ResourcesLimitsMemory           string
-	ResourcesLimitsMemoryQuantity   resource.Quantity
-	ResourcesRequestsCPU            string
-	ResourcesRequestsCPUQuantity    resource.Quantity
-	ResourcesRequestsMemory         string
-	ResourcesRequestsMemoryQuantity resource.Quantity
+	// ResourceQuota series Variables are for Setting Compute Resources required by this container
+	ResourceQuota ResourceQuota
 
-	LegacySubResources LegacySubResources
+	LegacySubResources    LegacySubResources
+	ControllerNSSpecified bool
+
+	K8sClient client.Client
 }
 
-func initTFConfigurationMeta(req ctrl.Request, configuration v1beta2.Configuration) *TFConfigurationMeta {
+func initTFConfigurationMeta(req ctrl.Request, configuration v1beta2.Configuration, k8sClient client.Client) *TFConfigurationMeta {
 	var meta = &TFConfigurationMeta{
 		ControllerNamespace: req.Namespace,
 		Namespace:           req.Namespace,
@@ -273,6 +275,7 @@ func initTFConfigurationMeta(req ctrl.Request, configuration v1beta2.Configurati
 		VariableSecretName:  fmt.Sprintf(TFVariableSecret, req.Name),
 		ApplyJobName:        req.Name + "-" + string(TerraformApply),
 		DestroyJobName:      req.Name + "-" + string(TerraformDestroy),
+		K8sClient:           k8sClient,
 	}
 
 	jobNodeSelectorStr := os.Getenv("JOB_NODE_SELECTOR")
@@ -368,7 +371,7 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, configur
 			}
 		}
 		if err := meta.updateTerraformJobIfNeeded(ctx, k8sClient, destroyJob); err != nil {
-			klog.ErrorS(err, types.ErrUpdateTerraformApplyJob, "Name", meta.ApplyJobName)
+			klog.ErrorS(err, types.ErrUpdateTerraformApplyJob, "Name", meta.DestroyJobName)
 			return errors.Wrap(err, types.ErrUpdateTerraformApplyJob)
 		}
 	}
@@ -439,45 +442,45 @@ func (r *ConfigurationReconciler) cleanUpSubResources(ctx context.Context, confi
 
 func (r *ConfigurationReconciler) preCheckResourcesSetting(meta *TFConfigurationMeta) error {
 
-	meta.ResourcesLimitsCPU = os.Getenv("RESOURCES_LIMITS_CPU")
-	if meta.ResourcesLimitsCPU != "" {
-		limitsCPU, err := resource.ParseQuantity(meta.ResourcesLimitsCPU)
+	meta.ResourceQuota.ResourcesLimitsCPU = os.Getenv("RESOURCES_LIMITS_CPU")
+	if meta.ResourceQuota.ResourcesLimitsCPU != "" {
+		limitsCPU, err := resource.ParseQuantity(meta.ResourceQuota.ResourcesLimitsCPU)
 		if err != nil {
 			errMsg := "failed to parse env variable RESOURCES_LIMITS_CPU into resource.Quantity"
 			klog.ErrorS(err, errMsg)
 			return errors.Wrap(err, errMsg)
 		}
-		meta.ResourcesLimitsCPUQuantity = limitsCPU
+		meta.ResourceQuota.ResourcesLimitsCPUQuantity = limitsCPU
 	}
-	meta.ResourcesLimitsMemory = os.Getenv("RESOURCES_LIMITS_MEMORY")
-	if meta.ResourcesLimitsMemory != "" {
-		limitsMemory, err := resource.ParseQuantity(meta.ResourcesLimitsMemory)
+	meta.ResourceQuota.ResourcesLimitsMemory = os.Getenv("RESOURCES_LIMITS_MEMORY")
+	if meta.ResourceQuota.ResourcesLimitsMemory != "" {
+		limitsMemory, err := resource.ParseQuantity(meta.ResourceQuota.ResourcesLimitsMemory)
 		if err != nil {
 			errMsg := "failed to parse env variable RESOURCES_LIMITS_MEMORY into resource.Quantity"
 			klog.ErrorS(err, errMsg)
 			return errors.Wrap(err, errMsg)
 		}
-		meta.ResourcesLimitsMemoryQuantity = limitsMemory
+		meta.ResourceQuota.ResourcesLimitsMemoryQuantity = limitsMemory
 	}
-	meta.ResourcesRequestsCPU = os.Getenv("RESOURCES_REQUESTS_CPU")
-	if meta.ResourcesRequestsCPU != "" {
-		requestsCPU, err := resource.ParseQuantity(meta.ResourcesRequestsCPU)
+	meta.ResourceQuota.ResourcesRequestsCPU = os.Getenv("RESOURCES_REQUESTS_CPU")
+	if meta.ResourceQuota.ResourcesRequestsCPU != "" {
+		requestsCPU, err := resource.ParseQuantity(meta.ResourceQuota.ResourcesRequestsCPU)
 		if err != nil {
 			errMsg := "failed to parse env variable RESOURCES_REQUESTS_CPU into resource.Quantity"
 			klog.ErrorS(err, errMsg)
 			return errors.Wrap(err, errMsg)
 		}
-		meta.ResourcesRequestsCPUQuantity = requestsCPU
+		meta.ResourceQuota.ResourcesRequestsCPUQuantity = requestsCPU
 	}
-	meta.ResourcesRequestsMemory = os.Getenv("RESOURCES_REQUESTS_MEMORY")
-	if meta.ResourcesRequestsMemory != "" {
-		requestsMemory, err := resource.ParseQuantity(meta.ResourcesRequestsMemory)
+	meta.ResourceQuota.ResourcesRequestsMemory = os.Getenv("RESOURCES_REQUESTS_MEMORY")
+	if meta.ResourceQuota.ResourcesRequestsMemory != "" {
+		requestsMemory, err := resource.ParseQuantity(meta.ResourceQuota.ResourcesRequestsMemory)
 		if err != nil {
 			errMsg := "failed to parse env variable RESOURCES_REQUESTS_MEMORY into resource.Quantity"
 			klog.ErrorS(err, errMsg)
 			return errors.Wrap(err, errMsg)
 		}
-		meta.ResourcesRequestsMemoryQuantity = requestsMemory
+		meta.ResourceQuota.ResourcesRequestsMemoryQuantity = requestsMemory
 	}
 	return nil
 }
@@ -533,7 +536,7 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	}
 
 	// Render configuration with backend
-	completeConfiguration, backendConf, err := tfcfg.RenderConfiguration(configuration, r.Client, configurationType, meta.Credentials)
+	completeConfiguration, backendConf, err := meta.RenderConfiguration(configuration, configurationType)
 	if err != nil {
 		return err
 	}
@@ -610,6 +613,7 @@ func (meta *TFConfigurationMeta) updateApplyStatus(ctx context.Context, k8sClien
 		if state == types.Available {
 			outputs, err := meta.getTFOutputs(ctx, k8sClient, configuration)
 			if err != nil {
+				klog.InfoS("Failed to get outputs", "error", err)
 				configuration.Status.Apply = v1beta2.ConfigurationApplyStatus{
 					State:   types.GeneratingOutputs,
 					Message: types.ErrGenerateOutputs + ": " + err.Error(),
@@ -650,7 +654,7 @@ func (meta *TFConfigurationMeta) assembleAndTriggerJob(ctx context.Context, k8sC
 	return k8sClient.Create(ctx, job)
 }
 
-// updateTerraformJob will set deletion finalizer to the Terraform job if its envs are changed, which will result in
+// updateTerraformJobIfNeeded will set deletion finalizer to the Terraform job if its envs are changed, which will result in
 // deleting the job. Finally, a new Terraform job will be generated
 func (meta *TFConfigurationMeta) updateTerraformJobIfNeeded(ctx context.Context, k8sClient client.Client, job batchv1.Job) error {
 	// if either one changes, delete the job
@@ -768,25 +772,25 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 		Env: meta.Envs,
 	}
 
-	if meta.ResourcesLimitsCPU != "" || meta.ResourcesLimitsMemory != "" ||
-		meta.ResourcesRequestsCPU != "" || meta.ResourcesRequestsMemory != "" {
+	if meta.ResourceQuota.ResourcesLimitsCPU != "" || meta.ResourceQuota.ResourcesLimitsMemory != "" ||
+		meta.ResourceQuota.ResourcesRequestsCPU != "" || meta.ResourceQuota.ResourcesRequestsMemory != "" {
 		resourceRequirements := v1.ResourceRequirements{}
-		if meta.ResourcesLimitsCPU != "" || meta.ResourcesLimitsMemory != "" {
+		if meta.ResourceQuota.ResourcesLimitsCPU != "" || meta.ResourceQuota.ResourcesLimitsMemory != "" {
 			resourceRequirements.Limits = map[v1.ResourceName]resource.Quantity{}
-			if meta.ResourcesLimitsCPU != "" {
-				resourceRequirements.Limits["cpu"] = meta.ResourcesLimitsCPUQuantity
+			if meta.ResourceQuota.ResourcesLimitsCPU != "" {
+				resourceRequirements.Limits["cpu"] = meta.ResourceQuota.ResourcesLimitsCPUQuantity
 			}
-			if meta.ResourcesLimitsMemory != "" {
-				resourceRequirements.Limits["memory"] = meta.ResourcesLimitsMemoryQuantity
+			if meta.ResourceQuota.ResourcesLimitsMemory != "" {
+				resourceRequirements.Limits["memory"] = meta.ResourceQuota.ResourcesLimitsMemoryQuantity
 			}
 		}
-		if meta.ResourcesRequestsCPU != "" || meta.ResourcesLimitsMemory != "" {
+		if meta.ResourceQuota.ResourcesRequestsCPU != "" || meta.ResourceQuota.ResourcesLimitsMemory != "" {
 			resourceRequirements.Requests = map[v1.ResourceName]resource.Quantity{}
-			if meta.ResourcesRequestsCPU != "" {
-				resourceRequirements.Requests["cpu"] = meta.ResourcesRequestsCPUQuantity
+			if meta.ResourceQuota.ResourcesRequestsCPU != "" {
+				resourceRequirements.Requests["cpu"] = meta.ResourceQuota.ResourcesRequestsCPUQuantity
 			}
-			if meta.ResourcesRequestsMemory != "" {
-				resourceRequirements.Requests["memory"] = meta.ResourcesRequestsMemoryQuantity
+			if meta.ResourceQuota.ResourcesRequestsMemory != "" {
+				resourceRequirements.Requests["memory"] = meta.ResourceQuota.ResourcesRequestsMemoryQuantity
 			}
 		}
 		container.Resources = resourceRequirements
@@ -960,6 +964,7 @@ func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient cli
 				gotSecret.Namespace, name,
 				ownerNamespace, ownerName,
 			)
+			klog.ErrorS(err, "fail to update backend secret")
 			return nil, errors.New(errMsg)
 		}
 		gotSecret.Data = data
@@ -1232,8 +1237,29 @@ func (meta *TFConfigurationMeta) KeepLegacySubResourceMetas() {
 
 func (meta *TFConfigurationMeta) getApplyJob(ctx context.Context, k8sClient client.Client, job *batchv1.Job) error {
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.LegacySubResources.ApplyJobName, Namespace: meta.LegacySubResources.Namespace}, job); err == nil {
+		klog.InfoS("Found legacy apply job", "Configuration", fmt.Sprintf("%s/%s", meta.Name, meta.Namespace),
+			"Job", fmt.Sprintf("%s/%s", meta.LegacySubResources.Namespace, meta.LegacySubResources.ApplyJobName))
 		return nil
 	}
 	err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.ApplyJobName, Namespace: meta.ControllerNamespace}, job)
 	return err
+}
+
+// RenderConfiguration will compose the Terraform configuration with hcl/json and backend
+func (meta *TFConfigurationMeta) RenderConfiguration(configuration *v1beta2.Configuration, configurationType types.ConfigurationType) (string, backend.Backend, error) {
+	backendInterface, err := backend.ParseConfigurationBackend(configuration, meta.K8sClient, meta.Credentials, meta.ControllerNSSpecified)
+	if err != nil {
+		return "", nil, errors.Wrap(err, "failed to prepare Terraform backend configuration")
+	}
+
+	switch configurationType {
+	case types.ConfigurationHCL:
+		completedConfiguration := configuration.Spec.HCL
+		completedConfiguration += "\n" + backendInterface.HCL()
+		return completedConfiguration, backendInterface, nil
+	case types.ConfigurationRemote:
+		return backendInterface.HCL(), backendInterface, nil
+	default:
+		return "", nil, errors.New("Unsupported Configuration Type")
+	}
 }

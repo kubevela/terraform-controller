@@ -3,6 +3,7 @@ package backend
 import (
 	"context"
 	"encoding/base64"
+	"gotest.tools/assert"
 	"reflect"
 	"testing"
 
@@ -82,17 +83,19 @@ terraform {
 }
 
 func TestK8SBackend_GetTFStateJSON(t *testing.T) {
+	const UID = "xxxx-xxxx"
 	type fields struct {
-		Client       client.Client
-		HCLCode      string
-		SecretSuffix string
-		SecretNS     string
+		Client             client.Client
+		HCLCode            string
+		SecretSuffix       string
+		SecretNS           string
+		LegacySecretSuffix string
 	}
 	type args struct {
 		ctx context.Context
 	}
 	tfStateData, _ := base64.StdEncoding.DecodeString("H4sIAAAAAAAA/4SQzarbMBCF934KoXUdPKNf+1VKCWNp5AocO8hyaSl592KlcBd3cZfnHPHpY/52QshfXI68b3IS+tuVK5dCaS+P+8ci4TbcULb94JJplZPAFte8MS18PQrKBO8Q+xk59SHa1AMA9M4YmoN3FGJ8M/azPs96yElcCkLIsG+V8sblnqOc3uXlRuvZ0GxSSuiCRUYbw2gGHRFGPxitEgJYQDQ0a68I2ChNo1cAZJ2bR20UtW8bsv55NuJRS94W2erXe5X5QQs3A/FZ4fhJaOwUgZTVMRjto1HGpSGSQuuD955hdDDPcR6NY1ZpQJ/YwagTRAvBpsi8LXn7Pa1U+ahfWHX/zWThYz9L4Otg3390r+5fAAAA//8hmcuNuQEAAA==")
-	secret := &v1.Secret{
+	baseSecret := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "tfstate-default-a",
 			Namespace: "default",
@@ -102,7 +105,8 @@ func TestK8SBackend_GetTFStateJSON(t *testing.T) {
 			TerraformStateNameInSecret: tfStateData,
 		},
 	}
-	k8sClient := fake.NewClientBuilder().WithObjects(secret).Build()
+
+	k8sClient := fake.NewClientBuilder().WithObjects(baseSecret).Build()
 	k8sClient2 := fake.NewClientBuilder().Build()
 	tests := []struct {
 		name    string
@@ -120,24 +124,7 @@ func TestK8SBackend_GetTFStateJSON(t *testing.T) {
 				SecretNS:     "default",
 			},
 			args: args{ctx: context.Background()},
-			want: []byte(`{
-  "version": 4,
-  "terraform_version": "1.0.2",
-  "serial": 2,
-  "lineage": "c35c8722-b2ef-cd6f-1111-755abc87acdd",
-  "outputs": {
-    "container_id":{
-      "value": "e5fff27c62e26dc9504d21980543f21161225ab483a1e534a98311a677b9453a",
-      "type": "string"
-    },
-    "image_id": {
-      "value": "sha256:d1a364dc548d5357f0da3268c888e1971bbdb957ee3f028fe7194f1d61c6fdeenginx:latest",
-      "type": "string"
-    }
-  },
-  "resources": []
-}
-`),
+			want: tfStateJson,
 		},
 		{
 			name: "secret doesn't exist",
@@ -151,14 +138,26 @@ func TestK8SBackend_GetTFStateJSON(t *testing.T) {
 			want:    nil,
 			wantErr: true,
 		},
+		{
+			name: "got a legacy secret",
+			fields: fields{
+				Client:             k8sClient,
+				HCLCode:            "",
+				LegacySecretSuffix: "a",
+				SecretNS:           "default",
+				SecretSuffix:       UID,
+			},
+			want: tfStateJson,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			k := &K8SBackend{
-				Client:       tt.fields.Client,
-				HCLCode:      tt.fields.HCLCode,
-				SecretSuffix: tt.fields.SecretSuffix,
-				SecretNS:     tt.fields.SecretNS,
+				Client:             tt.fields.Client,
+				HCLCode:            tt.fields.HCLCode,
+				SecretSuffix:       tt.fields.SecretSuffix,
+				SecretNS:           tt.fields.SecretNS,
+				LegacySecretSuffix: tt.fields.LegacySecretSuffix,
 			}
 			got, err := k.GetTFStateJSON(tt.args.ctx)
 			if (err != nil) != tt.wantErr {
@@ -221,3 +220,54 @@ func TestK8SBackend_CleanUp(t *testing.T) {
 		})
 	}
 }
+
+func TestMigrateLegacySecret(t *testing.T) {
+	secretNS := "default"
+	secret := v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "tfstate-default-a",
+			Namespace: secretNS,
+		},
+		Type: v1.SecretTypeOpaque,
+	}
+	k8sClient := fake.NewClientBuilder().WithObjects(&secret).Build()
+	fakeUID := "xxxx-xxxx"
+	k := &K8SBackend{
+		Client:             k8sClient,
+		HCLCode:            "",
+		SecretSuffix:       fakeUID,
+		SecretNS:           secretNS,
+		LegacySecretSuffix: "a",
+	}
+	err := k.migrateLegacySecret()
+	assert.NilError(t, err)
+	NoLegacySecK8sClient := fake.NewClientBuilder().Build()
+	k = &K8SBackend{
+		Client:             NoLegacySecK8sClient,
+		HCLCode:            "",
+		SecretSuffix:       fakeUID,
+		SecretNS:           secretNS,
+		LegacySecretSuffix: "a",
+	}
+	err = k.migrateLegacySecret()
+	assert.NilError(t, err)
+}
+
+var tfStateJson = []byte(`{
+  "version": 4,
+  "terraform_version": "1.0.2",
+  "serial": 2,
+  "lineage": "c35c8722-b2ef-cd6f-1111-755abc87acdd",
+  "outputs": {
+    "container_id":{
+      "value": "e5fff27c62e26dc9504d21980543f21161225ab483a1e534a98311a677b9453a",
+      "type": "string"
+    },
+    "image_id": {
+      "value": "sha256:d1a364dc548d5357f0da3268c888e1971bbdb957ee3f028fe7194f1d61c6fdeenginx:latest",
+      "type": "string"
+    }
+  },
+  "resources": []
+}
+`)

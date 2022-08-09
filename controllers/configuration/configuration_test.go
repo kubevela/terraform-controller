@@ -2,11 +2,9 @@ package configuration
 
 import (
 	"context"
-	"reflect"
 	"strings"
 	"testing"
 
-	"github.com/oam-dev/terraform-controller/controllers/configuration/backend"
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -101,134 +99,6 @@ func TestValidConfigurationObject(t *testing.T) {
 		})
 	}
 
-}
-
-func TestRenderConfiguration(t *testing.T) {
-	type args struct {
-		configuration     *v1beta2.Configuration
-		configurationType types.ConfigurationType
-		credentials       map[string]string
-	}
-	type want struct {
-		cfg              string
-		backendInterface backend.Backend
-		errMsg           string
-	}
-
-	k8sClient := fake.NewClientBuilder().Build()
-
-	testcases := []struct {
-		name string
-		args args
-		want want
-	}{
-		{
-			name: "backend is not nil, configuration is hcl",
-			args: args{
-				configuration: &v1beta2.Configuration{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "n1",
-					},
-					Spec: v1beta2.ConfigurationSpec{
-						Backend: &v1beta2.Backend{},
-						HCL:     "image_id=123",
-					},
-				},
-				configurationType: types.ConfigurationHCL,
-			},
-			want: want{
-				cfg: `image_id=123
-
-terraform {
-  backend "kubernetes" {
-    secret_suffix     = ""
-    in_cluster_config = true
-    namespace         = "n1"
-  }
-}
-`,
-				backendInterface: &backend.K8SBackend{
-					Client: k8sClient,
-					HCLCode: `
-terraform {
-  backend "kubernetes" {
-    secret_suffix     = ""
-    in_cluster_config = true
-    namespace         = "n1"
-  }
-}
-`,
-					SecretSuffix: "",
-					SecretNS:     "n1",
-				},
-			},
-		},
-		{
-			name: "backend is nil, configuration is remote",
-			args: args{
-				configuration: &v1beta2.Configuration{
-					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "n2",
-					},
-					Spec: v1beta2.ConfigurationSpec{
-						Remote: "https://github.com/a/b.git",
-					},
-				},
-				configurationType: types.ConfigurationRemote,
-			},
-			want: want{
-				cfg: `
-terraform {
-  backend "kubernetes" {
-    secret_suffix     = ""
-    in_cluster_config = true
-    namespace         = "n2"
-  }
-}
-`,
-				backendInterface: &backend.K8SBackend{
-					Client: k8sClient,
-					HCLCode: `
-terraform {
-  backend "kubernetes" {
-    secret_suffix     = ""
-    in_cluster_config = true
-    namespace         = "n2"
-  }
-}
-`,
-					SecretSuffix: "",
-					SecretNS:     "n2",
-				},
-			},
-		},
-		{
-			name: "backend is nil, configuration is not supported",
-			args: args{
-				configuration: &v1beta2.Configuration{
-					Spec: v1beta2.ConfigurationSpec{},
-				},
-			},
-			want: want{
-				errMsg: "Unsupported Configuration Type",
-			},
-		},
-	}
-
-	for _, tc := range testcases {
-		t.Run(tc.name, func(t *testing.T) {
-			got, backendConf, err := RenderConfiguration(tc.args.configuration, k8sClient, tc.args.configurationType, tc.args.credentials)
-			if tc.want.errMsg != "" && !strings.Contains(err.Error(), tc.want.errMsg) {
-				t.Errorf("ValidConfigurationObject() error = %v, wantErr %v", err, tc.want.errMsg)
-				return
-			}
-			assert.Equal(t, tc.want.cfg, got)
-
-			if !reflect.DeepEqual(tc.want.backendInterface, backendConf) {
-				t.Errorf("backendInterface is not equal.\n got %#v\n, want %#v", backendConf, tc.want.backendInterface)
-			}
-		})
-	}
 }
 
 func TestReplaceTerraformSource(t *testing.T) {
