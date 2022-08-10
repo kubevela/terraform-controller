@@ -282,6 +282,9 @@ spec:
                 required:
                 - name
                 type: object
+              JobEnv:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
               remote:
                 description: Remote is a git repo which contains hcl files. Currently,
                   only public git repos are supported.

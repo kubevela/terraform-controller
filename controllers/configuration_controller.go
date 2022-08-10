@@ -247,6 +247,7 @@ type TFConfigurationMeta struct {
 	DeleteResource        bool
 	Region                string
 	Credentials           map[string]string
+	JobEnv                map[string]interface{}
 
 	Backend backend.Backend
 	// JobNodeSelector Expose the node selector of job to the controller level
@@ -528,6 +529,13 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 				return errors.Wrap(updateStatusErr, msg)
 			}
 			return errors.New(msg)
+		}
+		if configuration.Spec.JobEnv != nil {
+			jobEnv, err := tfcfg.RawExtension2Map(configuration.Spec.JobEnv)
+			if err != nil {
+				return err
+			}
+			meta.JobEnv = jobEnv
 		}
 
 		if err := meta.getCredentials(ctx, k8sClient, p); err != nil {
@@ -998,9 +1006,6 @@ func (meta *TFConfigurationMeta) prepareTFVariables(configuration *v1beta2.Confi
 			return err
 		}
 		data[k] = []byte(envValue)
-		valueFrom := &v1.EnvVarSource{SecretKeyRef: &v1.SecretKeySelector{Key: k}}
-		valueFrom.SecretKeyRef.Name = meta.VariableSecretName
-		envs = append(envs, v1.EnvVar{Name: k, ValueFrom: valueFrom})
 	}
 
 	if !configuration.Spec.InlineCredentials && meta.Credentials == nil {
@@ -1008,6 +1013,15 @@ func (meta *TFConfigurationMeta) prepareTFVariables(configuration *v1beta2.Confi
 	}
 	for k, v := range meta.Credentials {
 		data[k] = []byte(v)
+	}
+	for k, v := range meta.JobEnv {
+		envValue, err := tfcfg.Interface2String(v)
+		if err != nil {
+			return err
+		}
+		data[k] = []byte(envValue)
+	}
+	for k := range data {
 		valueFrom := &v1.EnvVarSource{SecretKeyRef: &v1.SecretKeySelector{Key: k}}
 		valueFrom.SecretKeyRef.Name = meta.VariableSecretName
 		envs = append(envs, v1.EnvVar{Name: k, ValueFrom: valueFrom})
