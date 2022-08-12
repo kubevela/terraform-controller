@@ -1,6 +1,7 @@
-package e2e
+package normal
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -9,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
 	"gotest.tools/assert"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,6 +29,8 @@ var (
 		"examples/alibaba/oss/configuration_hcl_bucket.yaml",
 	}
 	testConfigurationsForceDelete = "examples/random/configuration_force_delete.yaml"
+
+	chartNamespace = "terraform"
 )
 
 type ConfigurationAttr struct {

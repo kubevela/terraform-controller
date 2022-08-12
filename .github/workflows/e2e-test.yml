@@ -61,6 +61,9 @@ jobs:
           make configuration
         env:
           TERRAFORM_BACKEND_NAMESPACE: terraform
+      - name: dump controller logs
+        if: ${{ always() }}
+        run: kubectl logs deploy/terraform-controller -n terraform
 
       - name: Upload coverage report
         uses: codecov/codecov-action@v2

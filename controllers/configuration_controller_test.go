@@ -114,7 +114,7 @@ func TestInitTFConfigurationMeta(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			meta := initTFConfigurationMeta(req, tc.configuration)
+			meta := initTFConfigurationMeta(req, tc.configuration, nil)
 			if !reflect.DeepEqual(meta.Name, tc.want.Name) {
 				t.Errorf("initTFConfigurationMeta = %v, want %v", meta, tc.want)
 			}
@@ -176,7 +176,7 @@ func TestInitTFConfigurationMetaWithDeleteResource(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			meta := initTFConfigurationMeta(req, tc.configuration)
+			meta := initTFConfigurationMeta(req, tc.configuration, nil)
 			if !reflect.DeepEqual(meta.DeleteResource, tc.meta.DeleteResource) {
 				t.Errorf("initTFConfigurationMeta = %v, want %v", meta, tc.meta)
 			}
@@ -197,7 +197,7 @@ func TestInitTFConfigurationMetaWithJobNodeSelector(t *testing.T) {
 		},
 		Spec: v1beta2.ConfigurationSpec{},
 	}
-	meta := initTFConfigurationMeta(req, configuration)
+	meta := initTFConfigurationMeta(req, configuration, nil)
 	assert.Equal(t, meta.JobNodeSelector, map[string]string{"ssd": "true"})
 }
 
@@ -1437,14 +1437,16 @@ func TestAssembleTerraformJobWithResourcesSetting(t *testing.T) {
 		TerraformImage:      "f",
 		RemoteGit:           "g",
 
-		ResourcesLimitsCPU:              "10m",
-		ResourcesLimitsCPUQuantity:      quantityLimitsCPU,
-		ResourcesLimitsMemory:           "10Mi",
-		ResourcesLimitsMemoryQuantity:   quantityLimitsMemory,
-		ResourcesRequestsCPU:            "100m",
-		ResourcesRequestsCPUQuantity:    quantityRequestsCPU,
-		ResourcesRequestsMemory:         "5Gi",
-		ResourcesRequestsMemoryQuantity: quantityRequestsMemory,
+		ResourceQuota: ResourceQuota{
+			ResourcesLimitsCPU:              "10m",
+			ResourcesLimitsCPUQuantity:      quantityLimitsCPU,
+			ResourcesLimitsMemory:           "10Mi",
+			ResourcesLimitsMemoryQuantity:   quantityLimitsMemory,
+			ResourcesRequestsCPU:            "100m",
+			ResourcesRequestsCPUQuantity:    quantityRequestsCPU,
+			ResourcesRequestsMemory:         "5Gi",
+			ResourcesRequestsMemoryQuantity: quantityRequestsMemory,
+		},
 	}
 
 	job := meta.assembleTerraformJob(TerraformApply)
@@ -2170,6 +2172,186 @@ func TestGetApplyJob(t *testing.T) {
 				if err != nil {
 					t.Errorf("unexpected error: %v", err)
 				}
+			}
+		})
+	}
+}
+
+func TestRenderConfiguration(t *testing.T) {
+	type args struct {
+		configuration         *v1beta2.Configuration
+		configurationType     types.ConfigurationType
+		credentials           map[string]string
+		controllerNSSpecified bool
+	}
+	type want struct {
+		cfg              string
+		backendInterface backend.Backend
+		errMsg           string
+	}
+
+	k8sClient := fake.NewClientBuilder().Build()
+	baseMeta := TFConfigurationMeta{
+		K8sClient: k8sClient,
+	}
+
+	testcases := []struct {
+		name string
+		args args
+		want want
+	}{
+		{
+			name: "backend is not nil, configuration is hcl",
+			args: args{
+				configuration: &v1beta2.Configuration{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "n1",
+					},
+					Spec: v1beta2.ConfigurationSpec{
+						Backend: &v1beta2.Backend{},
+						HCL:     "image_id=123",
+					},
+				},
+				configurationType: types.ConfigurationHCL,
+			},
+			want: want{
+				cfg: `image_id=123
+
+terraform {
+  backend "kubernetes" {
+    secret_suffix     = ""
+    in_cluster_config = true
+    namespace         = "n1"
+  }
+}
+`,
+				backendInterface: &backend.K8SBackend{
+					Client: k8sClient,
+					HCLCode: `
+terraform {
+  backend "kubernetes" {
+    secret_suffix     = ""
+    in_cluster_config = true
+    namespace         = "n1"
+  }
+}
+`,
+					SecretSuffix: "",
+					SecretNS:     "n1",
+				},
+			},
+		},
+		{
+			name: "backend is nil, configuration is remote",
+			args: args{
+				configuration: &v1beta2.Configuration{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "n2",
+					},
+					Spec: v1beta2.ConfigurationSpec{
+						Remote: "https://github.com/a/b.git",
+					},
+				},
+				configurationType: types.ConfigurationRemote,
+			},
+			want: want{
+				cfg: `
+terraform {
+  backend "kubernetes" {
+    secret_suffix     = ""
+    in_cluster_config = true
+    namespace         = "n2"
+  }
+}
+`,
+				backendInterface: &backend.K8SBackend{
+					Client: k8sClient,
+					HCLCode: `
+terraform {
+  backend "kubernetes" {
+    secret_suffix     = ""
+    in_cluster_config = true
+    namespace         = "n2"
+  }
+}
+`,
+					SecretSuffix: "",
+					SecretNS:     "n2",
+				},
+			},
+		},
+		{
+			name: "backend is nil, configuration is not supported",
+			args: args{
+				configuration: &v1beta2.Configuration{
+					Spec: v1beta2.ConfigurationSpec{},
+				},
+			},
+			want: want{
+				errMsg: "Unsupported Configuration Type",
+			},
+		},
+		{
+			name: "controller-namespace specified, backend should have legacy secret suffix",
+			args: args{
+				configuration: &v1beta2.Configuration{
+					Spec: v1beta2.ConfigurationSpec{
+						Backend: nil,
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						UID:       "xxxx-xxxx",
+						Namespace: "n2",
+						Name:      "name",
+					},
+				},
+				controllerNSSpecified: true,
+				configurationType:     types.ConfigurationRemote,
+			},
+			want: want{
+				cfg: `
+terraform {
+  backend "kubernetes" {
+    secret_suffix     = "xxxx-xxxx"
+    in_cluster_config = true
+    namespace         = "n2"
+  }
+}
+`,
+				backendInterface: &backend.K8SBackend{
+					Client: k8sClient,
+					HCLCode: `
+terraform {
+  backend "kubernetes" {
+    secret_suffix     = "xxxx-xxxx"
+    in_cluster_config = true
+    namespace         = "n2"
+  }
+}
+`,
+					SecretSuffix:       "xxxx-xxxx",
+					SecretNS:           "n2",
+					LegacySecretSuffix: "name",
+				}},
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			meta := baseMeta
+			meta.ControllerNSSpecified = tc.args.controllerNSSpecified
+			got, backendConf, err := meta.RenderConfiguration(tc.args.configuration, tc.args.configurationType)
+			if tc.want.errMsg != "" && !strings.Contains(err.Error(), tc.want.errMsg) {
+				t.Errorf("ValidConfigurationObject() error = %v, wantErr %v", err, tc.want.errMsg)
+				return
+			}
+			if tc.want.errMsg == "" && err != nil {
+				t.Errorf("ValidConfigurationObject() error = %v, wantErr nil", err)
+				return
+			}
+			assert.Equal(t, tc.want.cfg, got)
+
+			if !reflect.DeepEqual(tc.want.backendInterface, backendConf) {
+				t.Errorf("backendInterface is not equal.\n got %#v\n, want %#v", backendConf, tc.want.backendInterface)
 			}
 		})
 	}

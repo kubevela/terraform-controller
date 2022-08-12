@@ -1,9 +1,8 @@
 package gitee
 
 import (
+	"github.com/oam-dev/terraform-controller/e2e/normal"
 	"testing"
-
-	"github.com/oam-dev/terraform-controller/e2e"
 )
 
 var (
@@ -16,5 +15,5 @@ var (
 func TestGiteeConfigurationRegression(t *testing.T) {
 	var retryTimes = 240
 
-	e2e.Regression(t, giteeConfigurationsRegression, retryTimes)
+	normal.Regression(t, giteeConfigurationsRegression, retryTimes)
 }

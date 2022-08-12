@@ -56,7 +56,7 @@ var backendInitFuncMap = map[string]backendInitFunc{
 }
 
 // ParseConfigurationBackend parses backend Conf from the v1beta2.Configuration
-func ParseConfigurationBackend(configuration *v1beta2.Configuration, k8sClient client.Client, credentials map[string]string) (Backend, error) {
+func ParseConfigurationBackend(configuration *v1beta2.Configuration, k8sClient client.Client, credentials map[string]string, controllerNSSpecified bool) (Backend, error) {
 	backend := configuration.Spec.Backend
 
 	var (
@@ -68,7 +68,7 @@ func ParseConfigurationBackend(configuration *v1beta2.Configuration, k8sClient c
 	switch {
 	case backend == nil || (backend.Inline == "" && backend.BackendType == ""):
 		// use the default k8s backend
-		return handleDefaultBackend(configuration, k8sClient)
+		return handleDefaultBackend(configuration, k8sClient, controllerNSSpecified)
 
 	case backend.Inline != "" && backend.BackendType != "":
 		return nil, errors.New("it's not allowed to set `spec.backend.inline` and `spec.backend.backendType` at the same time")
@@ -79,6 +79,8 @@ func ParseConfigurationBackend(configuration *v1beta2.Configuration, k8sClient c
 
 	case backend.BackendType != "":
 		// In this case, use the explicit custom backend
+		// we don't change backend secret suffix to UID of configuration here.
+		// If backend specified, it's user's responsibility to set the right secret suffix, to avoid conflict.
 		backendType, backendConf, err = handleExplicitBackend(backend)
 	}
 	if err != nil {
@@ -92,7 +94,7 @@ func ParseConfigurationBackend(configuration *v1beta2.Configuration, k8sClient c
 	return initFunc(k8sClient, backendConf, credentials)
 }
 
-func handleDefaultBackend(configuration *v1beta2.Configuration, k8sClient client.Client) (Backend, error) {
+func handleDefaultBackend(configuration *v1beta2.Configuration, k8sClient client.Client, controllerNSSpecified bool) (Backend, error) {
 	if configuration.Spec.Backend != nil {
 		if configuration.Spec.Backend.SecretSuffix == "" {
 			configuration.Spec.Backend.SecretSuffix = configuration.Name
@@ -104,7 +106,7 @@ func handleDefaultBackend(configuration *v1beta2.Configuration, k8sClient client
 			InClusterConfig: true,
 		}
 	}
-	return newDefaultK8SBackend(configuration.Spec.Backend.SecretSuffix, k8sClient, configuration.Namespace), nil
+	return newDefaultK8SBackend(configuration, k8sClient, controllerNSSpecified), nil
 }
 
 func handleInlineBackendHCL(hclCode string) (string, interface{}, error) {

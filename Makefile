@@ -267,7 +267,8 @@ custom: custom-credentials custom-provider
 
 
 configuration:
-	go test -coverprofile=e2e-coverage1.xml -v ./e2e/... -count=1
+	go test -coverprofile=e2e-coverage1.xml -v $(go list ./e2e/...|grep -v controllernamespace) -count=1
+	go test -v ./e2e/controllernamespace/...
 
 e2e-setup: install-chart alibaba
 
