@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/pkg/errors"
 	"os"
 	"reflect"
 	"strings"
@@ -16,6 +15,7 @@ import (
 
 	"github.com/agiledragon/gomonkey/v2"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/sts"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -199,6 +199,157 @@ func TestInitTFConfigurationMetaWithJobNodeSelector(t *testing.T) {
 	}
 	meta := initTFConfigurationMeta(req, configuration, nil)
 	assert.Equal(t, meta.JobNodeSelector, map[string]string{"ssd": "true"})
+}
+
+func TestPrepareTFVariables(t *testing.T) {
+	prjID := "PrjID"
+	prjIDValue := "test123"
+	testKey := "Test"
+	testValue := "abc123"
+	credentialKey := "key"
+	credentialValue := "testkey"
+	variable, _ := json.Marshal(map[string]interface{}{
+		testKey: testValue,
+	})
+	configuration := v1beta2.Configuration{
+		ObjectMeta: v1.ObjectMeta{
+			Namespace: "default",
+			Name:      "abc",
+		},
+		Spec: v1beta2.ConfigurationSpec{
+			ProviderReference: &crossplane.Reference{
+				Name:      "default",
+				Namespace: "default",
+			},
+			HCL: "test",
+			Variable: &runtime.RawExtension{
+				Raw: variable,
+			},
+		},
+	}
+	meta := &TFConfigurationMeta{
+		JobEnv: map[string]interface{}{
+			prjID: prjIDValue,
+		},
+		ProviderReference: &crossplane.Reference{
+			Name:      "default",
+			Namespace: "default",
+		},
+		Credentials: map[string]string{
+			credentialKey: credentialValue,
+		},
+	}
+	err := meta.prepareTFVariables(&configuration)
+	assert.Nil(t, err)
+	rTestKey := fmt.Sprintf("TF_VAR_%s", testKey)
+	wantVarSecretData := map[string]string{prjID: prjIDValue, rTestKey: testValue, credentialKey: credentialValue}
+	for k, v := range wantVarSecretData {
+		actualV, ok := meta.VariableSecretData[k]
+		assert.Equal(t, ok, true)
+		assert.Equal(t, actualV, []byte(v))
+	}
+	existMap := map[string]bool{}
+	for _, e := range meta.Envs {
+		switch e.Name {
+		case prjID:
+			existMap[prjID] = true
+		case rTestKey:
+			existMap[rTestKey] = true
+		case credentialKey:
+			existMap[credentialKey] = true
+		default:
+			t.Fatalf("unexpected %s", e.Name)
+		}
+	}
+	assert.Equal(t, len(existMap), 3)
+	for _, v := range existMap {
+		assert.Equal(t, v, true)
+	}
+}
+
+func TestInitTFConfigurationMetaWithJobEnv(t *testing.T) {
+	req := ctrl.Request{}
+	r := &ConfigurationReconciler{}
+	s := runtime.NewScheme()
+	v1beta1.AddToScheme(s)
+	v1beta2.AddToScheme(s)
+	corev1.AddToScheme(s)
+	req.Namespace = "default"
+	req.Name = "abc"
+	prjID := "PrjID"
+	prjIDValue := "abc"
+	data, _ := json.Marshal(map[string]interface{}{
+		prjID: prjIDValue,
+	})
+	ak := provider.AlibabaCloudCredentials{
+		AccessKeyID:     "aaaa",
+		AccessKeySecret: "bbbbb",
+	}
+	credentials, err := json.Marshal(&ak)
+	secret := corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "default",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"credentials": credentials,
+		},
+		Type: corev1.SecretTypeOpaque,
+	}
+	provider := v1beta1.Provider{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "terraform.core.oam.dev/v1beta2",
+			Kind:       "Provider",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "default",
+			Namespace: "default",
+		},
+		Spec: v1beta1.ProviderSpec{
+			Provider: "ucloud",
+			Credentials: v1beta1.ProviderCredentials{
+				Source: crossplane.CredentialsSourceSecret,
+				SecretRef: &crossplane.SecretKeySelector{
+					SecretReference: crossplane.SecretReference{
+						Name:      "default",
+						Namespace: "default",
+					},
+					Key: "credentials",
+				},
+			},
+		},
+	}
+	configuration := v1beta2.Configuration{
+		ObjectMeta: v1.ObjectMeta{
+			Namespace: "default",
+			Name:      "abc",
+		},
+		Spec: v1beta2.ConfigurationSpec{
+			ProviderReference: &crossplane.Reference{
+				Name:      "default",
+				Namespace: "default",
+			},
+			JobEnv: &runtime.RawExtension{
+				Raw: data,
+			},
+			HCL: "test",
+		},
+	}
+	r.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(&configuration, &provider, &secret).Build()
+	meta := initTFConfigurationMeta(req, configuration, r.Client)
+	err = r.preCheck(context.Background(), &configuration, meta)
+	assert.Nil(t, err)
+	assert.Equal(t, meta.JobEnv, map[string]interface{}{
+		prjID: prjIDValue,
+	})
+	assert.Equal(t, meta.VariableSecretData[prjID], []byte(prjIDValue))
+	envExist := false
+	for _, e := range meta.Envs {
+		if e.Name == prjID {
+			envExist = true
+		}
+	}
+	assert.Equal(t, envExist, true)
 }
 
 func TestCheckProvider(t *testing.T) {

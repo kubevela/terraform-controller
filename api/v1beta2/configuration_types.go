@@ -54,7 +54,8 @@ type ConfigurationSpec struct {
 
 	// ProviderReference specifies the reference to Provider
 	ProviderReference *types.Reference `json:"providerRef,omitempty"`
-
+	// +kubebuilder:pruning:PreserveUnknownFields
+	JobEnv *runtime.RawExtension `json:"JobEnv,omitempty"`
 	// InlineCredentials specifies the credentials in spec.HCl field as below.
 	//	provider "aws" {
 	//		region     = "us-west-2"
