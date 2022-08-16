@@ -1384,9 +1384,9 @@ func TestTerraformDestroy(t *testing.T) {
 		},
 		VariableSecretName:  fmt.Sprintf(TFVariableSecret, secretSuffix),
 		ConfigurationCMName: configurationCMName,
+		// True is default value if user ignores configuration.Spec.DeleteResource
+		DeleteResource: true,
 	}
-	metaWithDeleteResource := baseMeta
-	metaWithDeleteResource.DeleteResource = true
 	metaWithLegacyResource := baseMeta
 	metaWithLegacyResource.LegacySubResources = LegacySubResources{
 		Namespace:           legacyNamespace,
@@ -1442,16 +1442,6 @@ func TestTerraformDestroy(t *testing.T) {
 			},
 			objects:       []client.Object{readyProvider, baseConfiguration, baseConfigurationCM},
 			keptResources: []client.Object{baseConfigurationCM},
-		},
-		{
-			name: "set DeleteResource, directly clean resources",
-			args: args{
-				configuration: baseConfiguration,
-				meta:          &metaWithDeleteResource,
-			},
-			want:             want{},
-			objects:          []client.Object{readyProvider, baseConfiguration, baseConfigurationCM},
-			deletedResources: []client.Object{baseConfigurationCM},
 		},
 		{
 			name: "provider is not ready, cloud resource couldn't be created, delete directly",
