@@ -359,9 +359,12 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, configur
 		return err
 	}
 
-	deleteConfigurationDirectly := deletable || meta.DeleteResource
+	// Sub-resources can be deleted directly without waiting destroy job is done means:
+	// - Configuration is deletable (no cloud resources are provisioned or force delete is set)
+	// - OR user want to keep the resource when delete the configuration CR
+	notWaitingDestroyJob := deletable || !meta.DeleteResource
 
-	if !deleteConfigurationDirectly {
+	if !notWaitingDestroyJob {
 		if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.DestroyJobName, Namespace: meta.ControllerNamespace}, &destroyJob); err != nil {
 			if kerrors.IsNotFound(err) {
 				if err := r.Client.Get(ctx, client.ObjectKey{Name: configuration.Name, Namespace: configuration.Namespace}, &v1beta2.Configuration{}); err == nil {
@@ -390,15 +393,14 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, configur
 		return nil
 	}
 	// When the deletion Job process succeeded, clean up work is starting.
-	if !deleteConfigurationDirectly {
+	if !notWaitingDestroyJob {
 		if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.DestroyJobName, Namespace: meta.ControllerNamespace}, &destroyJob); err != nil {
 			return err
 		}
 		if destroyJob.Status.Succeeded == int32(1) {
 			return r.cleanUpSubResources(ctx, configuration, meta)
 		}
-	}
-	if deleteConfigurationDirectly {
+	} else {
 		return r.cleanUpSubResources(ctx, configuration, meta)
 	}
 
