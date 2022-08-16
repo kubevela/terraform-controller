@@ -1071,7 +1071,7 @@ func deleteConfigMap(ctx context.Context, meta *TFConfigurationMeta, k8sClient c
 	for _, combination := range possibleCombination {
 		if err := k8sClient.Get(ctx, client.ObjectKey{Name: combination[0], Namespace: combination[1]}, &cm); err == nil {
 			if err := k8sClient.Delete(ctx, &cm); err != nil {
-				return err
+				return client.IgnoreNotFound(err)
 			}
 		}
 	}
@@ -1090,7 +1090,7 @@ func deleteVariableSecret(ctx context.Context, meta *TFConfigurationMeta, k8sCli
 	for _, combination := range possibleCombination {
 		if err := k8sClient.Get(ctx, client.ObjectKey{Name: combination[0], Namespace: combination[1]}, &variableSecret); err == nil {
 			if err := k8sClient.Delete(ctx, &variableSecret); err != nil {
-				return err
+				return client.IgnoreNotFound(err)
 			}
 		}
 	}
@@ -1109,7 +1109,7 @@ func deleteApplyJob(ctx context.Context, meta *TFConfigurationMeta, k8sClient cl
 	for _, combination := range possibleCombination {
 		if err := k8sClient.Get(ctx, client.ObjectKey{Name: combination[0], Namespace: combination[1]}, &job); err == nil {
 			if err := k8sClient.Delete(ctx, &job); err != nil {
-				return err
+				return client.IgnoreNotFound(err)
 			}
 		}
 	}
@@ -1128,7 +1128,7 @@ func deleteDestroyJob(ctx context.Context, meta *TFConfigurationMeta, k8sClient 
 	for _, combination := range possibleCombination {
 		if err := k8sClient.Get(ctx, client.ObjectKey{Name: combination[0], Namespace: combination[1]}, &job); err == nil {
 			if err := k8sClient.Delete(ctx, &job); err != nil {
-				return err
+				return client.IgnoreNotFound(err)
 			}
 		}
 	}
