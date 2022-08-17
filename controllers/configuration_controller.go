@@ -1108,7 +1108,7 @@ func deleteApplyJob(ctx context.Context, meta *TFConfigurationMeta, k8sClient cl
 	klog.InfoS("Deleting the apply job", "Name", meta.ApplyJobName)
 	for _, combination := range possibleCombination {
 		if err := k8sClient.Get(ctx, client.ObjectKey{Name: combination[0], Namespace: combination[1]}, &job); err == nil {
-			if err := k8sClient.Delete(ctx, &job); err != nil {
+			if err := k8sClient.Delete(ctx, &job, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
 				return client.IgnoreNotFound(err)
 			}
 		}
@@ -1127,7 +1127,7 @@ func deleteDestroyJob(ctx context.Context, meta *TFConfigurationMeta, k8sClient 
 	klog.InfoS("Deleting the destroy job", "Name", meta.DestroyJobName)
 	for _, combination := range possibleCombination {
 		if err := k8sClient.Get(ctx, client.ObjectKey{Name: combination[0], Namespace: combination[1]}, &job); err == nil {
-			if err := k8sClient.Delete(ctx, &job); err != nil {
+			if err := k8sClient.Delete(ctx, &job, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
 				return client.IgnoreNotFound(err)
 			}
 		}
