@@ -44,10 +44,11 @@ jobs:
           echo "LDFLAGS=${LDFLAGS}" >> $GITHUB_ENV
       - name: Build
         run: |
+          cd ./hack/tool/backup_restore && \
           ${{ env.GO_BUILD_ENV }} GOOS=${{ steps.get_matrix.outputs.OS }} GOARCH=${{ steps.get_matrix.outputs.ARCH }} \
-            go build -ldflags "${{ env.LDFLAGS }}" \
-            -o _bin/backup_restore/${{ steps.get_matrix.outputs.OS }}-${{ steps.get_matrix.outputs.ARCH }}/backup_restore -v \
-            ./hack/tool/backup_restore/main.go
+          go build -ldflags "${{ env.LDFLAGS }}" \
+          -o _bin/backup_restore/${{ steps.get_matrix.outputs.OS }}-${{ steps.get_matrix.outputs.ARCH }}/backup_restore \
+          -v .
       - name: Compress
         run: |
           cd _bin/backup_restore && \
