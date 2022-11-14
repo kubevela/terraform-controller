@@ -47,6 +47,9 @@ type ConfigurationSpec struct {
 	Path string `json:"path,omitempty"`
 
 	BaseConfigurationSpec `json:",inline"`
+
+	// GitCredentialsReference specifies the reference to the secret containing the git credentials
+	GitCredentialsReference *types.SecretReference `json:"gitCredentialsReference,omitempty"`
 }
 
 // BaseConfigurationSpec defines the common fields of a ConfigurationSpec
@@ -67,9 +70,6 @@ type BaseConfigurationSpec struct {
 
 	// Region is cloud provider's region. It will override the region in the region field of ProviderReference
 	Region string `json:"region,omitempty"`
-
-	// GitCredentialsReference specifies the reference to the secret containing the git credentials
-	GitCredentialsReference *types.SecretReference `json:"gitCredentialsReference,omitempty"`
 }
 
 // ConfigurationStatus defines the observed state of Configuration
@@ -116,7 +116,7 @@ type Backend struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="STATE",type="string",JSONPath=".status.apply.state"
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
-// +kubebuilder:resource:shortName={conf,velaconf}
+// +kubebuilder:resource:shortName={conf,terraform-conf}
 type Configuration struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
