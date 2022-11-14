@@ -13,6 +13,9 @@ spec:
     kind: Configuration
     listKind: ConfigurationList
     plural: configurations
+    shortNames:
+    - conf
+    - velaconf
     singular: configuration
   scope: Namespaced
   versions:
@@ -68,6 +71,19 @@ spec:
                 description: DeleteResource will determine whether provisioned cloud
                   resources will be deleted when CR is deleted
                 type: boolean
+              gitCredentialsReference:
+                description: GitCredentialsReference specifies the reference to the
+                  secret containing the git credentials
+                properties:
+                  name:
+                    description: Name of the secret.
+                    type: string
+                  namespace:
+                    description: Namespace of the secret.
+                    type: string
+                required:
+                - name
+                type: object
               hcl:
                 description: HCL is the Terraform HCL type configuration
                 type: string
@@ -187,6 +203,9 @@ spec:
           spec:
             description: ConfigurationSpec defines the desired state of Configuration
             properties:
+              JobEnv:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
               backend:
                 description: 'Backend describes the Terraform backend configuration.
                   This field is needed if the users use a git repo to provide the
@@ -256,6 +275,19 @@ spec:
                   which state it is or whether it has provisioned some resources It
                   will help delete Configuration in unexpected cases.
                 type: boolean
+              gitCredentialsReference:
+                description: GitCredentialsReference specifies the reference to the
+                  secret containing the git credentials
+                properties:
+                  name:
+                    description: Name is unique within a namespace to reference a
+                      secret resource.
+                    type: string
+                  namespace:
+                    description: Namespace defines the space within which the secret
+                      name must be unique.
+                    type: string
+                type: object
               hcl:
                 description: HCL is the Terraform HCL type configuration
                 type: string
@@ -282,9 +314,6 @@ spec:
                 required:
                 - name
                 type: object
-              JobEnv:
-                type: object
-                x-kubernetes-preserve-unknown-fields: true
               remote:
                 description: Remote is a git repo which contains hcl files. Currently,
                   only public git repos are supported.

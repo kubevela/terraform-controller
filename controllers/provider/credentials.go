@@ -141,6 +141,21 @@ func GetProviderFromConfiguration(ctx context.Context, k8sClient client.Client, 
 	return provider, nil
 }
 
+func GetGitCredentialsFromConfiguration(ctx context.Context, k8sClient client.Client, namespace, name string) (*v1.Secret, error) {
+	var secret = &v1.Secret{}
+
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: name, Namespace: namespace}, secret); err != nil {
+		if kerrors.IsNotFound(err) {
+			return nil, nil
+		}
+		errMsg := "failed to get git credentials Secret object"
+		klog.ErrorS(err, errMsg, "Name", name, "Namespace", namespace)
+		return nil, errors.Wrap(err, errMsg)
+	}
+
+	return secret, nil
+}
+
 // checkAlibabaCloudProvider checks if the credentials from the provider are valid
 func checkAlibabaCloudCredentials(region string, accessKeyID, accessKeySecret, stsToken string) error {
 	var (

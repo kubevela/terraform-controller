@@ -65,6 +65,9 @@ const (
 	// terraformContainerName is the name of the container that executes the terraform in the pod
 	terraformContainerName     = "terraform-executor"
 	terraformInitContainerName = "terraform-init"
+
+	GitAuthConfigVolumeName      = "git-auth-configuration"
+	GitAuthConfigVolumeMountPath = "/root/.ssh"
 )
 
 const (
@@ -228,26 +231,27 @@ type ResourceQuota struct {
 
 // TFConfigurationMeta is all the metadata of a Configuration
 type TFConfigurationMeta struct {
-	Name                  string
-	Namespace             string
-	ControllerNamespace   string
-	ConfigurationType     types.ConfigurationType
-	CompleteConfiguration string
-	RemoteGit             string
-	RemoteGitPath         string
-	ConfigurationChanged  bool
-	EnvChanged            bool
-	ConfigurationCMName   string
-	ApplyJobName          string
-	DestroyJobName        string
-	Envs                  []v1.EnvVar
-	ProviderReference     *crossplane.Reference
-	VariableSecretName    string
-	VariableSecretData    map[string][]byte
-	DeleteResource        bool
-	Region                string
-	Credentials           map[string]string
-	JobEnv                map[string]interface{}
+	Name                    string
+	Namespace               string
+	ControllerNamespace     string
+	ConfigurationType       types.ConfigurationType
+	CompleteConfiguration   string
+	RemoteGit               string
+	RemoteGitPath           string
+	ConfigurationChanged    bool
+	EnvChanged              bool
+	ConfigurationCMName     string
+	ApplyJobName            string
+	DestroyJobName          string
+	Envs                    []v1.EnvVar
+	ProviderReference       *crossplane.Reference
+	VariableSecretName      string
+	VariableSecretData      map[string][]byte
+	DeleteResource          bool
+	Region                  string
+	Credentials             map[string]string
+	JobEnv                  map[string]interface{}
+	GitCredentialsReference *v1.SecretReference
 
 	Backend backend.Backend
 	// JobNodeSelector Expose the node selector of job to the controller level
@@ -307,6 +311,10 @@ func initTFConfigurationMeta(req ctrl.Request, configuration v1beta2.Configurati
 
 	if !configuration.Spec.InlineCredentials {
 		meta.ProviderReference = tfcfg.GetProviderNamespacedName(configuration)
+	}
+
+	if configuration.Spec.GitCredentialsReference != nil {
+		meta.GitCredentialsReference = configuration.Spec.GitCredentialsReference
 	}
 
 	return meta
@@ -545,6 +553,18 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 		}
 	}
 
+	gitCreds, err := provider.GetGitCredentialsFromConfiguration(ctx, k8sClient, meta.GitCredentialsReference.Namespace, meta.GitCredentialsReference.Name)
+	if gitCreds == nil {
+		msg := "Git credentials Secret is not found"
+		if err != nil {
+			msg = err.Error()
+		}
+		if updateStatusErr := meta.updateApplyStatus(ctx, k8sClient, types.Authorizing, msg); updateStatusErr != nil {
+			return errors.Wrap(updateStatusErr, msg)
+		}
+		return errors.New(msg)
+	}
+
 	// Render configuration with backend
 	completeConfiguration, backendConf, err := meta.RenderConfiguration(configuration, configurationType)
 	if err != nil {
@@ -710,6 +730,10 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 			Name:      BackendVolumeName,
 			MountPath: BackendVolumeMountPath,
 		},
+		{
+			Name:      GitAuthConfigVolumeName,
+			MountPath: GitAuthConfigVolumeMountPath,
+		},
 	}
 
 	// prepare local Terraform .tf files
@@ -738,7 +762,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 				Command: []string{
 					"sh",
 					"-c",
-					fmt.Sprintf("git clone %s %s && cp -r %s/* %s", meta.RemoteGit, BackendVolumeMountPath,
+					fmt.Sprintf("eval `ssh-agent` && ssh-add %s/%s && git clone %s %s && cp -r %s/* %s", GitAuthConfigVolumeMountPath, v1.SSHAuthPrivateKey, meta.RemoteGit, BackendVolumeMountPath,
 						hclPath, WorkingVolumeMountPath),
 				},
 				VolumeMounts: initContainerVolumeMounts,
@@ -855,7 +879,8 @@ func (meta *TFConfigurationMeta) assembleExecutorVolumes() []v1.Volume {
 	workingVolume.EmptyDir = &v1.EmptyDirVolumeSource{}
 	inputTFConfigurationVolume := meta.createConfigurationVolume()
 	tfBackendVolume := meta.createTFBackendVolume()
-	return []v1.Volume{workingVolume, inputTFConfigurationVolume, tfBackendVolume}
+	gitAuthConfigVolume := meta.createGitAuthConfigVolume()
+	return []v1.Volume{workingVolume, inputTFConfigurationVolume, tfBackendVolume, gitAuthConfigVolume}
 }
 
 func (meta *TFConfigurationMeta) createConfigurationVolume() v1.Volume {
@@ -871,6 +896,16 @@ func (meta *TFConfigurationMeta) createTFBackendVolume() v1.Volume {
 	gitVolume := v1.Volume{Name: BackendVolumeName}
 	gitVolume.EmptyDir = &v1.EmptyDirVolumeSource{}
 	return gitVolume
+}
+
+func (meta *TFConfigurationMeta) createGitAuthConfigVolume() v1.Volume {
+	var gitSecretDefaultMode int32 = 0400
+	gitAuthSecretVolumeSource := v1.SecretVolumeSource{}
+	gitAuthSecretVolumeSource.SecretName = meta.GitCredentialsReference.Name
+	gitAuthSecretVolumeSource.DefaultMode = &gitSecretDefaultMode
+	gitAuthSecretVolume := v1.Volume{Name: GitAuthConfigVolumeName}
+	gitAuthSecretVolume.Secret = &gitAuthSecretVolumeSource
+	return gitAuthSecretVolume
 }
 
 // TfStateProperty is the tf state property for an output

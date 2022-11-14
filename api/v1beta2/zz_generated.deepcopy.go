@@ -23,6 +23,7 @@ package v1beta2
 
 import (
 	crossplane_runtime "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
+	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -170,6 +171,11 @@ func (in *ConfigurationSpec) DeepCopyInto(out *ConfigurationSpec) {
 		*out = new(crossplane_runtime.Reference)
 		**out = **in
 	}
+	if in.JobEnv != nil {
+		in, out := &in.JobEnv, &out.JobEnv
+		*out = new(runtime.RawExtension)
+		(*in).DeepCopyInto(*out)
+	}
 	if in.DeleteResource != nil {
 		in, out := &in.DeleteResource, &out.DeleteResource
 		*out = new(bool)
@@ -178,6 +184,11 @@ func (in *ConfigurationSpec) DeepCopyInto(out *ConfigurationSpec) {
 	if in.ForceDelete != nil {
 		in, out := &in.ForceDelete, &out.ForceDelete
 		*out = new(bool)
+		**out = **in
+	}
+	if in.GitCredentialsReference != nil {
+		in, out := &in.GitCredentialsReference, &out.GitCredentialsReference
+		*out = new(v1.SecretReference)
 		**out = **in
 	}
 }
