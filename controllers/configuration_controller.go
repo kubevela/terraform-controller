@@ -554,16 +554,18 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 		}
 	}
 
-	gitCreds, err := tfcfg.GetGitCredentialsFromConfiguration(ctx, k8sClient, meta.GitCredentialsReference.Namespace, meta.GitCredentialsReference.Name)
-	if gitCreds == nil {
-		msg := "Git credentials Secret not found"
-		if err != nil {
-			msg = fmt.Sprintf("git credentials Secret not found: %s", err)
+	if meta.GitCredentialsReference != nil {
+		gitCreds, err := tfcfg.GetGitCredentialsFromConfiguration(ctx, k8sClient, meta.GitCredentialsReference.Namespace, meta.GitCredentialsReference.Name)
+		if gitCreds == nil {
+			msg := "Git credentials Secret not found"
+			if err != nil {
+				msg = fmt.Sprintf("git credentials Secret not found: %s", err)
+			}
+			if updateStatusErr := meta.updateApplyStatus(ctx, k8sClient, types.Authorizing, msg); updateStatusErr != nil {
+				return errors.Wrap(updateStatusErr, msg)
+			}
+			return errors.New(msg)
 		}
-		if updateStatusErr := meta.updateApplyStatus(ctx, k8sClient, types.Authorizing, msg); updateStatusErr != nil {
-			return errors.Wrap(updateStatusErr, msg)
-		}
-		return errors.New(msg)
 	}
 
 	// Render configuration with backend
@@ -733,27 +735,6 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 		},
 	}
 
-	if meta.GitCredentialsReference != nil {
-		initContainerVolumeMounts = append(initContainerVolumeMounts,
-			v1.VolumeMount{
-				Name:      GitAuthConfigVolumeName,
-				MountPath: GitAuthConfigVolumeMountPath,
-			})
-
-		initContainers = append(initContainers,
-			v1.Container{
-				Name:            "git-auth-configuration",
-				Image:           meta.GitImage,
-				ImagePullPolicy: v1.PullIfNotPresent,
-				Command: []string{
-					"sh",
-					"-c",
-					fmt.Sprintf("eval `ssh-agent` && ssh-add %s/%s ", GitAuthConfigVolumeMountPath, v1.SSHAuthPrivateKey),
-				},
-				VolumeMounts: initContainerVolumeMounts,
-			})
-	}
-
 	// prepare local Terraform .tf files
 	initContainer = v1.Container{
 		Name:            "prepare-input-terraform-configurations",
@@ -772,18 +753,33 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 	hclPath := filepath.Join(BackendVolumeMountPath, meta.RemoteGitPath)
 
 	if meta.RemoteGit != "" {
+		cloneCommand := fmt.Sprintf("git clone %s %s && cp -r %s/* %s", meta.RemoteGit, BackendVolumeMountPath, hclPath, WorkingVolumeMountPath)
+
+		// Check for git credentials, mount the SSH known hosts and private key, add private key into the SSH authentication agent
+		if meta.GitCredentialsReference != nil {
+			initContainerVolumeMounts = append(initContainerVolumeMounts,
+				v1.VolumeMount{
+					Name:      GitAuthConfigVolumeName,
+					MountPath: GitAuthConfigVolumeMountPath,
+				})
+
+			sshCommand := fmt.Sprintf("eval `ssh-agent` && ssh-add %s/%s", GitAuthConfigVolumeMountPath, v1.SSHAuthPrivateKey)
+			cloneCommand = fmt.Sprintf("%s && %s", sshCommand, cloneCommand)
+		}
+
+		command := []string{
+			"sh",
+			"-c",
+			cloneCommand,
+		}
+
 		initContainers = append(initContainers,
 			v1.Container{
 				Name:            "git-configuration",
 				Image:           meta.GitImage,
 				ImagePullPolicy: v1.PullIfNotPresent,
-				Command: []string{
-					"sh",
-					"-c",
-					fmt.Sprintf("git clone %s %s && cp -r %s/* %s", meta.RemoteGit, BackendVolumeMountPath,
-						hclPath, WorkingVolumeMountPath),
-				},
-				VolumeMounts: initContainerVolumeMounts,
+				Command:         command,
+				VolumeMounts:    initContainerVolumeMounts,
 			})
 	}
 
