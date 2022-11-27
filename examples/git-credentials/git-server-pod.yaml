@@ -1,0 +1,78 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: init-git-server-script
+  namespace: default
+data:
+  init-git-server.sh: |
+    #!/bin/sh
+    set -x
+    mkdir -p ~/.ssh
+    chmod 0700 ~/.ssh
+    touch ~/.ssh/authorized_keys
+    chmod 0600 ~/.ssh/authorized_keys
+    mkdir simple-terraform-module.git
+    git config --global init.defaultBranch master &>/dev/null
+    git init --bare simple-terraform-module.git
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: git-server
+  namespace: default
+  labels:
+    name: git-server
+spec:
+  containers:
+  - name: git-server
+    image: ubuntu:22.04
+    command:
+      - sh
+      - -c
+      - >-
+        apt update &&
+        apt install git -y &&
+        apt install openssh-server -y &&
+        mkdir /var/run/sshd &&
+        useradd -r -m -U -d /home/git -s /bin/bash git &&
+        su - git -c /tmp/scripts/init-git-server.sh &&
+        cat ~/.ssh/authorized_keys >> /home/git/.ssh/authorized_keys &&
+        /usr/sbin/sshd -D
+    volumeMounts:
+      - mountPath: /root/.ssh
+        name: ssh-keys
+      - mountPath: /tmp/scripts
+        name: init-git-server
+    resources:
+      limits:
+        memory: "128Mi"
+        cpu: "500m"
+    ports:
+      - containerPort: 22
+    readinessProbe:
+        tcpSocket:
+          port: 22
+        initialDelaySeconds: 10
+  volumes:
+    - name: ssh-keys
+      secret:
+        secretName: ssh-keys
+        items:
+          - key: id_rsa.pub
+            path: authorized_keys
+    - name: init-git-server
+      configMap:
+        name: init-git-server-script
+        defaultMode: 0555
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: git-server
+spec:
+  ports:
+  - port: 22
+    protocol: TCP
+    targetPort: 22
+  selector:
+    name: git-server

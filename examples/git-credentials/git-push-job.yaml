@@ -1,0 +1,86 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: simple-terraform-module
+  namespace: default
+data:
+  main.tf: |
+    resource "tls_private_key" "private_key" {
+      algorithm   = var.algorithm
+    }
+  outputs.tf: |
+    output "openssh_private_key" {
+      value = nonsensitive(tls_private_key.private_key.private_key_pem)
+    }
+  variables.tf: |
+    variable "algorithm" {
+      description = "Encryption algorithm for the private key"
+      type = string
+    }
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: git-push
+  namespace: default
+  labels:
+    name: git-push
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      initContainers:
+        - name: wait-for-git-server
+          image: alpine/git
+          command:
+            - sh
+            - -c
+            - >-
+              set -x &&
+              until nc -vzw 2 git-server 22; do sleep 10; done
+          volumeMounts:
+            - mountPath: /usr/.ssh
+              name: ssh-keys
+      containers:
+        - name: git-push
+          image: alpine/git
+          command:
+            - sh
+            - -c
+            - >-
+              set -x &&
+              eval $(ssh-agent) &&
+              ssh-add /usr/.ssh/id_rsa &&
+              mkdir /root/.ssh &&
+              ssh-keyscan git-server >> /root/.ssh/known_hosts &&
+              mkdir /usr/simple-terraform-module &&
+              cd /usr/simple-terraform-module &&
+              cp /simple-terraform-module/*.tf . &&
+              git config --global init.defaultBranch master &&
+              git init &&
+              git config user.name "john.doe" &&
+              git config user.email "john@doe.com" &&
+              git add . &&
+              git commit -m "initial commit" &&
+              git remote add origin git@git-server:simple-terraform-module.git &&
+              git push --set-upstream origin master
+          volumeMounts:
+            - mountPath: /usr/.ssh
+              name: ssh-keys
+            - mountPath: /simple-terraform-module
+              name: simple-terraform-module
+          resources:
+            limits:
+              memory: "128Mi"
+              cpu: "500m"
+      volumes:
+        - name: ssh-keys
+          secret:
+            secretName: ssh-keys
+            items:
+              - key: id_rsa
+                path: id_rsa
+            defaultMode: 0400
+        - name: simple-terraform-module
+          configMap:
+            name: simple-terraform-module
