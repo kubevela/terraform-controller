@@ -90,7 +90,7 @@ else
 CONTROLLER_GEN=$(shell which controller-gen)
 endif
 
-GOLANGCILINT_VERSION ?= v1.38.0
+GOLANGCILINT_VERSION ?= v1.50.1
 HOSTOS := $(shell uname -s | tr '[:upper:]' '[:lower:]')
 HOSTARCH := $(shell uname -m)
 ifeq ($(HOSTARCH),x86_64)
