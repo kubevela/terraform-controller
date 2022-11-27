@@ -548,7 +548,6 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 			}
 			meta.JobEnv = jobEnv
 		}
-
 		if err := meta.getCredentials(ctx, k8sClient, p); err != nil {
 			return err
 		}
@@ -557,9 +556,9 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	if meta.GitCredentialsReference != nil {
 		gitCreds, err := tfcfg.GetGitCredentialsFromConfiguration(ctx, k8sClient, meta.GitCredentialsReference.Namespace, meta.GitCredentialsReference.Name)
 		if gitCreds == nil {
-			msg := "Git credentials Secret not found"
+			msg := "git credentials Secret not found"
 			if err != nil {
-				msg = fmt.Sprintf("git credentials Secret not found: %s", err)
+				msg = err.Error()
 			}
 			if updateStatusErr := meta.updateApplyStatus(ctx, k8sClient, types.Authorizing, msg); updateStatusErr != nil {
 				return errors.Wrap(updateStatusErr, msg)
