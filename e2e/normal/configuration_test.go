@@ -2,11 +2,7 @@ package normal
 
 import (
 	"context"
-	// "crypto/rand"
-	// "crypto/rsa"
-	// "crypto/x509"
 	"encoding/base64"
-	// "encoding/pem"
 	"fmt"
 	"os"
 	"os/exec"
@@ -15,8 +11,6 @@ import (
 	"testing"
 	"text/template"
 	"time"
-
-	// "golang.org/x/crypto/ssh"
 
 	"gotest.tools/assert"
 	coreV1 "k8s.io/api/core/v1"
@@ -29,17 +23,17 @@ import (
 )
 
 var (
-	testConfigurationsInlineCredentials                        = "../examples/random/configuration_random.yaml"
-	testConfigurationsInlineCredentialsCustomBackendKubernetes = "../examples/random/configuration_random_custom_backend_kubernetes.yaml"
+	testConfigurationsInlineCredentials                        = "examples/random/configuration_random.yaml"
+	testConfigurationsInlineCredentialsCustomBackendKubernetes = "examples/random/configuration_random_custom_backend_kubernetes.yaml"
 	testConfigurationsRegression                               = []string{
 		"examples/alibaba/eip/configuration_eip.yaml",
 		"examples/alibaba/eip/configuration_eip_remote_in_another_namespace.yaml",
 		"examples/alibaba/eip/configuration_eip_remote_subdirectory.yaml",
 		"examples/alibaba/oss/configuration_hcl_bucket.yaml",
 	}
-	testConfigurationsForceDelete                   = "../examples/random/configuration_force_delete.yaml"
-	testConfigurationsGitCredentialsSecretReference = "../examples/random/configuration_git_ssh.yaml"
-	chartNamespace                                  = "terraform"
+	testConfigurationsForceDelete             = "examples/random/configuration_force_delete.yaml"
+	testConfigurationsGitCredsSecretReference = "../examples/random/configuration_git_ssh.yaml"
+	chartNamespace                            = "terraform"
 )
 
 type ConfigurationAttr struct {
@@ -296,7 +290,7 @@ func TestForceDeleteConfiguration(t *testing.T) {
 func TestGitCredentialsSecretReference(t *testing.T) {
 	configuration := ConfigurationAttr{
 		Name:                   "random-e2e-git-creds-secret-ref",
-		YamlPath:               testConfigurationsGitCredentialsSecretReference,
+		YamlPath:               testConfigurationsGitCredsSecretReference,
 		TFConfigMapName:        "tf-random-e2e-git-creds-secret-ref",
 		BackendStateSecretName: "tfstate-default-random-e2e-git-creds-secret-ref",
 		OutputsSecretName:      "random-e2e-git-creds-secret-ref-conn",
@@ -307,14 +301,15 @@ func TestGitCredentialsSecretReference(t *testing.T) {
 	assert.NilError(t, err)
 	pwd, _ := os.Getwd()
 	gitServer := filepath.Join(pwd, "..", "../examples/git-credentials")
+	gitServerApplyCmd := fmt.Sprintf("kubectl apply -f %s", gitServer)
+	gitServerDeleteCmd := fmt.Sprintf("kubectl apply -f %s", gitServer)
 
 	beforeApply := func(ctx *TestContext) {
-		gitServerCmd := fmt.Sprintf("kubectl apply -f %s", gitServer)
-		err = exec.Command("bash", "-c", gitServerCmd).Run()
+		err = exec.Command("bash", "-c", gitServerApplyCmd).Run()
 		assert.NilError(t, err)
 
 		klog.Info("- Checking git-server pod status")
-		for i := 0; i < 60; i++ {
+		for i := 0; i < 120; i++ {
 			pod, _ := clientSet.CoreV1().Pods("default").Get(ctx, "git-server", v1.GetOptions{})
 			conditions := pod.Status.Conditions
 			var index int
@@ -328,10 +323,10 @@ func TestGitCredentialsSecretReference(t *testing.T) {
 			if conditions[index].Status == "True" && conditions[index].Type == coreV1.PodReady {
 				break
 			}
-			if i == 59 {
+			if i == 119 {
 				t.Error("git-server pod is not running")
 			}
-			time.Sleep(5 * time.Second)
+			time.Sleep(10 * time.Second)
 		}
 
 		getKnownHostsCmd := "kubectl exec pod/git-server -- ssh-keyscan git-server"
@@ -346,14 +341,12 @@ func TestGitCredentialsSecretReference(t *testing.T) {
 		err = tmpl.Execute(gitSshAuthSecretYamlFile, base64.StdEncoding.EncodeToString(knownHosts))
 		assert.NilError(t, err)
 
-		gitServerCmd = fmt.Sprintf("kubectl apply -f %s", gitServer)
-		err = exec.Command("bash", "-c", gitServerCmd).Run()
+		err = exec.Command("bash", "-c", gitServerDeleteCmd).Run()
 		assert.NilError(t, err)
 	}
 
 	cleanUp := func(ctx *TestContext) {
-		gitServerCmd := fmt.Sprintf("kubectl delete -f %s", gitServer)
-		err = exec.Command("bash", "-c", gitServerCmd).Run()
+		err = exec.Command("bash", "-c", gitServerDeleteCmd).Run()
 		assert.NilError(t, err)
 	}
 

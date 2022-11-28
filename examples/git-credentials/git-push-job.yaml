@@ -69,10 +69,10 @@ spec:
               name: ssh-keys
             - mountPath: /simple-terraform-module
               name: simple-terraform-module
-          resources:
+          resources: 
             limits:
               memory: "128Mi"
-              cpu: "500m"
+              cpu: "0.1"
       volumes:
         - name: ssh-keys
           secret:

@@ -31,28 +31,34 @@ spec:
       - -c
       - >-
         apt update &&
-        apt install git -y &&
-        apt install openssh-server -y &&
+        apt install git openssh-server -y &&
         mkdir /var/run/sshd &&
         useradd -r -m -U -d /home/git -s /bin/bash git &&
         su - git -c /tmp/scripts/init-git-server.sh &&
         cat ~/.ssh/authorized_keys >> /home/git/.ssh/authorized_keys &&
         /usr/sbin/sshd -D
+    lifecycle:
+      preStop:
+        exec:
+          command:
+           - sh
+           - -c
+           - service ssh stop
     volumeMounts:
       - mountPath: /root/.ssh
         name: ssh-keys
       - mountPath: /tmp/scripts
         name: init-git-server
-    resources:
-      limits:
-        memory: "128Mi"
-        cpu: "500m"
     ports:
       - containerPort: 22
     readinessProbe:
         tcpSocket:
           port: 22
-        initialDelaySeconds: 10
+        initialDelaySeconds: 30
+    resources: 
+      limits:
+        memory: "500Mi"
+        cpu: "0.2"
   volumes:
     - name: ssh-keys
       secret:
@@ -69,6 +75,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: git-server
+  namespace: default
 spec:
   ports:
   - port: 22
