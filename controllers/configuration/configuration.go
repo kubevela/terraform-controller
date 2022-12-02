@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	v1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	apitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
@@ -153,20 +152,4 @@ func GetProviderNamespacedName(configuration v1beta2.Configuration) *crossplane.
 		Name:      provider.DefaultName,
 		Namespace: provider.DefaultNamespace,
 	}
-}
-
-// GetGitCredentialsFromConfiguration will get the secret containing the SSH private key & known_hosts
-func GetGitCredentialsFromConfiguration(ctx context.Context, k8sClient client.Client, namespace, name string) (*v1.Secret, error) {
-	var secret = &v1.Secret{}
-
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: name, Namespace: namespace}, secret); err != nil {
-		if kerrors.IsNotFound(err) {
-			return nil, nil
-		}
-		errMsg := "failed to get git credentials Secret object"
-		klog.ErrorS(err, errMsg, "Name", name, "Namespace", namespace)
-		return nil, errors.Wrap(err, errMsg)
-	}
-
-	return secret, nil
 }

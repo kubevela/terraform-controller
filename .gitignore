@@ -30,3 +30,6 @@ terraform-controller-*
 examples/tf-native/alibaba/cs/kubeconfig
 
 bin/manager
+
+# Secret for git server 
+examples/git-credentials/git-ssh-auth-secret.yaml

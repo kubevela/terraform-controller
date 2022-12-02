@@ -252,7 +252,7 @@ type TFConfigurationMeta struct {
 	Region                  string
 	Credentials             map[string]string
 	JobEnv                  map[string]interface{}
-	GitCredentialsReference *v1.SecretReference
+	GitCredentialsReference *crossplane.SecretReference
 
 	Backend backend.Backend
 	// JobNodeSelector Expose the node selector of job to the controller level
@@ -554,13 +554,13 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	}
 
 	if meta.GitCredentialsReference != nil {
-		gitCreds, err := tfcfg.GetGitCredentialsFromConfiguration(ctx, k8sClient, meta.GitCredentialsReference.Namespace, meta.GitCredentialsReference.Name)
+		gitCreds, err := GetGitCredentialsFromConfiguration(ctx, k8sClient, meta.GitCredentialsReference.Namespace, meta.GitCredentialsReference.Name)
 		if gitCreds == nil {
 			msg := "git credentials Secret not found"
 			if err != nil {
 				msg = err.Error()
 			}
-			if updateStatusErr := meta.updateApplyStatus(ctx, k8sClient, types.Authorizing, msg); updateStatusErr != nil {
+			if updateStatusErr := meta.updateApplyStatus(ctx, k8sClient, types.GitCredentialsNotFound, msg); updateStatusErr != nil {
 				return errors.Wrap(updateStatusErr, msg)
 			}
 			return errors.New(msg)
@@ -892,12 +892,12 @@ func (meta *TFConfigurationMeta) assembleExecutorVolumes() []v1.Volume {
 	workingVolume.EmptyDir = &v1.EmptyDirVolumeSource{}
 	inputTFConfigurationVolume := meta.createConfigurationVolume()
 	tfBackendVolume := meta.createTFBackendVolume()
+	executorVolumes := []v1.Volume{workingVolume, inputTFConfigurationVolume, tfBackendVolume}
 	if meta.GitCredentialsReference != nil {
 		gitAuthConfigVolume := meta.createGitAuthConfigVolume()
-		return []v1.Volume{workingVolume, inputTFConfigurationVolume, tfBackendVolume, gitAuthConfigVolume}
+		executorVolumes = append(executorVolumes, gitAuthConfigVolume)
 	}
-
-	return []v1.Volume{workingVolume, inputTFConfigurationVolume, tfBackendVolume}
+	return executorVolumes
 }
 
 func (meta *TFConfigurationMeta) createConfigurationVolume() v1.Volume {
@@ -1330,4 +1330,20 @@ func (meta *TFConfigurationMeta) RenderConfiguration(configuration *v1beta2.Conf
 	default:
 		return "", nil, errors.New("Unsupported Configuration Type")
 	}
+}
+
+// GetGitCredentialsFromConfiguration will get the secret containing the SSH private key & known_hosts
+func GetGitCredentialsFromConfiguration(ctx context.Context, k8sClient client.Client, namespace, name string) (*v1.Secret, error) {
+	var secret = &v1.Secret{}
+
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: name, Namespace: namespace}, secret); err != nil {
+		if kerrors.IsNotFound(err) {
+			return nil, nil
+		}
+		errMsg := "failed to get git credentials Secret object"
+		klog.ErrorS(err, errMsg, "Name", name, "Namespace", namespace)
+		return nil, errors.Wrap(err, errMsg)
+	}
+
+	return secret, nil
 }

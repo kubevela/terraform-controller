@@ -34,6 +34,7 @@ const (
 	GeneratingOutputs                    ConfigurationState = "GeneratingTerraformOutputs"
 	InvalidRegion                        ConfigurationState = "InvalidRegion"
 	TerraformInitError                   ConfigurationState = "TerraformInitError"
+	GitCredentialsNotFound               ConfigurationState = "GitCredentialsSecretNotFound"
 )
 
 // Stage is the Terraform stage
