@@ -23,6 +23,7 @@ package v1beta2
 
 import (
 	crossplane_runtime "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
+	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -187,7 +188,7 @@ func (in *ConfigurationSpec) DeepCopyInto(out *ConfigurationSpec) {
 	}
 	if in.GitCredentialsReference != nil {
 		in, out := &in.GitCredentialsReference, &out.GitCredentialsReference
-		*out = new(crossplane_runtime.SecretReference)
+		*out = new(v1.SecretReference)
 		**out = **in
 	}
 }

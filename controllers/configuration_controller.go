@@ -252,7 +252,7 @@ type TFConfigurationMeta struct {
 	Region                  string
 	Credentials             map[string]string
 	JobEnv                  map[string]interface{}
-	GitCredentialsReference *crossplane.SecretReference
+	GitCredentialsReference *v1.SecretReference
 
 	Backend backend.Backend
 	// JobNodeSelector Expose the node selector of job to the controller level

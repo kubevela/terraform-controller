@@ -303,6 +303,7 @@ func TestGitCredentialsSecretReference(t *testing.T) {
 	gitServer := filepath.Join(pwd, "..", "../examples/git-credentials")
 	gitServerApplyCmd := fmt.Sprintf("kubectl apply -f %s", gitServer)
 	gitServerDeleteCmd := fmt.Sprintf("kubectl delete -f %s", gitServer)
+	gitSshAuthSecretYaml := filepath.Join(gitServer, "git-ssh-auth-secret.yaml")
 
 	beforeApply := func(ctx *TestContext) {
 		err = exec.Command("bash", "-c", gitServerApplyCmd).Run()
@@ -335,7 +336,6 @@ func TestGitCredentialsSecretReference(t *testing.T) {
 
 		gitSshAuthSecretTmpl := filepath.Join(gitServer, "templates/git-ssh-auth-secret.tmpl")
 		tmpl := template.Must(template.ParseFiles(gitSshAuthSecretTmpl))
-		gitSshAuthSecretYaml := filepath.Join(gitServer, "git-ssh-auth-secret.yaml")
 		gitSshAuthSecretYamlFile, err := os.Create(gitSshAuthSecretYaml)
 		assert.NilError(t, err)
 		err = tmpl.Execute(gitSshAuthSecretYamlFile, base64.StdEncoding.EncodeToString(knownHosts))
@@ -348,6 +348,7 @@ func TestGitCredentialsSecretReference(t *testing.T) {
 	cleanUp := func(ctx *TestContext) {
 		err = exec.Command("bash", "-c", gitServerDeleteCmd).Run()
 		assert.NilError(t, err)
+		os.Remove(gitSshAuthSecretYaml)
 	}
 
 	testBase(

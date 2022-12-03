@@ -17,6 +17,7 @@ limitations under the License.
 package v1beta1
 
 import (
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
@@ -49,7 +50,7 @@ type ConfigurationSpec struct {
 	BaseConfigurationSpec `json:",inline"`
 
 	// GitCredentialsReference specifies the reference to the secret containing the git credentials
-	GitCredentialsReference *types.SecretReference `json:"gitCredentialsReference,omitempty"`
+	GitCredentialsReference *v1.SecretReference `json:"gitCredentialsReference,omitempty"`
 }
 
 // BaseConfigurationSpec defines the common fields of a ConfigurationSpec

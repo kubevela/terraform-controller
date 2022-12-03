@@ -76,13 +76,13 @@ spec:
                   secret containing the git credentials
                 properties:
                   name:
-                    description: Name of the secret.
+                    description: Name is unique within a namespace to reference a
+                      secret resource.
                     type: string
                   namespace:
-                    description: Namespace of the secret.
+                    description: Namespace defines the space within which the secret
+                      name must be unique.
                     type: string
-                required:
-                - name
                 type: object
               hcl:
                 description: HCL is the Terraform HCL type configuration
@@ -280,13 +280,13 @@ spec:
                   secret containing the git credentials
                 properties:
                   name:
-                    description: Name of the secret.
+                    description: Name is unique within a namespace to reference a
+                      secret resource.
                     type: string
                   namespace:
-                    description: Namespace of the secret.
+                    description: Namespace defines the space within which the secret
+                      name must be unique.
                     type: string
-                required:
-                - name
                 type: object
               hcl:
                 description: HCL is the Terraform HCL type configuration
