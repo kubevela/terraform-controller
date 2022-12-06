@@ -556,11 +556,11 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	if meta.GitCredentialsSecretReference != nil {
 		gitCreds, err := GetGitCredentialsSecret(ctx, k8sClient, meta.GitCredentialsSecretReference)
 		if gitCreds == nil {
-			msg := string(types.GitCredentialsNotFound)
+			msg := string(types.InvalidGitCredentialsSecretReference)
 			if err != nil {
 				msg = err.Error()
 			}
-			if updateStatusErr := meta.updateApplyStatus(ctx, k8sClient, types.GitCredentialsNotFound, msg); updateStatusErr != nil {
+			if updateStatusErr := meta.updateApplyStatus(ctx, k8sClient, types.InvalidGitCredentialsSecretReference, msg); updateStatusErr != nil {
 				return errors.Wrap(updateStatusErr, msg)
 			}
 			return errors.New(msg)
