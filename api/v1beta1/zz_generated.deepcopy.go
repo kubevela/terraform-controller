@@ -177,8 +177,8 @@ func (in *ConfigurationSpec) DeepCopyInto(out *ConfigurationSpec) {
 		**out = **in
 	}
 	in.BaseConfigurationSpec.DeepCopyInto(&out.BaseConfigurationSpec)
-	if in.GitCredentialsReference != nil {
-		in, out := &in.GitCredentialsReference, &out.GitCredentialsReference
+	if in.GitCredentialsSecretReference != nil {
+		in, out := &in.GitCredentialsSecretReference, &out.GitCredentialsSecretReference
 		*out = new(v1.SecretReference)
 		**out = **in
 	}

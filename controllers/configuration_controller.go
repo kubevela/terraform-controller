@@ -232,27 +232,27 @@ type ResourceQuota struct {
 
 // TFConfigurationMeta is all the metadata of a Configuration
 type TFConfigurationMeta struct {
-	Name                    string
-	Namespace               string
-	ControllerNamespace     string
-	ConfigurationType       types.ConfigurationType
-	CompleteConfiguration   string
-	RemoteGit               string
-	RemoteGitPath           string
-	ConfigurationChanged    bool
-	EnvChanged              bool
-	ConfigurationCMName     string
-	ApplyJobName            string
-	DestroyJobName          string
-	Envs                    []v1.EnvVar
-	ProviderReference       *crossplane.Reference
-	VariableSecretName      string
-	VariableSecretData      map[string][]byte
-	DeleteResource          bool
-	Region                  string
-	Credentials             map[string]string
-	JobEnv                  map[string]interface{}
-	GitCredentialsReference *v1.SecretReference
+	Name                          string
+	Namespace                     string
+	ControllerNamespace           string
+	ConfigurationType             types.ConfigurationType
+	CompleteConfiguration         string
+	RemoteGit                     string
+	RemoteGitPath                 string
+	ConfigurationChanged          bool
+	EnvChanged                    bool
+	ConfigurationCMName           string
+	ApplyJobName                  string
+	DestroyJobName                string
+	Envs                          []v1.EnvVar
+	ProviderReference             *crossplane.Reference
+	VariableSecretName            string
+	VariableSecretData            map[string][]byte
+	DeleteResource                bool
+	Region                        string
+	Credentials                   map[string]string
+	JobEnv                        map[string]interface{}
+	GitCredentialsSecretReference *v1.SecretReference
 
 	Backend backend.Backend
 	// JobNodeSelector Expose the node selector of job to the controller level
@@ -314,8 +314,8 @@ func initTFConfigurationMeta(req ctrl.Request, configuration v1beta2.Configurati
 		meta.ProviderReference = tfcfg.GetProviderNamespacedName(configuration)
 	}
 
-	if configuration.Spec.GitCredentialsReference != nil {
-		meta.GitCredentialsReference = configuration.Spec.GitCredentialsReference
+	if configuration.Spec.GitCredentialsSecretReference != nil {
+		meta.GitCredentialsSecretReference = configuration.Spec.GitCredentialsSecretReference
 	}
 
 	return meta
@@ -553,10 +553,10 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 		}
 	}
 
-	if meta.GitCredentialsReference != nil {
-		gitCreds, err := GetGitCredentialsFromConfiguration(ctx, k8sClient, meta.GitCredentialsReference.Namespace, meta.GitCredentialsReference.Name)
+	if meta.GitCredentialsSecretReference != nil {
+		gitCreds, err := GetGitCredentialsSecret(ctx, k8sClient, meta.GitCredentialsSecretReference)
 		if gitCreds == nil {
-			msg := "git credentials Secret not found"
+			msg := string(types.GitCredentialsNotFound)
 			if err != nil {
 				msg = err.Error()
 			}
@@ -755,7 +755,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 		cloneCommand := fmt.Sprintf("git clone %s %s && cp -r %s/* %s", meta.RemoteGit, BackendVolumeMountPath, hclPath, WorkingVolumeMountPath)
 
 		// Check for git credentials, mount the SSH known hosts and private key, add private key into the SSH authentication agent
-		if meta.GitCredentialsReference != nil {
+		if meta.GitCredentialsSecretReference != nil {
 			initContainerVolumeMounts = append(initContainerVolumeMounts,
 				v1.VolumeMount{
 					Name:      GitAuthConfigVolumeName,
@@ -893,7 +893,7 @@ func (meta *TFConfigurationMeta) assembleExecutorVolumes() []v1.Volume {
 	inputTFConfigurationVolume := meta.createConfigurationVolume()
 	tfBackendVolume := meta.createTFBackendVolume()
 	executorVolumes := []v1.Volume{workingVolume, inputTFConfigurationVolume, tfBackendVolume}
-	if meta.GitCredentialsReference != nil {
+	if meta.GitCredentialsSecretReference != nil {
 		gitAuthConfigVolume := meta.createGitAuthConfigVolume()
 		executorVolumes = append(executorVolumes, gitAuthConfigVolume)
 	}
@@ -918,7 +918,7 @@ func (meta *TFConfigurationMeta) createTFBackendVolume() v1.Volume {
 func (meta *TFConfigurationMeta) createGitAuthConfigVolume() v1.Volume {
 	var gitSecretDefaultMode int32 = 0400
 	gitAuthSecretVolumeSource := v1.SecretVolumeSource{}
-	gitAuthSecretVolumeSource.SecretName = meta.GitCredentialsReference.Name
+	gitAuthSecretVolumeSource.SecretName = meta.GitCredentialsSecretReference.Name
 	gitAuthSecretVolumeSource.DefaultMode = &gitSecretDefaultMode
 	gitAuthSecretVolume := v1.Volume{Name: GitAuthConfigVolumeName}
 	gitAuthSecretVolume.Secret = &gitAuthSecretVolumeSource
@@ -1332,17 +1332,30 @@ func (meta *TFConfigurationMeta) RenderConfiguration(configuration *v1beta2.Conf
 	}
 }
 
-// GetGitCredentialsFromConfiguration will get the secret containing the SSH private key & known_hosts
-func GetGitCredentialsFromConfiguration(ctx context.Context, k8sClient client.Client, namespace, name string) (*v1.Secret, error) {
-	var secret = &v1.Secret{}
+// GetGitCredentialsSecret will get the secret containing the SSH private key & known_hosts
+func GetGitCredentialsSecret(ctx context.Context, k8sClient client.Client, secretRef *v1.SecretReference) (*v1.Secret, error) {
+	secret := &v1.Secret{}
 
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: name, Namespace: namespace}, secret); err != nil {
-		if kerrors.IsNotFound(err) {
-			return nil, nil
-		}
-		errMsg := "failed to get git credentials Secret object"
-		klog.ErrorS(err, errMsg, "Name", name, "Namespace", namespace)
+	namespacedName := client.ObjectKey{Name: secretRef.Name, Namespace: secretRef.Namespace}
+	err := k8sClient.Get(ctx, namespacedName, secret)
+	if err != nil {
+		errMsg := "Failed to get git credentials secret"
+		klog.ErrorS(err, errMsg, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
 		return nil, errors.Wrap(err, errMsg)
+	}
+
+	keyNotFoundErrMsg := "key not in secret"
+	keyNotFoundErr := errors.New(keyNotFoundErrMsg)
+
+	if _, ok := secret.Data[v1.SSHAuthPrivateKey]; !ok {
+		errMsg := fmt.Sprintf("'%s' not in git credentials secret", v1.SSHAuthPrivateKey)
+		klog.ErrorS(keyNotFoundErr, errMsg, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
+		return nil, errors.Wrap(keyNotFoundErr, errMsg)
+	}
+	if _, ok := secret.Data["known_hosts"]; !ok {
+		errMsg := "'known_hosts' not in git credentials secret"
+		klog.ErrorS(keyNotFoundErr, errMsg, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
+		return nil, errors.Wrap(keyNotFoundErr, errMsg)
 	}
 
 	return secret, nil

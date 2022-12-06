@@ -49,8 +49,8 @@ type ConfigurationSpec struct {
 
 	BaseConfigurationSpec `json:",inline"`
 
-	// GitCredentialsReference specifies the reference to the secret containing the git credentials
-	GitCredentialsReference *v1.SecretReference `json:"gitCredentialsReference,omitempty"`
+	// GitCredentialsSecretReference specifies the reference to the secret containing the git credentials
+	GitCredentialsSecretReference *v1.SecretReference `json:"gitCredentialsSecretReference,omitempty"`
 }
 
 // BaseConfigurationSpec defines the common fields of a ConfigurationSpec

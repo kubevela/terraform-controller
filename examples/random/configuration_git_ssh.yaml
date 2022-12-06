@@ -9,7 +9,7 @@ spec:
     algorithm: RSA
   writeConnectionSecretToRef:
     name: random-e2e-git-creds-secret-ref-conn
-  gitCredentialsReference:
+  gitCredentialsSecretReference:
         name: git-ssh-auth
         namespace: default
 

@@ -71,9 +71,9 @@ spec:
                 description: DeleteResource will determine whether provisioned cloud
                   resources will be deleted when CR is deleted
                 type: boolean
-              gitCredentialsReference:
-                description: GitCredentialsReference specifies the reference to the
-                  secret containing the git credentials
+              gitCredentialsSecretReference:
+                description: GitCredentialsSecretReference specifies the reference
+                  to the secret containing the git credentials
                 properties:
                   name:
                     description: Name is unique within a namespace to reference a
@@ -275,9 +275,9 @@ spec:
                   which state it is or whether it has provisioned some resources It
                   will help delete Configuration in unexpected cases.
                 type: boolean
-              gitCredentialsReference:
-                description: GitCredentialsReference specifies the reference to the
-                  secret containing the git credentials
+              gitCredentialsSecretReference:
+                description: GitCredentialsSecretReference specifies the reference
+                  to the secret containing the git credentials
                 properties:
                   name:
                     description: Name is unique within a namespace to reference a

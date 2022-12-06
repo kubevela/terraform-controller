@@ -15,6 +15,7 @@ import (
 
 	"github.com/agiledragon/gomonkey/v2"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/sts"
+	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	batchv1 "k8s.io/api/batch/v1"
@@ -2493,6 +2494,137 @@ terraform {
 
 			if !reflect.DeepEqual(tc.want.backendInterface, backendConf) {
 				t.Errorf("backendInterface is not equal.\n got %#v\n, want %#v", backendConf, tc.want.backendInterface)
+			}
+		})
+	}
+}
+
+func TestCheckGitCredentialsSecretReference(t *testing.T) {
+	ctx := context.Background()
+	scheme := runtime.NewScheme()
+	corev1.AddToScheme(scheme)
+	k8sClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+
+	privateKey := []byte("aaa")
+	knownHosts := []byte("zzz")
+	secret := &corev1.Secret{
+		ObjectMeta: v1.ObjectMeta{
+			Namespace: "default",
+			Name:      "git-ssh",
+		},
+		Data: map[string][]byte{
+			corev1.SSHAuthPrivateKey: privateKey,
+			"known_hosts":            knownHosts,
+		},
+		Type: corev1.SecretTypeSSHAuth,
+	}
+	assert.Nil(t, k8sClient.Create(ctx, secret))
+	assert.Nil(t, k8sClient.Get(ctx, client.ObjectKeyFromObject(secret), secret))
+
+	secretNoKnownhost := &corev1.Secret{
+		ObjectMeta: v1.ObjectMeta{
+			Namespace: "default",
+			Name:      "git-ssh-no-known-hosts",
+		},
+		Data: map[string][]byte{
+			corev1.SSHAuthPrivateKey: privateKey,
+		},
+		Type: corev1.SecretTypeSSHAuth,
+	}
+	assert.Nil(t, k8sClient.Create(ctx, secretNoKnownhost))
+
+	secretNoPrivateKey := &corev1.Secret{
+		ObjectMeta: v1.ObjectMeta{
+			Namespace: "default",
+			Name:      "git-ssh-no-private-key",
+		},
+		Data: map[string][]byte{
+			"known_hosts": knownHosts,
+		},
+	}
+	assert.Nil(t, k8sClient.Create(ctx, secretNoPrivateKey))
+
+	type args struct {
+		k8sClient                     client.Client
+		GitCredentialsSecretReference *corev1.SecretReference
+	}
+
+	type want struct {
+		secret *corev1.Secret
+		errMsg string
+	}
+
+	testcases := []struct {
+		name string
+		args args
+		want want
+	}{
+		{
+			name: "secret not found",
+			args: args{
+				k8sClient: k8sClient,
+				GitCredentialsSecretReference: &corev1.SecretReference{
+					Namespace: "default",
+					Name:      "git-shh",
+				},
+			},
+			want: want{
+				errMsg: "secrets \"git-shh\" not found",
+			},
+		},
+		{
+			name: "key 'known_hosts' not in git credentials secret",
+			args: args{
+				k8sClient: k8sClient,
+				GitCredentialsSecretReference: &corev1.SecretReference{
+					Namespace: "default",
+					Name:      "git-ssh-no-known-hosts",
+				},
+			},
+			want: want{
+				errMsg: "'known_hosts' not in git credentials secret",
+			},
+		},
+		{
+			name: "key 'ssh-privatekey' not in git credentials secret",
+			args: args{
+				k8sClient: k8sClient,
+				GitCredentialsSecretReference: &corev1.SecretReference{
+					Namespace: "default",
+					Name:      "git-ssh-no-private-key",
+				},
+			},
+			want: want{
+				errMsg: fmt.Sprintf("'%s' not in git credentials secret", corev1.SSHAuthPrivateKey),
+			},
+		},
+		{
+			name: "secret exists",
+			args: args{
+				k8sClient: k8sClient,
+				GitCredentialsSecretReference: &corev1.SecretReference{
+					Namespace: "default",
+					Name:      "git-ssh",
+				},
+			},
+			want: want{
+				secret: secret,
+			},
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := GetGitCredentialsSecret(ctx, tc.args.k8sClient, tc.args.GitCredentialsSecretReference)
+
+			if err != nil {
+				if !strings.Contains(err.Error(), tc.want.errMsg) {
+					t.Errorf("GetGitCredentialsSecret error = %v, wantErr = %v", err, tc.want.errMsg)
+					return
+				}
+			}
+			if tc.want.secret != nil && !reflect.DeepEqual(got, tc.want.secret) {
+				t.Errorf("GetGitCredentialsSecret differs between got and want: %s", cmp.Diff(got, tc.want.secret))
 			}
 		})
 	}
