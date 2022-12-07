@@ -1607,6 +1607,39 @@ func TestAssembleTerraformJobWithResourcesSetting(t *testing.T) {
 	assert.Equal(t, "5Gi", requestsMemory.String())
 }
 
+func TestAssembleTerraformJobWithGitCredentialsSecretRef(t *testing.T) {
+	meta := &TFConfigurationMeta{
+		Name:                "a",
+		ConfigurationCMName: "b",
+		BusyboxImage:        "c",
+		GitImage:            "d",
+		Namespace:           "e",
+		TerraformImage:      "f",
+		RemoteGit:           "g",
+		GitCredentialsSecretReference: &corev1.SecretReference{
+			Namespace: "default",
+			Name:      "git-ssh",
+		},
+	}
+
+	job := meta.assembleTerraformJob(TerraformApply)
+	spec := job.Spec.Template.Spec
+
+	var gitSecretDefaultMode int32 = 0400
+	gitAuthSecretVolume := corev1.Volume{Name: GitAuthConfigVolumeName}
+	gitAuthSecretVolume.Secret = &corev1.SecretVolumeSource{
+		SecretName:  "git-ssh",
+		DefaultMode: &gitSecretDefaultMode,
+	}
+
+	gitSecretVolumeMount := corev1.VolumeMount{
+		Name:      GitAuthConfigVolumeName,
+		MountPath: GitAuthConfigVolumeMountPath,
+	}
+	assert.Contains(t, spec.InitContainers[1].VolumeMounts, gitSecretVolumeMount)
+	assert.Contains(t, spec.Volumes, gitAuthSecretVolume)
+}
+
 func TestTfStatePropertyToToProperty(t *testing.T) {
 	testcases := []TfStateProperty{
 		{
