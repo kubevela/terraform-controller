@@ -15,7 +15,6 @@ import (
 
 	"github.com/agiledragon/gomonkey/v2"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/sts"
-	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	batchv1 "k8s.io/api/batch/v1"
@@ -2602,7 +2601,7 @@ func TestCheckGitCredentialsSecretReference(t *testing.T) {
 				},
 			},
 			want: want{
-				errMsg: "secrets \"git-shh\" not found",
+				errMsg: "Failed to get git credentials secret: secrets \"git-shh\" not found",
 			},
 		},
 		{
@@ -2615,7 +2614,7 @@ func TestCheckGitCredentialsSecretReference(t *testing.T) {
 				},
 			},
 			want: want{
-				errMsg: "'known_hosts' not in git credentials secret",
+				errMsg: fmt.Sprintf("'%s' not in git credentials secret", GitCredsKnownHosts),
 			},
 		},
 		{
@@ -2648,16 +2647,13 @@ func TestCheckGitCredentialsSecretReference(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := GetGitCredentialsSecret(ctx, tc.args.k8sClient, tc.args.GitCredentialsSecretReference)
+			sec, err := GetGitCredentialsSecret(ctx, tc.args.k8sClient, tc.args.GitCredentialsSecretReference)
 
 			if err != nil {
-				if !strings.Contains(err.Error(), tc.want.errMsg) {
-					t.Errorf("GetGitCredentialsSecret error = %v, wantErr = %v", err, tc.want.errMsg)
-					return
-				}
+				assert.EqualError(t, err, tc.want.errMsg)
 			}
-			if tc.want.secret != nil && !reflect.DeepEqual(got, tc.want.secret) {
-				t.Errorf("GetGitCredentialsSecret differs between got and want: %s", cmp.Diff(got, tc.want.secret))
+			if tc.want.secret != nil {
+				assert.EqualValues(t, sec, tc.want.secret)
 			}
 		})
 	}

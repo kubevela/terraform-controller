@@ -44,7 +44,6 @@ jobs:
           kind create cluster --image kindest/node:v1.20.7@sha256:688fba5ce6b825be62a7c7fe1415b35da2bdfbb5a69227c499ea4cc0008661ca
           kubectl version
           kubectl cluster-info
-          kubectl describe nodes
 
       - name: Load Image to kind cluster
         run: make kind-load

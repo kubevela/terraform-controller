@@ -96,6 +96,10 @@ const (
 	ServiceAccountName = "tf-executor-service-account"
 )
 
+const (
+	GitCredsKnownHosts = "known_hosts"
+)
+
 // ConfigurationReconciler reconciles a Configuration object.
 type ConfigurationReconciler struct {
 	client.Client
@@ -1344,18 +1348,12 @@ func GetGitCredentialsSecret(ctx context.Context, k8sClient client.Client, secre
 		return nil, errors.Wrap(err, errMsg)
 	}
 
-	keyNotFoundErrMsg := "key not in secret"
-	keyNotFoundErr := errors.New(keyNotFoundErrMsg)
-
-	if _, ok := secret.Data[v1.SSHAuthPrivateKey]; !ok {
-		errMsg := fmt.Sprintf("'%s' not in git credentials secret", v1.SSHAuthPrivateKey)
-		klog.ErrorS(keyNotFoundErr, errMsg, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
-		return nil, errors.Wrap(keyNotFoundErr, errMsg)
-	}
-	if _, ok := secret.Data["known_hosts"]; !ok {
-		errMsg := "'known_hosts' not in git credentials secret"
-		klog.ErrorS(keyNotFoundErr, errMsg, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
-		return nil, errors.Wrap(keyNotFoundErr, errMsg)
+	needSecretKeys := []string{GitCredsKnownHosts, v1.SSHAuthPrivateKey}
+	for _, key := range needSecretKeys {
+		if _, ok := secret.Data[key]; !ok {
+			err := errors.Errorf("'%s' not in git credentials secret", key)
+			return nil, err
+		}
 	}
 
 	return secret, nil
