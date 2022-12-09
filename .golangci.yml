@@ -44,7 +44,7 @@ linters-settings:
 
   gocyclo:
     # minimal code complexity to report, 30 by default (but we recommend 10-20)
-    min-complexity: 30
+    min-complexity: 32
 
   maligned:
     # print struct with more effective memory layout or not, false by default
@@ -176,6 +176,14 @@ issues:
         - errcheck
 
     - text: "don't use an underscore"
+      linters:
+        - revive
+
+    - text: "package-comments:"
+      linters:
+        - revive
+    
+    - text: "exported:"
       linters:
         - revive
 

@@ -2,15 +2,18 @@ package normal
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"text/template"
 	"time"
 
 	"gotest.tools/assert"
+	coreV1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -28,9 +31,9 @@ var (
 		"examples/alibaba/eip/configuration_eip_remote_subdirectory.yaml",
 		"examples/alibaba/oss/configuration_hcl_bucket.yaml",
 	}
-	testConfigurationsForceDelete = "examples/random/configuration_force_delete.yaml"
-
-	chartNamespace = "terraform"
+	testConfigurationsForceDelete             = "examples/random/configuration_force_delete.yaml"
+	testConfigurationsGitCredsSecretReference = "../examples/random/configuration_git_ssh.yaml"
+	chartNamespace                            = "terraform"
 )
 
 type ConfigurationAttr struct {
@@ -282,6 +285,81 @@ func TestForceDeleteConfiguration(t *testing.T) {
 			break
 		}
 	}
+}
+
+func TestGitCredentialsSecretReference(t *testing.T) {
+	configuration := ConfigurationAttr{
+		Name:                   "random-e2e-git-creds-secret-ref",
+		YamlPath:               testConfigurationsGitCredsSecretReference,
+		TFConfigMapName:        "tf-random-e2e-git-creds-secret-ref",
+		BackendStateSecretName: "tfstate-default-random-e2e-git-creds-secret-ref",
+		OutputsSecretName:      "random-e2e-git-creds-secret-ref-conn",
+		VariableSecretName:     "variable-random-e2e-git-creds-secret-ref",
+	}
+
+	clientSet, err := client.Init()
+	assert.NilError(t, err)
+	pwd, _ := os.Getwd()
+	gitServer := filepath.Join(pwd, "..", "../examples/git-credentials")
+	gitServerApplyCmd := fmt.Sprintf("kubectl apply -f %s", gitServer)
+	gitServerDeleteCmd := fmt.Sprintf("kubectl delete -f %s", gitServer)
+	gitSshAuthSecretYaml := filepath.Join(gitServer, "git-ssh-auth-secret.yaml")
+
+	beforeApply := func(ctx *TestContext) {
+		err = exec.Command("bash", "-c", gitServerApplyCmd).Run()
+		assert.NilError(t, err)
+
+		klog.Info("- Checking git-server pod status")
+		for i := 0; i < 120; i++ {
+			pod, _ := clientSet.CoreV1().Pods("default").Get(ctx, "git-server", v1.GetOptions{})
+			conditions := pod.Status.Conditions
+			var index int
+			for count, condition := range conditions {
+				index = count
+				if condition.Status == "True" && condition.Type == coreV1.PodReady {
+					klog.Info("- pod=git-server ", condition.Type, "=", condition.Status)
+					break
+				}
+			}
+			if conditions[index].Status == "True" && conditions[index].Type == coreV1.PodReady {
+				break
+			}
+			if i == 119 {
+				t.Error("git-server pod is not running")
+			}
+			time.Sleep(10 * time.Second)
+		}
+
+		getKnownHostsCmd := "kubectl exec pod/git-server -- ssh-keyscan git-server"
+		knownHosts, err := exec.Command("bash", "-c", getKnownHostsCmd).Output()
+		assert.NilError(t, err)
+
+		gitSshAuthSecretTmpl := filepath.Join(gitServer, "templates/git-ssh-auth-secret.tmpl")
+		tmpl := template.Must(template.ParseFiles(gitSshAuthSecretTmpl))
+		gitSshAuthSecretYamlFile, err := os.Create(gitSshAuthSecretYaml)
+		assert.NilError(t, err)
+		err = tmpl.Execute(gitSshAuthSecretYamlFile, base64.StdEncoding.EncodeToString(knownHosts))
+		assert.NilError(t, err)
+
+		err = exec.Command("bash", "-c", gitServerApplyCmd).Run()
+		assert.NilError(t, err)
+	}
+
+	cleanUp := func(ctx *TestContext) {
+		err = exec.Command("bash", "-c", gitServerDeleteCmd).Run()
+		assert.NilError(t, err)
+		os.Remove(gitSshAuthSecretYaml)
+	}
+
+	testBase(
+		t,
+		configuration,
+		Injector{
+			BeforeApplyConfiguration: beforeApply,
+			CleanUp:                  cleanUp,
+		},
+		false,
+	)
 }
 
 //func TestBasicConfigurationRegression(t *testing.T) {

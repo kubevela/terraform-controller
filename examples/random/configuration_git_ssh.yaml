@@ -1,0 +1,15 @@
+apiVersion: terraform.core.oam.dev/v1beta2
+kind: Configuration
+metadata:
+  name: random-e2e-git-creds-secret-ref
+spec:
+  inlineCredentials: true
+  remote: git@git-server:simple-terraform-module.git
+  variable:
+    algorithm: RSA
+  writeConnectionSecretToRef:
+    name: random-e2e-git-creds-secret-ref-conn
+  gitCredentialsSecretReference:
+        name: git-ssh-auth
+        namespace: default
+

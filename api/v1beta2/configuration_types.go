@@ -17,6 +17,7 @@ limitations under the License.
 package v1beta2
 
 import (
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
@@ -75,6 +76,9 @@ type ConfigurationSpec struct {
 	// ForceDelete will force delete Configuration no matter which state it is or whether it has provisioned some resources
 	// It will help delete Configuration in unexpected cases.
 	ForceDelete *bool `json:"forceDelete,omitempty"`
+
+	// GitCredentialsSecretReference specifies the reference to the secret containing the git credentials
+	GitCredentialsSecretReference *v1.SecretReference `json:"gitCredentialsSecretReference,omitempty"`
 }
 
 // ConfigurationStatus defines the observed state of Configuration
@@ -150,7 +154,7 @@ type S3BackendConf struct {
 // +kubebuilder:object:root=true
 
 // Configuration is the Schema for the configurations API
-//+kubebuilder:storageversion
+// +kubebuilder:storageversion
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="STATE",type="string",JSONPath=".status.apply.state"
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"

@@ -17,6 +17,7 @@ limitations under the License.
 package v1beta1
 
 import (
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
@@ -47,6 +48,9 @@ type ConfigurationSpec struct {
 	Path string `json:"path,omitempty"`
 
 	BaseConfigurationSpec `json:",inline"`
+
+	// GitCredentialsSecretReference specifies the reference to the secret containing the git credentials
+	GitCredentialsSecretReference *v1.SecretReference `json:"gitCredentialsSecretReference,omitempty"`
 }
 
 // BaseConfigurationSpec defines the common fields of a ConfigurationSpec
@@ -113,6 +117,7 @@ type Backend struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="STATE",type="string",JSONPath=".status.apply.state"
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
+// +kubebuilder:resource:shortName={conf,terraform-conf}
 type Configuration struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
