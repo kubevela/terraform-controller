@@ -18,7 +18,7 @@ jobs:
         TARGETS: [ linux/amd64, darwin/amd64, windows/amd64, linux/arm64, darwin/arm64 ]
     env:
       BACKUP_RESTORE_TOOL_VERSION_KEY: github.com/kubevela/terraform-controller/version.BackupRestoreToolVersion
-      BACKUP_RESTORE_TOOL_VERSION: cat hack/tool/backup_restore/VERSION
+      BACKUP_RESTORE_TOOL_VERSION: $(cat VERSION)
       GO_BUILD_ENV: GO111MODULE=on CGO_ENABLED=0
       DIST_DIRS: find * -type d -exec
     steps:
