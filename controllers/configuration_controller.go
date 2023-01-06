@@ -69,6 +69,11 @@ const (
 	GitAuthConfigVolumeName = "git-auth-configuration"
 	// GitAuthConfigVolumeMountPath is the volume mount path for git auth configurtaion
 	GitAuthConfigVolumeMountPath = "/root/.ssh"
+	// TerraformCredentialsConfigVolumeName is the volume name for terraform auth configurtaion
+	TerraformCredentialsConfigVolumeName = "terraform-credentials-configuration"
+	// TerraformCredentialsConfigVolumeMountPath is the volume mount path for terraform auth configurtaion
+	TerraformCredentialsConfigVolumeMountPath = "/root/.terraform.d"
+
 )
 
 const (
@@ -98,6 +103,10 @@ const (
 
 const (
 	GitCredsKnownHosts = "known_hosts"
+	// Terraform credentials
+	TerraformCredentials = "credentials.tfrc.json"
+	// Terraform Registry
+	TerraformRegistry = "terraformrc"
 )
 
 // ConfigurationReconciler reconciles a Configuration object.
@@ -257,6 +266,7 @@ type TFConfigurationMeta struct {
 	Credentials                   map[string]string
 	JobEnv                        map[string]interface{}
 	GitCredentialsSecretReference *v1.SecretReference
+	TerraformCredentialsSecretReference *v1.SecretReference
 
 	Backend backend.Backend
 	// JobNodeSelector Expose the node selector of job to the controller level
@@ -320,6 +330,10 @@ func initTFConfigurationMeta(req ctrl.Request, configuration v1beta2.Configurati
 
 	if configuration.Spec.GitCredentialsSecretReference != nil {
 		meta.GitCredentialsSecretReference = configuration.Spec.GitCredentialsSecretReference
+	}
+
+	if configuration.Spec.TerraformCredentialsSecretReference != nil {
+		meta.TerraformCredentialsSecretReference = configuration.Spec.TerraformCredentialsSecretReference
 	}
 
 	return meta
@@ -571,6 +585,20 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 		}
 	}
 
+	if meta.TerraformCredentialsSecretReference != nil {
+		terraformCreds, err := GetTerraformCredentialsSecret(ctx, k8sClient, meta.TerraformCredentialsSecretReference)
+		if terraformCreds == nil {
+			msg := string(types.InvalidTerraformCredentialsSecretReference)
+			if err != nil {
+				msg = err.Error()
+			}
+			if updateStatusErr := meta.updateApplyStatus(ctx, k8sClient, types.InvalidTerraformCredentialsSecretReference, msg); updateStatusErr != nil {
+				return errors.Wrap(updateStatusErr, msg)
+			}
+			return errors.New(msg)
+		}
+	}
+
 	// Render configuration with backend
 	completeConfiguration, backendConf, err := meta.RenderConfiguration(configuration, configurationType)
 	if err != nil {
@@ -786,6 +814,32 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 			})
 	}
 
+	if meta.TerraformCredentialsSecretReference != nil {
+		initContainerVolumeMounts = append(initContainerVolumeMounts,
+			v1.VolumeMount{
+				Name:      TerraformCredentialsConfigVolumeName,
+				MountPath: TerraformCredentialsConfigVolumeMountPath,
+			})
+
+		// copy the terraformrc file from /root/terraform.d/ to /root
+        copyCommand = "cp /root/.terraform.d/terraformrc /root/.terraformrc"
+
+		command := []string{
+			"sh",
+			"-c",
+			copyCommand,
+		}
+
+		initContainers = append(initContainers,
+			v1.Container{
+				Name:            "terraform-credentials-configuration",
+				Image:           meta.GitImage,
+				ImagePullPolicy: v1.PullIfNotPresent,
+				Command:         command,
+				VolumeMounts:    initContainerVolumeMounts,
+			})
+	}
+
 	// run `terraform init`
 	tfPreApplyInitContainer = v1.Container{
 		Name:            terraformInitContainerName,
@@ -901,6 +955,10 @@ func (meta *TFConfigurationMeta) assembleExecutorVolumes() []v1.Volume {
 		gitAuthConfigVolume := meta.createGitAuthConfigVolume()
 		executorVolumes = append(executorVolumes, gitAuthConfigVolume)
 	}
+	if meta.terraformCredentialsSecretReference != nil {
+		terraformCredentialsConfigVolume := meta.createTerraformCredentialsConfigVolume()
+		executorVolumes = append(executorVolumes, terraformCredentialsConfigVolume)
+	}
 	return executorVolumes
 }
 
@@ -927,6 +985,16 @@ func (meta *TFConfigurationMeta) createGitAuthConfigVolume() v1.Volume {
 	gitAuthSecretVolume := v1.Volume{Name: GitAuthConfigVolumeName}
 	gitAuthSecretVolume.Secret = &gitAuthSecretVolumeSource
 	return gitAuthSecretVolume
+}
+
+func (meta *TFConfigurationMeta) createTerraformCredentialsConfigVolume() v1.Volume {
+	var terraformSecretDefaultMode int32 = 0400
+	terraformCredentialsSecretVolumeSource := v1.SecretVolumeSource{}
+	terraformCredentialsSecretVolumeSource.SecretName = meta.TerraformCredentialsSecretReference.Name
+	terraformCredentialsSecretVolumeSource.DefaultMode = &terraformSecretDefaultMode
+	terraformCredentialsSecretVolume := v1.Volume{Name: TerraformCredentialsConfigVolumeName}
+	terraformCredentialsSecretVolume.Secret = &terraformCredentialsSecretVolumeSource
+	return terraformCredentialsSecretVolume
 }
 
 // TfStateProperty is the tf state property for an output
@@ -1357,4 +1425,28 @@ func GetGitCredentialsSecret(ctx context.Context, k8sClient client.Client, secre
 	}
 
 	return secret, nil
+}
+
+
+// GetTerraformCredentialsSecret will get the secret containing the terraform credentials and terrform registry details
+func GetTerraformCredentialsSecret(ctx context.Context, k8sClient client.Client, secretRef *v1.SecretReference) (*v1.Secret, error){
+	secret := &v1.Secret{}
+    namespacedName := client.ObjectKey{Name: secretRef.Name, Namespace: secretRef.Namespace}
+	err := k8sClient.Get(ctx, namespacedName, secret)
+	if err != nil {
+		errMsg := "Failed to get terraform credentials secret"
+		klog.ErrorS(err, errMsg, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
+		return nil, errors.Wrap(err, errMsg)
+	}
+
+	needSecretKeys := []string{TerraformRegistry, TerraformCredentials}
+	for _, key := range needSecretKeys {
+		if _, ok := secret.Data[key]; !ok {
+			err := errors.Errorf("'%s' not in git credentials secret", key)
+			return nil, err
+		}
+	}
+
+	return secret, nil
+
 }

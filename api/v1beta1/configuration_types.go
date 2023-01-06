@@ -51,6 +51,9 @@ type ConfigurationSpec struct {
 
 	// GitCredentialsSecretReference specifies the reference to the secret containing the git credentials
 	GitCredentialsSecretReference *v1.SecretReference `json:"gitCredentialsSecretReference,omitempty"`
+
+	// TerraformCredentialsSecretReference specifies the reference to the secret containing the terraform credentials and terraform registry details
+	TerraformCredentialsSecretReference *v1.SecretReference `json:"terraformCredentialsSecretReference,omitempty"`
 }
 
 // BaseConfigurationSpec defines the common fields of a ConfigurationSpec

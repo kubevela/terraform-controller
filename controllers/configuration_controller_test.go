@@ -1618,7 +1618,7 @@ func TestAssembleTerraformJobWithGitCredentialsSecretRef(t *testing.T) {
 		GitCredentialsSecretReference: &corev1.SecretReference{
 			Namespace: "default",
 			Name:      "git-ssh",
-		},
+		}
 	}
 
 	job := meta.assembleTerraformJob(TerraformApply)
@@ -1637,6 +1637,45 @@ func TestAssembleTerraformJobWithGitCredentialsSecretRef(t *testing.T) {
 	}
 	assert.Contains(t, spec.InitContainers[1].VolumeMounts, gitSecretVolumeMount)
 	assert.Contains(t, spec.Volumes, gitAuthSecretVolume)
+}
+
+func TestAssembleTerraformJobWithTerraformCredentialsSecretRef(t *testing.T) {
+	meta := &TFConfigurationMeta{
+		Name:                "a",
+		ConfigurationCMName: "b",
+		BusyboxImage:        "c",
+		GitImage:            "d",
+		Namespace:           "e",
+		TerraformImage:      "f",
+		RemoteGit:           "g",
+		GitCredentialsSecretReference: &corev1.SecretReference{
+			Namespace: "default",
+			Name:      "git-ssh",
+		},
+		terraformCredentialsSecretReference: &corev1.SecretReference{
+			Namespace: "default",
+			Name:      "terraform-credentials",
+		},
+	}
+
+	job := meta.assembleTerraformJob(TerraformApply)
+	spec := job.Spec.Template.Spec
+
+	var terraformSecretDefaultMode int32 = 0400
+	terraformCredentialsSecretVolume := corev1.Volume{Name: TerraformCredentialsConfigVolumeName}
+	terraformCredentialsSecretVolume.Secret = &corev1.SecretVolumeSource{
+		SecretName:  "terraform-credentials",
+		DefaultMode: &gitSecretDefaultMode,
+	}
+
+	terraformCredentialsSecretVolumeMount := corev1.VolumeMount{
+		Name:      TerraformCredentialsConfigVolumeName,
+		MountPath: TerraformCredentialsConfigVolumeMountPath,
+	}
+
+	assert.Contains(t, spec.InitContainers[1].VolumeMounts, terraformCredentialsSecretVolumeMount)
+	assert.Contains(t, spec.Volumes, terraformCredentialsSecretVolume)
+
 }
 
 func TestTfStatePropertyToToProperty(t *testing.T) {

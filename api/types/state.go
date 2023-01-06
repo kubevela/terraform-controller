@@ -35,6 +35,7 @@ const (
 	InvalidRegion                        ConfigurationState = "InvalidRegion"
 	TerraformInitError                   ConfigurationState = "TerraformInitError"
 	InvalidGitCredentialsSecretReference ConfigurationState = "InvalidGitCredentialsSecretReference"
+	InvalidTerraformCredentialsSecretReference ConfigurationState = "InvalidTerraformCredentialsSecretReference"
 )
 
 // Stage is the Terraform stage
