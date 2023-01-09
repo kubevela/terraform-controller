@@ -1618,7 +1618,7 @@ func TestAssembleTerraformJobWithGitCredentialsSecretRef(t *testing.T) {
 		GitCredentialsSecretReference: &corev1.SecretReference{
 			Namespace: "default",
 			Name:      "git-ssh",
-		}
+		},
 	}
 
 	job := meta.assembleTerraformJob(TerraformApply)
@@ -1652,7 +1652,7 @@ func TestAssembleTerraformJobWithTerraformCredentialsSecretRef(t *testing.T) {
 			Namespace: "default",
 			Name:      "git-ssh",
 		},
-		terraformCredentialsSecretReference: &corev1.SecretReference{
+		TerraformCredentialsSecretReference: &corev1.SecretReference{
 			Namespace: "default",
 			Name:      "terraform-credentials",
 		},
@@ -1673,7 +1673,7 @@ func TestAssembleTerraformJobWithTerraformCredentialsSecretRef(t *testing.T) {
 		MountPath: TerraformCredentialsConfigVolumeMountPath,
 	}
 
-	assert.Contains(t, spec.InitContainers[1].VolumeMounts, terraformCredentialsSecretVolumeMount)
+	assert.Contains(t, spec.InitContainers[2].VolumeMounts, terraformCredentialsSecretVolumeMount)
 	assert.Contains(t, spec.Volumes, terraformCredentialsSecretVolume)
 
 }
@@ -2696,4 +2696,137 @@ func TestCheckGitCredentialsSecretReference(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCheckTerraformCredentialsSecretReference(t *testing.T) {
+	ctx := context.Background()
+	scheme := runtime.NewScheme()
+	corev1.AddToScheme(scheme)
+	k8sClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+
+	credentialstfrcjson := []byte("tfcreds")
+	terraformrc := []byte("tfrc")
+
+	secret := &corev1.Secret{
+		ObjectMeta: v1.ObjectMeta{
+			Namespace: "default",
+			Name:      "terraform-creds",
+		},
+		Data: map[string][]byte{
+			"credentials.tfrc.json": credentialstfrcjson,
+			"terraformrc":           terraformrc,
+		},
+		Type: corev1.SecretTypeSSHAuth,
+	}
+	assert.Nil(t, k8sClient.Create(ctx, secret))
+	assert.Nil(t, k8sClient.Get(ctx, client.ObjectKeyFromObject(secret), secret))
+
+	secretNotTerraformCreds := &corev1.Secret{
+		ObjectMeta: v1.ObjectMeta{
+			Namespace: "default",
+			Name:      "terraform-creds-no-creds",
+		},
+		Data: map[string][]byte{
+			"terraformrc": terraformrc,
+		},
+		Type: corev1.SecretTypeSSHAuth,
+	}
+
+	assert.Nil(t, k8sClient.Create(ctx, secretNotTerraformCreds))
+
+	secretNotTerraformRc := &corev1.Secret{
+		ObjectMeta: v1.ObjectMeta{
+			Namespace: "default",
+			Name:      "terraform-creds-no-terraformrc",
+		},
+		Data: map[string][]byte{
+			"credentials.tfrc.json": credentialstfrcjson,
+		},
+		Type: corev1.SecretTypeSSHAuth,
+	}
+
+	assert.Nil(t, k8sClient.Create(ctx, secretNotTerraformRc))
+
+	type args struct {
+		k8sClient                           client.Client
+		TerraformCredentialsSecretReference *corev1.SecretReference
+	}
+
+	type want struct {
+		secret *corev1.Secret
+		errMsg string
+	}
+
+	testcases := []struct {
+		name string
+		args args
+		want want
+	}{
+		{
+			name: "secret not found",
+			args: args{
+				k8sClient: k8sClient,
+				TerraformCredentialsSecretReference: &corev1.SecretReference{
+					Namespace: "default",
+					Name:      "terraform-credentials",
+				},
+			},
+			want: want{
+				errMsg: "Failed to get terraform credentials secret: secrets \"terraform-credentials\" not found",
+			},
+		},
+		{
+			name: "key 'terraformrc' not in terraform credentials secret",
+			args: args{
+				k8sClient: k8sClient,
+				TerraformCredentialsSecretReference: &corev1.SecretReference{
+					Namespace: "default",
+					Name:      "terraform-creds-no-terraformrc",
+				},
+			},
+			want: want{
+				errMsg: fmt.Sprintf("'%s' not in terraform credentials secret", TerraformRegistry),
+			},
+		},
+		{
+			name: "key 'credentials.tfrc.json' not in terraform credentials secret",
+			args: args{
+				k8sClient: k8sClient,
+				TerraformCredentialsSecretReference: &corev1.SecretReference{
+					Namespace: "default",
+					Name:      "terraform-creds-no-creds",
+				},
+			},
+			want: want{
+				errMsg: fmt.Sprintf("'%s' not in terraform credentials secret", TerraformCredentials),
+			},
+		},
+		{
+			name: "secret exists",
+			args: args{
+				k8sClient: k8sClient,
+				TerraformCredentialsSecretReference: &corev1.SecretReference{
+					Namespace: "default",
+					Name:      "terraform-creds",
+				},
+			},
+			want: want{
+				secret: secret,
+			},
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			sec, err := GetTerraformCredentialsSecret(ctx, tc.args.k8sClient, tc.args.TerraformCredentialsSecretReference)
+
+			if err != nil {
+				assert.EqualError(t, err, tc.want.errMsg)
+			}
+			if tc.want.secret != nil {
+				assert.EqualValues(t, sec, tc.want.secret)
+			}
+		})
+	}
+
 }

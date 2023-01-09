@@ -73,7 +73,6 @@ const (
 	TerraformCredentialsConfigVolumeName = "terraform-credentials-configuration"
 	// TerraformCredentialsConfigVolumeMountPath is the volume mount path for terraform auth configurtaion
 	TerraformCredentialsConfigVolumeMountPath = "/root/.terraform.d"
-
 )
 
 const (
@@ -245,27 +244,27 @@ type ResourceQuota struct {
 
 // TFConfigurationMeta is all the metadata of a Configuration
 type TFConfigurationMeta struct {
-	Name                          string
-	Namespace                     string
-	ControllerNamespace           string
-	ConfigurationType             types.ConfigurationType
-	CompleteConfiguration         string
-	RemoteGit                     string
-	RemoteGitPath                 string
-	ConfigurationChanged          bool
-	EnvChanged                    bool
-	ConfigurationCMName           string
-	ApplyJobName                  string
-	DestroyJobName                string
-	Envs                          []v1.EnvVar
-	ProviderReference             *crossplane.Reference
-	VariableSecretName            string
-	VariableSecretData            map[string][]byte
-	DeleteResource                bool
-	Region                        string
-	Credentials                   map[string]string
-	JobEnv                        map[string]interface{}
-	GitCredentialsSecretReference *v1.SecretReference
+	Name                                string
+	Namespace                           string
+	ControllerNamespace                 string
+	ConfigurationType                   types.ConfigurationType
+	CompleteConfiguration               string
+	RemoteGit                           string
+	RemoteGitPath                       string
+	ConfigurationChanged                bool
+	EnvChanged                          bool
+	ConfigurationCMName                 string
+	ApplyJobName                        string
+	DestroyJobName                      string
+	Envs                                []v1.EnvVar
+	ProviderReference                   *crossplane.Reference
+	VariableSecretName                  string
+	VariableSecretData                  map[string][]byte
+	DeleteResource                      bool
+	Region                              string
+	Credentials                         map[string]string
+	JobEnv                              map[string]interface{}
+	GitCredentialsSecretReference       *v1.SecretReference
 	TerraformCredentialsSecretReference *v1.SecretReference
 
 	Backend backend.Backend
@@ -822,7 +821,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 			})
 
 		// copy the terraformrc file from /root/terraform.d/ to /root
-        copyCommand = "cp /root/.terraform.d/terraformrc /root/.terraformrc"
+		copyCommand := "cp /root/.terraform.d/terraformrc /root/.terraformrc"
 
 		command := []string{
 			"sh",
@@ -832,7 +831,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 
 		initContainers = append(initContainers,
 			v1.Container{
-				Name:            "terraform-credentials-configuration",
+				Name:            "terraform-creds-configuration",
 				Image:           meta.GitImage,
 				ImagePullPolicy: v1.PullIfNotPresent,
 				Command:         command,
@@ -955,10 +954,11 @@ func (meta *TFConfigurationMeta) assembleExecutorVolumes() []v1.Volume {
 		gitAuthConfigVolume := meta.createGitAuthConfigVolume()
 		executorVolumes = append(executorVolumes, gitAuthConfigVolume)
 	}
-	if meta.terraformCredentialsSecretReference != nil {
+	if meta.TerraformCredentialsSecretReference != nil {
 		terraformCredentialsConfigVolume := meta.createTerraformCredentialsConfigVolume()
 		executorVolumes = append(executorVolumes, terraformCredentialsConfigVolume)
 	}
+
 	return executorVolumes
 }
 
@@ -1427,11 +1427,10 @@ func GetGitCredentialsSecret(ctx context.Context, k8sClient client.Client, secre
 	return secret, nil
 }
 
-
 // GetTerraformCredentialsSecret will get the secret containing the terraform credentials and terrform registry details
-func GetTerraformCredentialsSecret(ctx context.Context, k8sClient client.Client, secretRef *v1.SecretReference) (*v1.Secret, error){
+func GetTerraformCredentialsSecret(ctx context.Context, k8sClient client.Client, secretRef *v1.SecretReference) (*v1.Secret, error) {
 	secret := &v1.Secret{}
-    namespacedName := client.ObjectKey{Name: secretRef.Name, Namespace: secretRef.Namespace}
+	namespacedName := client.ObjectKey{Name: secretRef.Name, Namespace: secretRef.Namespace}
 	err := k8sClient.Get(ctx, namespacedName, secret)
 	if err != nil {
 		errMsg := "Failed to get terraform credentials secret"
