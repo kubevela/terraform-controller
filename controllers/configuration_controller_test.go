@@ -1665,7 +1665,7 @@ func TestAssembleTerraformJobWithTerraformCredentialsSecretRef(t *testing.T) {
 	terraformCredentialsSecretVolume := corev1.Volume{Name: TerraformCredentialsConfigVolumeName}
 	terraformCredentialsSecretVolume.Secret = &corev1.SecretVolumeSource{
 		SecretName:  "terraform-credentials",
-		DefaultMode: &gitSecretDefaultMode,
+		DefaultMode: &terraformSecretDefaultMode,
 	}
 
 	terraformCredentialsSecretVolumeMount := corev1.VolumeMount{

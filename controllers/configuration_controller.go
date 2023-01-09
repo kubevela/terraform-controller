@@ -1442,7 +1442,7 @@ func GetTerraformCredentialsSecret(ctx context.Context, k8sClient client.Client,
 	needSecretKeys := []string{TerraformRegistry, TerraformCredentials}
 	for _, key := range needSecretKeys {
 		if _, ok := secret.Data[key]; !ok {
-			err := errors.Errorf("'%s' not in git credentials secret", key)
+			err := errors.Errorf("'%s' not in terraform credentials secret", key)
 			return nil, err
 		}
 	}
