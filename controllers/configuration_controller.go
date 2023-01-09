@@ -958,7 +958,6 @@ func (meta *TFConfigurationMeta) assembleExecutorVolumes() []v1.Volume {
 		terraformCredentialsConfigVolume := meta.createTerraformCredentialsConfigVolume()
 		executorVolumes = append(executorVolumes, terraformCredentialsConfigVolume)
 	}
-
 	return executorVolumes
 }
 
@@ -1426,6 +1425,7 @@ func GetGitCredentialsSecret(ctx context.Context, k8sClient client.Client, secre
 
 	return secret, nil
 }
+
 
 // GetTerraformCredentialsSecret will get the secret containing the terraform credentials and terrform registry details
 func GetTerraformCredentialsSecret(ctx context.Context, k8sClient client.Client, secretRef *v1.SecretReference) (*v1.Secret, error) {
