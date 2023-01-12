@@ -21,21 +21,23 @@ type ConfigurationState string
 
 // Reasons a resource is or is not ready.
 const (
-	Authorizing                          ConfigurationState = "Authorizing"
-	ProviderNotFound                     ConfigurationState = "ProviderNotFound"
-	ProviderNotReady                     ConfigurationState = "ProviderNotReady"
-	ConfigurationStaticCheckFailed       ConfigurationState = "ConfigurationSpecNotValid"
-	Available                            ConfigurationState = "Available"
-	ConfigurationProvisioningAndChecking ConfigurationState = "ProvisioningAndChecking"
-	ConfigurationDestroying              ConfigurationState = "Destroying"
-	ConfigurationApplyFailed             ConfigurationState = "ApplyFailed"
-	ConfigurationDestroyFailed           ConfigurationState = "DestroyFailed"
-	ConfigurationReloading               ConfigurationState = "ConfigurationReloading"
-	GeneratingOutputs                    ConfigurationState = "GeneratingTerraformOutputs"
-	InvalidRegion                        ConfigurationState = "InvalidRegion"
-	TerraformInitError                   ConfigurationState = "TerraformInitError"
-	InvalidGitCredentialsSecretReference ConfigurationState = "InvalidGitCredentialsSecretReference"
-	InvalidTerraformCredentialsSecretReference ConfigurationState = "InvalidTerraformCredentialsSecretReference"
+	Authorizing                                         ConfigurationState = "Authorizing"
+	ProviderNotFound                                    ConfigurationState = "ProviderNotFound"
+	ProviderNotReady                                    ConfigurationState = "ProviderNotReady"
+	ConfigurationStaticCheckFailed                      ConfigurationState = "ConfigurationSpecNotValid"
+	Available                                           ConfigurationState = "Available"
+	ConfigurationProvisioningAndChecking                ConfigurationState = "ProvisioningAndChecking"
+	ConfigurationDestroying                             ConfigurationState = "Destroying"
+	ConfigurationApplyFailed                            ConfigurationState = "ApplyFailed"
+	ConfigurationDestroyFailed                          ConfigurationState = "DestroyFailed"
+	ConfigurationReloading                              ConfigurationState = "ConfigurationReloading"
+	GeneratingOutputs                                   ConfigurationState = "GeneratingTerraformOutputs"
+	InvalidRegion                                       ConfigurationState = "InvalidRegion"
+	TerraformInitError                                  ConfigurationState = "TerraformInitError"
+	InvalidGitCredentialsSecretReference                ConfigurationState = "InvalidGitCredentialsSecretReference"
+	InvalidTerraformCredentialsSecretReference          ConfigurationState = "InvalidTerraformCredentialsSecretReference"
+	InvalidTerraformRegistryConfigMapReference          ConfigurationState = "InvalidTerraformRegistryConfigMapReference"
+	InvalidTerraformCredentialsHelperConfigMapReference ConfigurationState = "InvalidTerraformCredentialsHelperConfigMapReference"
 )
 
 // Stage is the Terraform stage

@@ -73,6 +73,14 @@ const (
 	TerraformCredentialsConfigVolumeName = "terraform-credentials-configuration"
 	// TerraformCredentialsConfigVolumeMountPath is the volume mount path for terraform auth configurtaion
 	TerraformCredentialsConfigVolumeMountPath = "/root/.terraform.d"
+	// TerraformRegistryConfigVolumeName is the volume name of the terraform registry configuration
+	TerraformRegistryConfigVolumeName = "terraform-registry-configuration"
+	// TerraformRegistryConfigVolumeMountPath is the volume mount path for registry configuration
+	TerraformRegistryConfigVolumeMountPath = "/root"
+	// TerraformCredentialsHelperConfigVolumeName is the volume name for terraform auth configurtaion
+	TerraformCredentialsHelperConfigVolumeName = "terraform-credentials-helper-configuration"
+	// TerraformCredentialsHelperConfigVolumeMountPath is the volume mount path for terraform auth configurtaion
+	TerraformCredentialsHelperConfigVolumeMountPath = "/root/.terraform.d/plugins"
 )
 
 const (
@@ -104,8 +112,8 @@ const (
 	GitCredsKnownHosts = "known_hosts"
 	// Terraform credentials
 	TerraformCredentials = "credentials.tfrc.json"
-	// Terraform Registry
-	TerraformRegistry = "terraformrc"
+	// Terraform Registry Configuration
+	TerraformRegistryConfig = ".terraformrc"
 )
 
 // ConfigurationReconciler reconciles a Configuration object.
@@ -244,28 +252,30 @@ type ResourceQuota struct {
 
 // TFConfigurationMeta is all the metadata of a Configuration
 type TFConfigurationMeta struct {
-	Name                                string
-	Namespace                           string
-	ControllerNamespace                 string
-	ConfigurationType                   types.ConfigurationType
-	CompleteConfiguration               string
-	RemoteGit                           string
-	RemoteGitPath                       string
-	ConfigurationChanged                bool
-	EnvChanged                          bool
-	ConfigurationCMName                 string
-	ApplyJobName                        string
-	DestroyJobName                      string
-	Envs                                []v1.EnvVar
-	ProviderReference                   *crossplane.Reference
-	VariableSecretName                  string
-	VariableSecretData                  map[string][]byte
-	DeleteResource                      bool
-	Region                              string
-	Credentials                         map[string]string
-	JobEnv                              map[string]interface{}
-	GitCredentialsSecretReference       *v1.SecretReference
-	TerraformCredentialsSecretReference *v1.SecretReference
+	Name                                         string
+	Namespace                                    string
+	ControllerNamespace                          string
+	ConfigurationType                            types.ConfigurationType
+	CompleteConfiguration                        string
+	RemoteGit                                    string
+	RemoteGitPath                                string
+	ConfigurationChanged                         bool
+	EnvChanged                                   bool
+	ConfigurationCMName                          string
+	ApplyJobName                                 string
+	DestroyJobName                               string
+	Envs                                         []v1.EnvVar
+	ProviderReference                            *crossplane.Reference
+	VariableSecretName                           string
+	VariableSecretData                           map[string][]byte
+	DeleteResource                               bool
+	Region                                       string
+	Credentials                                  map[string]string
+	JobEnv                                       map[string]interface{}
+	GitCredentialsSecretReference                *v1.SecretReference
+	TerraformCredentialsSecretReference          *v1.SecretReference
+	TerraformRegistryConfigMapReference          *v1.SecretReference
+	TerraformCredentialsHelperConfigMapReference *v1.SecretReference
 
 	Backend backend.Backend
 	// JobNodeSelector Expose the node selector of job to the controller level
@@ -333,6 +343,14 @@ func initTFConfigurationMeta(req ctrl.Request, configuration v1beta2.Configurati
 
 	if configuration.Spec.TerraformCredentialsSecretReference != nil {
 		meta.TerraformCredentialsSecretReference = configuration.Spec.TerraformCredentialsSecretReference
+	}
+
+	if configuration.Spec.TerraformRegistryConfigMapReference != nil {
+		meta.TerraformRegistryConfigMapReference = configuration.Spec.TerraformRegistryConfigMapReference
+	}
+
+	if configuration.Spec.TerraformCredentialsHelperConfigMapReference != nil {
+		meta.TerraformCredentialsHelperConfigMapReference = configuration.Spec.TerraformCredentialsHelperConfigMapReference
 	}
 
 	return meta
@@ -598,6 +616,34 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 		}
 	}
 
+	if meta.TerraformRegistryConfigMapReference != nil {
+		terraformRegistryConfig, err := GetTerraformRegistryConfigMap(ctx, k8sClient, meta.TerraformRegistryConfigMapReference)
+		if terraformRegistryConfig == nil {
+			msg := string(types.InvalidTerraformRegistryConfigMapReference)
+			if err != nil {
+				msg = err.Error()
+			}
+			if updateStatusErr := meta.updateApplyStatus(ctx, k8sClient, types.InvalidTerraformRegistryConfigMapReference, msg); updateStatusErr != nil {
+				return errors.Wrap(updateStatusErr, msg)
+			}
+			return errors.New(msg)
+		}
+	}
+
+	if meta.TerraformCredentialsHelperConfigMapReference != nil {
+		terraformCredentialsHelper, err := GetTerraformCredentialsHelperConfigMap(ctx, k8sClient, meta.TerraformCredentialsHelperConfigMapReference)
+		if terraformCredentialsHelper == nil {
+			msg := string(types.InvalidTerraformCredentialsHelperConfigMapReference)
+			if err != nil {
+				msg = err.Error()
+			}
+			if updateStatusErr := meta.updateApplyStatus(ctx, k8sClient, types.InvalidTerraformCredentialsHelperConfigMapReference, msg); updateStatusErr != nil {
+				return errors.Wrap(updateStatusErr, msg)
+			}
+			return errors.New(msg)
+		}
+	}
+
 	// Render configuration with backend
 	completeConfiguration, backendConf, err := meta.RenderConfiguration(configuration, configurationType)
 	if err != nil {
@@ -765,6 +811,30 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 		},
 	}
 
+	if meta.TerraformCredentialsSecretReference != nil {
+		initContainerVolumeMounts = append(initContainerVolumeMounts,
+			v1.VolumeMount{
+				Name:      TerraformCredentialsConfigVolumeName,
+				MountPath: TerraformCredentialsConfigVolumeMountPath,
+			})
+	}
+
+	if meta.TerraformRegistryConfigMapReference != nil {
+		initContainerVolumeMounts = append(initContainerVolumeMounts,
+			v1.VolumeMount{
+				Name:      TerraformRegistryConfigVolumeName,
+				MountPath: TerraformRegistryConfigVolumeMountPath,
+			})
+	}
+
+	if meta.TerraformCredentialsHelperConfigMapReference != nil {
+		initContainerVolumeMounts = append(initContainerVolumeMounts,
+			v1.VolumeMount{
+				Name:      TerraformCredentialsHelperConfigVolumeName,
+				MountPath: TerraformCredentialsHelperConfigVolumeMountPath,
+			})
+	}
+
 	// prepare local Terraform .tf files
 	initContainer = v1.Container{
 		Name:            "prepare-input-terraform-configurations",
@@ -806,32 +876,6 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 		initContainers = append(initContainers,
 			v1.Container{
 				Name:            "git-configuration",
-				Image:           meta.GitImage,
-				ImagePullPolicy: v1.PullIfNotPresent,
-				Command:         command,
-				VolumeMounts:    initContainerVolumeMounts,
-			})
-	}
-
-	if meta.TerraformCredentialsSecretReference != nil {
-		initContainerVolumeMounts = append(initContainerVolumeMounts,
-			v1.VolumeMount{
-				Name:      TerraformCredentialsConfigVolumeName,
-				MountPath: TerraformCredentialsConfigVolumeMountPath,
-			})
-
-		// copy the terraformrc file from /root/terraform.d/ to /root
-		copyCommand := "cp /root/.terraform.d/terraformrc /root/.terraformrc"
-
-		command := []string{
-			"sh",
-			"-c",
-			copyCommand,
-		}
-
-		initContainers = append(initContainers,
-			v1.Container{
-				Name:            "terraform-creds-configuration",
 				Image:           meta.GitImage,
 				ImagePullPolicy: v1.PullIfNotPresent,
 				Command:         command,
@@ -958,6 +1002,14 @@ func (meta *TFConfigurationMeta) assembleExecutorVolumes() []v1.Volume {
 		terraformCredentialsConfigVolume := meta.createTerraformCredentialsConfigVolume()
 		executorVolumes = append(executorVolumes, terraformCredentialsConfigVolume)
 	}
+	if meta.TerraformRegistryConfigMapReference != nil {
+		terraformRegistryConfigVolume := meta.createTerraformRegistryConfigVolume()
+		executorVolumes = append(executorVolumes, terraformRegistryConfigVolume)
+	}
+	if meta.TerraformCredentialsHelperConfigMapReference != nil {
+		terraformCredentialsHelperConfigVolume := meta.createTerraformCredentialsHelperConfigVolume()
+		executorVolumes = append(executorVolumes, terraformCredentialsHelperConfigVolume)
+	}
 	return executorVolumes
 }
 
@@ -994,6 +1046,26 @@ func (meta *TFConfigurationMeta) createTerraformCredentialsConfigVolume() v1.Vol
 	terraformCredentialsSecretVolume := v1.Volume{Name: TerraformCredentialsConfigVolumeName}
 	terraformCredentialsSecretVolume.Secret = &terraformCredentialsSecretVolumeSource
 	return terraformCredentialsSecretVolume
+}
+
+func (meta *TFConfigurationMeta) createTerraformRegistryConfigVolume() v1.Volume {
+	var terraformConfigMapDefaultMode int32 = 0400
+	terraformRegistryConfigMapVolumeSource := v1.ConfigMapVolumeSource{}
+	terraformRegistryConfigMapVolumeSource.Name = meta.TerraformRegistryConfigMapReference.Name
+	terraformRegistryConfigMapVolumeSource.DefaultMode = &terraformConfigMapDefaultMode
+	terraformRegistryConfigMapVolume := v1.Volume{Name: TerraformRegistryConfigVolumeName}
+	terraformRegistryConfigMapVolume.ConfigMap = &terraformRegistryConfigMapVolumeSource
+	return terraformRegistryConfigMapVolume
+}
+
+func (meta *TFConfigurationMeta) createTerraformCredentialsHelperConfigVolume() v1.Volume {
+	var terraformConfigMapDefaultMode int32 = 0400
+	terraformCredentialsHelperConfigMapVolumeSource := v1.ConfigMapVolumeSource{}
+	terraformCredentialsHelperConfigMapVolumeSource.Name = meta.TerraformCredentialsHelperConfigMapReference.Name
+	terraformCredentialsHelperConfigMapVolumeSource.DefaultMode = &terraformConfigMapDefaultMode
+	terraformCredentialsHelperConfigMapVolume := v1.Volume{Name: TerraformCredentialsHelperConfigVolumeName}
+	terraformCredentialsHelperConfigMapVolume.ConfigMap = &terraformCredentialsHelperConfigMapVolumeSource
+	return terraformCredentialsHelperConfigMapVolume
 }
 
 // TfStateProperty is the tf state property for an output
@@ -1426,8 +1498,7 @@ func GetGitCredentialsSecret(ctx context.Context, k8sClient client.Client, secre
 	return secret, nil
 }
 
-
-// GetTerraformCredentialsSecret will get the secret containing the terraform credentials and terrform registry details
+// GetTerraformCredentialsSecret will get the secret containing the terraform credentials
 func GetTerraformCredentialsSecret(ctx context.Context, k8sClient client.Client, secretRef *v1.SecretReference) (*v1.Secret, error) {
 	secret := &v1.Secret{}
 	namespacedName := client.ObjectKey{Name: secretRef.Name, Namespace: secretRef.Namespace}
@@ -1438,7 +1509,7 @@ func GetTerraformCredentialsSecret(ctx context.Context, k8sClient client.Client,
 		return nil, errors.Wrap(err, errMsg)
 	}
 
-	needSecretKeys := []string{TerraformRegistry, TerraformCredentials}
+	needSecretKeys := []string{TerraformCredentials}
 	for _, key := range needSecretKeys {
 		if _, ok := secret.Data[key]; !ok {
 			err := errors.Errorf("'%s' not in terraform credentials secret", key)
@@ -1448,4 +1519,39 @@ func GetTerraformCredentialsSecret(ctx context.Context, k8sClient client.Client,
 
 	return secret, nil
 
+}
+
+// GetTerraformRegistryConfigMap will get the config map containing the terraform registry configuration
+func GetTerraformRegistryConfigMap(ctx context.Context, k8sClient client.Client, configMapRef *v1.SecretReference) (*v1.ConfigMap, error) {
+	configMap := &v1.ConfigMap{}
+	namespacedName := client.ObjectKey{Name: configMapRef.Name, Namespace: configMapRef.Namespace}
+	err := k8sClient.Get(ctx, namespacedName, configMap)
+	if err != nil {
+		errMsg := "Failed to get the terraform registry config configmap"
+		klog.ErrorS(err, errMsg, "Name", configMapRef.Name, "Namespace", configMapRef.Namespace)
+		return nil, errors.Wrap(err, errMsg)
+	}
+	neededKeys := []string{TerraformRegistryConfig}
+	for _, key := range neededKeys {
+		if _, ok := configMap.Data[key]; !ok {
+			err := errors.Errorf("'%s' not in terraform registry configuration configmap", key)
+			return nil, err
+		}
+	}
+
+	return configMap, nil
+}
+
+// GetTerraformCredentialsHelperConfigMap get the config map containing the terraform credentials helper
+func GetTerraformCredentialsHelperConfigMap(ctx context.Context, k8sClient client.Client, configMapRef *v1.SecretReference) (*v1.ConfigMap, error) {
+	configMap := &v1.ConfigMap{}
+	namespacedName := client.ObjectKey{Name: configMapRef.Name, Namespace: configMapRef.Namespace}
+	err := k8sClient.Get(ctx, namespacedName, configMap)
+	if err != nil {
+		errMsg := "Failed to get the terraform credentials helper configmap"
+		klog.ErrorS(err, errMsg, "Name", configMapRef.Name, "Namespace", configMapRef.Namespace)
+		return nil, errors.Wrap(err, errMsg)
+	}
+
+	return configMap, nil
 }
