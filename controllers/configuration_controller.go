@@ -73,10 +73,10 @@ const (
 	TerraformCredentialsConfigVolumeName = "terraform-credentials-configuration"
 	// TerraformCredentialsConfigVolumeMountPath is the volume mount path for terraform auth configurtaion
 	TerraformCredentialsConfigVolumeMountPath = "/root/.terraform.d"
-	// TerraformRegistryConfigVolumeName is the volume name of the terraform registry configuration
-	TerraformRegistryConfigVolumeName = "terraform-registry-configuration"
-	// TerraformRegistryConfigVolumeMountPath is the volume mount path for registry configuration
-	TerraformRegistryConfigVolumeMountPath = "/root"
+	// TerraformRCConfigVolumeName is the volume name of the terraform registry configuration
+	TerraformRCConfigVolumeName = "terraform-rc-configuration"
+	// TerraformRCConfigVolumeMountPath is the volume mount path for registry configuration
+	TerraformRCConfigVolumeMountPath = "/root"
 	// TerraformCredentialsHelperConfigVolumeName is the volume name for terraform auth configurtaion
 	TerraformCredentialsHelperConfigVolumeName = "terraform-credentials-helper-configuration"
 	// TerraformCredentialsHelperConfigVolumeMountPath is the volume mount path for terraform auth configurtaion
@@ -822,8 +822,8 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 	if meta.TerraformRCConfigMapReference != nil {
 		initContainerVolumeMounts = append(initContainerVolumeMounts,
 			v1.VolumeMount{
-				Name:      TerraformRegistryConfigVolumeName,
-				MountPath: TerraformRegistryConfigVolumeMountPath,
+				Name:      TerraformRCConfigVolumeName,
+				MountPath: TerraformRCConfigVolumeMountPath,
 			})
 	}
 
@@ -995,19 +995,19 @@ func (meta *TFConfigurationMeta) assembleExecutorVolumes() []v1.Volume {
 	tfBackendVolume := meta.createTFBackendVolume()
 	executorVolumes := []v1.Volume{workingVolume, inputTFConfigurationVolume, tfBackendVolume}
 	if meta.GitCredentialsSecretReference != nil {
-		gitAuthConfigVolume := meta.createGitAuthConfigVolume()
+		gitAuthConfigVolume := meta.createSecretOrConfigMapVolume(true, meta.GitCredentialsSecretReference.Name, GitAuthConfigVolumeName)
 		executorVolumes = append(executorVolumes, gitAuthConfigVolume)
 	}
 	if meta.TerraformCredentialsSecretReference != nil {
-		terraformCredentialsConfigVolume := meta.createTerraformCredentialsConfigVolume()
+		terraformCredentialsConfigVolume := meta.createSecretOrConfigMapVolume(true, meta.TerraformCredentialsSecretReference.Name, TerraformCredentialsConfigVolumeName)
 		executorVolumes = append(executorVolumes, terraformCredentialsConfigVolume)
 	}
 	if meta.TerraformRCConfigMapReference != nil {
-		terraformRegistryConfigVolume := meta.createTerraformRegistryConfigVolume()
+		terraformRegistryConfigVolume := meta.createSecretOrConfigMapVolume(false, meta.TerraformRCConfigMapReference.Name, TerraformRCConfigVolumeName)
 		executorVolumes = append(executorVolumes, terraformRegistryConfigVolume)
 	}
 	if meta.TerraformCredentialsHelperConfigMapReference != nil {
-		terraformCredentialsHelperConfigVolume := meta.createTerraformCredentialsHelperConfigVolume()
+		terraformCredentialsHelperConfigVolume := meta.createSecretOrConfigMapVolume(false, meta.TerraformCredentialsHelperConfigMapReference.Name, TerraformCredentialsHelperConfigVolumeName)
 		executorVolumes = append(executorVolumes, terraformCredentialsHelperConfigVolume)
 	}
 	return executorVolumes
@@ -1028,44 +1028,21 @@ func (meta *TFConfigurationMeta) createTFBackendVolume() v1.Volume {
 	return gitVolume
 }
 
-func (meta *TFConfigurationMeta) createGitAuthConfigVolume() v1.Volume {
-	var gitSecretDefaultMode int32 = 0400
-	gitAuthSecretVolumeSource := v1.SecretVolumeSource{}
-	gitAuthSecretVolumeSource.SecretName = meta.GitCredentialsSecretReference.Name
-	gitAuthSecretVolumeSource.DefaultMode = &gitSecretDefaultMode
-	gitAuthSecretVolume := v1.Volume{Name: GitAuthConfigVolumeName}
-	gitAuthSecretVolume.Secret = &gitAuthSecretVolumeSource
-	return gitAuthSecretVolume
-}
-
-func (meta *TFConfigurationMeta) createTerraformCredentialsConfigVolume() v1.Volume {
-	var terraformSecretDefaultMode int32 = 0400
-	terraformCredentialsSecretVolumeSource := v1.SecretVolumeSource{}
-	terraformCredentialsSecretVolumeSource.SecretName = meta.TerraformCredentialsSecretReference.Name
-	terraformCredentialsSecretVolumeSource.DefaultMode = &terraformSecretDefaultMode
-	terraformCredentialsSecretVolume := v1.Volume{Name: TerraformCredentialsConfigVolumeName}
-	terraformCredentialsSecretVolume.Secret = &terraformCredentialsSecretVolumeSource
-	return terraformCredentialsSecretVolume
-}
-
-func (meta *TFConfigurationMeta) createTerraformRegistryConfigVolume() v1.Volume {
-	var terraformConfigMapDefaultMode int32 = 0400
-	terraformRegistryConfigMapVolumeSource := v1.ConfigMapVolumeSource{}
-	terraformRegistryConfigMapVolumeSource.Name = meta.TerraformRCConfigMapReference.Name
-	terraformRegistryConfigMapVolumeSource.DefaultMode = &terraformConfigMapDefaultMode
-	terraformRegistryConfigMapVolume := v1.Volume{Name: TerraformRegistryConfigVolumeName}
-	terraformRegistryConfigMapVolume.ConfigMap = &terraformRegistryConfigMapVolumeSource
-	return terraformRegistryConfigMapVolume
-}
-
-func (meta *TFConfigurationMeta) createTerraformCredentialsHelperConfigVolume() v1.Volume {
-	var terraformConfigMapDefaultMode int32 = 0400
-	terraformCredentialsHelperConfigMapVolumeSource := v1.ConfigMapVolumeSource{}
-	terraformCredentialsHelperConfigMapVolumeSource.Name = meta.TerraformCredentialsHelperConfigMapReference.Name
-	terraformCredentialsHelperConfigMapVolumeSource.DefaultMode = &terraformConfigMapDefaultMode
-	terraformCredentialsHelperConfigMapVolume := v1.Volume{Name: TerraformCredentialsHelperConfigVolumeName}
-	terraformCredentialsHelperConfigMapVolume.ConfigMap = &terraformCredentialsHelperConfigMapVolumeSource
-	return terraformCredentialsHelperConfigMapVolume
+func (meta *TFConfigurationMeta) createSecretOrConfigMapVolume(isSecret bool, secretOrConfigMapReferenceName string, volumeName string) v1.Volume {
+	var defaultMode int32 = 0400
+	volume := v1.Volume{Name: volumeName}
+	if isSecret {
+		volumeSource := v1.SecretVolumeSource{}
+		volumeSource.SecretName = secretOrConfigMapReferenceName
+		volumeSource.DefaultMode = &defaultMode
+		volume.Secret = &volumeSource
+	} else {
+		volumeSource := v1.ConfigMapVolumeSource{}
+		volumeSource.Name = secretOrConfigMapReferenceName
+		volumeSource.DefaultMode = &defaultMode
+		volume.ConfigMap = &volumeSource
+	}
+	return volume
 }
 
 // TfStateProperty is the tf state property for an output

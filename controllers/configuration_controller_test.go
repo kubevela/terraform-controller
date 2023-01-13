@@ -1663,7 +1663,7 @@ func TestAssembleTerraformJobWithTerraformRegistryConfigAndCredentialsSecretRef(
 
 	var terraformSecretDefaultMode int32 = 0400
 
-	terraformRegistryConfigMapVolume := corev1.Volume{Name: TerraformRegistryConfigVolumeName}
+	terraformRegistryConfigMapVolume := corev1.Volume{Name: TerraformRCConfigVolumeName}
 	terraformRegistryConfigMapVolume.ConfigMap = &corev1.ConfigMapVolumeSource{
 		LocalObjectReference: corev1.LocalObjectReference{
 			Name: "terraform-registry-config",
@@ -1672,8 +1672,8 @@ func TestAssembleTerraformJobWithTerraformRegistryConfigAndCredentialsSecretRef(
 	}
 
 	terraformRegistryConfigVolumeMount := corev1.VolumeMount{
-		Name:      TerraformRegistryConfigVolumeName,
-		MountPath: TerraformRegistryConfigVolumeMountPath,
+		Name:      TerraformRCConfigVolumeName,
+		MountPath: TerraformRCConfigVolumeMountPath,
 	}
 	terraformCredentialsSecretVolume := corev1.Volume{Name: TerraformCredentialsConfigVolumeName}
 	terraformCredentialsSecretVolume.Secret = &corev1.SecretVolumeSource{
@@ -1718,7 +1718,7 @@ func TestAssembleTerraformJobWithTerraformRegistryConfigAndCredentialsHelperConf
 
 	var terraformSecretDefaultMode int32 = 0400
 
-	terraformRegistryConfigMapVolume := corev1.Volume{Name: TerraformRegistryConfigVolumeName}
+	terraformRegistryConfigMapVolume := corev1.Volume{Name: TerraformRCConfigVolumeName}
 	terraformRegistryConfigMapVolume.ConfigMap = &corev1.ConfigMapVolumeSource{
 		LocalObjectReference: corev1.LocalObjectReference{
 			Name: "terraform-registry-config",
@@ -1727,8 +1727,8 @@ func TestAssembleTerraformJobWithTerraformRegistryConfigAndCredentialsHelperConf
 	}
 
 	terraformRegistryConfigVolumeMount := corev1.VolumeMount{
-		Name:      TerraformRegistryConfigVolumeName,
-		MountPath: TerraformRegistryConfigVolumeMountPath,
+		Name:      TerraformRCConfigVolumeName,
+		MountPath: TerraformRCConfigVolumeMountPath,
 	}
 	terraformCredentialsHelperConfigVolume := corev1.Volume{Name: TerraformCredentialsHelperConfigVolumeName}
 	terraformCredentialsHelperConfigVolume.ConfigMap = &corev1.ConfigMapVolumeSource{
