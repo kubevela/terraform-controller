@@ -1454,81 +1454,91 @@ func (meta *TFConfigurationMeta) RenderConfiguration(configuration *v1beta2.Conf
 
 // GetGitCredentialsSecret will get the secret containing the SSH private key & known_hosts
 func GetGitCredentialsSecret(ctx context.Context, k8sClient client.Client, secretRef *v1.SecretReference) (*v1.Secret, error) {
-	secret := &v1.Secret{}
-
-	namespacedName := client.ObjectKey{Name: secretRef.Name, Namespace: secretRef.Namespace}
-	err := k8sClient.Get(ctx, namespacedName, secret)
-	if err != nil {
-		errMsg := "Failed to get git credentials secret"
-		klog.ErrorS(err, errMsg, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
-		return nil, errors.Wrap(err, errMsg)
-	}
-
 	needSecretKeys := []string{GitCredsKnownHosts, v1.SSHAuthPrivateKey}
-	for _, key := range needSecretKeys {
-		if _, ok := secret.Data[key]; !ok {
-			err := errors.Errorf("'%s' not in git credentials secret", key)
-			return nil, err
-		}
+	errMsg := "Failed to get git credentials secret"
+	keyErrMsg := "not in git credentials secret"
+	secret, _, err := GetSecretOrConfigMap(ctx, k8sClient, true, secretRef, needSecretKeys, errMsg, keyErrMsg)
+	if secret != nil {
+		return secret, nil
+	} else {
+		return nil, err
 	}
-
-	return secret, nil
 }
 
 // GetTerraformCredentialsSecret will get the secret containing the terraform credentials
 func GetTerraformCredentialsSecret(ctx context.Context, k8sClient client.Client, secretRef *v1.SecretReference) (*v1.Secret, error) {
-	secret := &v1.Secret{}
-	namespacedName := client.ObjectKey{Name: secretRef.Name, Namespace: secretRef.Namespace}
-	err := k8sClient.Get(ctx, namespacedName, secret)
-	if err != nil {
-		errMsg := "Failed to get terraform credentials secret"
-		klog.ErrorS(err, errMsg, "Name", secretRef.Name, "Namespace", secretRef.Namespace)
-		return nil, errors.Wrap(err, errMsg)
-	}
-
 	needSecretKeys := []string{TerraformCredentials}
-	for _, key := range needSecretKeys {
-		if _, ok := secret.Data[key]; !ok {
-			err := errors.Errorf("'%s' not in terraform credentials secret", key)
-			return nil, err
-		}
+	errMsg := "Failed to get terraform credentials secret"
+	keyErrMsg := "not in terraform credentials secret"
+	secret, _, err := GetSecretOrConfigMap(ctx, k8sClient, true, secretRef, needSecretKeys, errMsg, keyErrMsg)
+	if secret != nil {
+		return secret, nil
+	} else {
+		return nil, err
 	}
-
-	return secret, nil
-
 }
 
 // GetTerraformRegistryConfigMap will get the config map containing the terraform registry configuration
 func GetTerraformRegistryConfigMap(ctx context.Context, k8sClient client.Client, configMapRef *v1.SecretReference) (*v1.ConfigMap, error) {
-	configMap := &v1.ConfigMap{}
-	namespacedName := client.ObjectKey{Name: configMapRef.Name, Namespace: configMapRef.Namespace}
-	err := k8sClient.Get(ctx, namespacedName, configMap)
-	if err != nil {
-		errMsg := "Failed to get the terraform registry config configmap"
-		klog.ErrorS(err, errMsg, "Name", configMapRef.Name, "Namespace", configMapRef.Namespace)
-		return nil, errors.Wrap(err, errMsg)
-	}
 	neededKeys := []string{TerraformRegistryConfig}
-	for _, key := range neededKeys {
-		if _, ok := configMap.Data[key]; !ok {
-			err := errors.Errorf("'%s' not in terraform registry configuration configmap", key)
-			return nil, err
-		}
+	errMsg := "Failed to get the terraform registry config configmap"
+	keyErrMsg := "not in terraform registry configuration configmap"
+	_, configMap, err := GetSecretOrConfigMap(ctx, k8sClient, false, configMapRef, neededKeys, errMsg, keyErrMsg)
+	if configMap != nil {
+		return configMap, nil
+	} else {
+		return nil, err
 	}
-
-	return configMap, nil
 }
 
 // GetTerraformCredentialsHelperConfigMap get the config map containing the terraform credentials helper
 func GetTerraformCredentialsHelperConfigMap(ctx context.Context, k8sClient client.Client, configMapRef *v1.SecretReference) (*v1.ConfigMap, error) {
-	configMap := &v1.ConfigMap{}
-	namespacedName := client.ObjectKey{Name: configMapRef.Name, Namespace: configMapRef.Namespace}
-	err := k8sClient.Get(ctx, namespacedName, configMap)
-	if err != nil {
-		errMsg := "Failed to get the terraform credentials helper configmap"
-		klog.ErrorS(err, errMsg, "Name", configMapRef.Name, "Namespace", configMapRef.Namespace)
-		return nil, errors.Wrap(err, errMsg)
+	errMsg := "Failed to get the terraform credentials helper configmap"
+	neededKeys := []string{}
+	_, configMap, err := GetSecretOrConfigMap(ctx, k8sClient, false, configMapRef, neededKeys, errMsg, "")
+	if configMap != nil {
+		return configMap, nil
+	} else {
+		return nil, err
 	}
+}
 
-	return configMap, nil
+func GetSecretOrConfigMap(ctx context.Context, k8sClient client.Client, isSecret bool, ref *v1.SecretReference, neededKeys []string, errMsg string, keyErrMsg string) (*v1.Secret, *v1.ConfigMap, error) {
+	secret := &v1.Secret{}
+	configMap := &v1.ConfigMap{}
+	var err error
+	if isSecret {
+		namespacedName := client.ObjectKey{Name: ref.Name, Namespace: ref.Namespace}
+		err = k8sClient.Get(ctx, namespacedName, secret)
+	} else {
+		namespacedName := client.ObjectKey{Name: ref.Name, Namespace: ref.Namespace}
+		err = k8sClient.Get(ctx, namespacedName, configMap)
+	}
+	if err != nil {
+		klog.ErrorS(err, errMsg, "Name", ref.Name, "Namespace", ref.Namespace)
+		return nil, nil, errors.Wrap(err, errMsg)
+	}
+	if len(neededKeys) > 0 {
+		for _, key := range neededKeys {
+			var keyErr bool
+			if isSecret {
+				if _, ok := secret.Data[key]; !ok {
+					keyErr = true
+				}
+			} else {
+				if _, ok := configMap.Data[key]; !ok {
+					keyErr = true
+				}
+			}
+			if keyErr {
+				keyErr := errors.Errorf("'%s' %s", key, keyErrMsg)
+				return nil, nil, keyErr
+			}
+		}
+	}
+	if isSecret {
+		return secret, nil, nil
+	} else {
+		return nil, configMap, nil
+	}
 }

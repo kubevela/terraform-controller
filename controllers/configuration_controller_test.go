@@ -2760,7 +2760,6 @@ func TestCheckGitCredentialsSecretReference(t *testing.T) {
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
 			sec, err := GetGitCredentialsSecret(ctx, tc.args.k8sClient, tc.args.GitCredentialsSecretReference)
-
 			if err != nil {
 				assert.EqualError(t, err, tc.want.errMsg)
 			}
