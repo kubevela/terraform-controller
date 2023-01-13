@@ -36,7 +36,7 @@ const (
 	TerraformInitError                                  ConfigurationState = "TerraformInitError"
 	InvalidGitCredentialsSecretReference                ConfigurationState = "InvalidGitCredentialsSecretReference"
 	InvalidTerraformCredentialsSecretReference          ConfigurationState = "InvalidTerraformCredentialsSecretReference"
-	InvalidTerraformRegistryConfigMapReference          ConfigurationState = "InvalidTerraformRegistryConfigMapReference"
+	InvalidTerraformRCConfigMapReference                ConfigurationState = "InvalidTerraformRCConfigMapReference"
 	InvalidTerraformCredentialsHelperConfigMapReference ConfigurationState = "InvalidTerraformCredentialsHelperConfigMapReference"
 )
 

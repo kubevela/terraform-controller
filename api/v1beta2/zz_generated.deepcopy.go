@@ -196,8 +196,8 @@ func (in *ConfigurationSpec) DeepCopyInto(out *ConfigurationSpec) {
 		*out = new(v1.SecretReference)
 		**out = **in
 	}
-	if in.TerraformRegistryConfigMapReference != nil {
-		in, out := &in.TerraformRegistryConfigMapReference, &out.TerraformRegistryConfigMapReference
+	if in.TerraformRCConfigMapReference != nil {
+		in, out := &in.TerraformRCConfigMapReference, &out.TerraformRCConfigMapReference
 		*out = new(v1.SecretReference)
 		**out = **in
 	}

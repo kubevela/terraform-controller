@@ -55,8 +55,8 @@ type ConfigurationSpec struct {
 	// TerraformCredentialsSecretReference specifies the reference to the secret containing the terraform credentials
 	TerraformCredentialsSecretReference *v1.SecretReference `json:"terraformCredentialsSecretReference,omitempty"`
 
-	// TerraformRegistryConfigMapReference specifies the reference to a config map containing the terraform registry configuration
-	TerraformRegistryConfigMapReference *v1.SecretReference `json:"terraformRegistryConfigMapReference,omitempty"`
+	// TerraformRCConfigMapReference specifies the reference to a config map containing the terraform registry configuration
+	TerraformRCConfigMapReference *v1.SecretReference `json:"terraformRCConfigMapReference,omitempty"`
 
 	// TerraformCredentialsHelperConfigMapReference specifies the reference to a configmap containing the terraform registry credentials helper
 	TerraformCredentialsHelperConfigMapReference *v1.SecretReference `json:"terraformCredentialsHelperConfigMapReference,omitempty"`

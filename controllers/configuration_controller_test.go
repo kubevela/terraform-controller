@@ -1648,7 +1648,7 @@ func TestAssembleTerraformJobWithTerraformRegistryConfigAndCredentialsSecretRef(
 		Namespace:           "e",
 		TerraformImage:      "f",
 		RemoteGit:           "g",
-		TerraformRegistryConfigMapReference: &corev1.SecretReference{
+		TerraformRCConfigMapReference: &corev1.SecretReference{
 			Namespace: "default",
 			Name:      "terraform-registry-config",
 		},
@@ -1703,7 +1703,7 @@ func TestAssembleTerraformJobWithTerraformRegistryConfigAndCredentialsHelperConf
 		Namespace:           "e",
 		TerraformImage:      "f",
 		RemoteGit:           "g",
-		TerraformRegistryConfigMapReference: &corev1.SecretReference{
+		TerraformRCConfigMapReference: &corev1.SecretReference{
 			Namespace: "default",
 			Name:      "terraform-registry-config",
 		},
@@ -2878,7 +2878,7 @@ func TestCheckTerraformCredentialsSecretReference(t *testing.T) {
 
 }
 
-func TestCheckTerraformRegistryConfigMapReference(t *testing.T) {
+func TestCheckTerraformRCConfigMapReference(t *testing.T) {
 	ctx := context.Background()
 	scheme := runtime.NewScheme()
 	corev1.AddToScheme(scheme)
@@ -2911,8 +2911,8 @@ func TestCheckTerraformRegistryConfigMapReference(t *testing.T) {
 	assert.Nil(t, k8sClient.Get(ctx, client.ObjectKeyFromObject(configMapNotTerraformRc), configMapNotTerraformRc))
 
 	type args struct {
-		k8sClient                           client.Client
-		TerraformRegistryConfigMapReference *corev1.SecretReference
+		k8sClient                     client.Client
+		TerraformRCConfigMapReference *corev1.SecretReference
 	}
 
 	type want struct {
@@ -2929,7 +2929,7 @@ func TestCheckTerraformRegistryConfigMapReference(t *testing.T) {
 			name: "configmap not found",
 			args: args{
 				k8sClient: k8sClient,
-				TerraformRegistryConfigMapReference: &corev1.SecretReference{
+				TerraformRCConfigMapReference: &corev1.SecretReference{
 					Namespace: "default",
 					Name:      "terraform-registry",
 				},
@@ -2942,7 +2942,7 @@ func TestCheckTerraformRegistryConfigMapReference(t *testing.T) {
 			name: "key '.terraformrc' not in terraform registry config",
 			args: args{
 				k8sClient: k8sClient,
-				TerraformRegistryConfigMapReference: &corev1.SecretReference{
+				TerraformRCConfigMapReference: &corev1.SecretReference{
 					Namespace: "default",
 					Name:      "terraform-registry-config-no-terraformrc",
 				},
@@ -2955,7 +2955,7 @@ func TestCheckTerraformRegistryConfigMapReference(t *testing.T) {
 			name: "configmap exists",
 			args: args{
 				k8sClient: k8sClient,
-				TerraformRegistryConfigMapReference: &corev1.SecretReference{
+				TerraformRCConfigMapReference: &corev1.SecretReference{
 					Namespace: "default",
 					Name:      "terraform-registry-config",
 				},
@@ -2968,7 +2968,7 @@ func TestCheckTerraformRegistryConfigMapReference(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			configMap, err := GetTerraformRegistryConfigMap(ctx, tc.args.k8sClient, tc.args.TerraformRegistryConfigMapReference)
+			configMap, err := GetTerraformRegistryConfigMap(ctx, tc.args.k8sClient, tc.args.TerraformRCConfigMapReference)
 
 			if err != nil {
 				assert.EqualError(t, err, tc.want.errMsg)

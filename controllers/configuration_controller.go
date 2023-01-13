@@ -274,7 +274,7 @@ type TFConfigurationMeta struct {
 	JobEnv                                       map[string]interface{}
 	GitCredentialsSecretReference                *v1.SecretReference
 	TerraformCredentialsSecretReference          *v1.SecretReference
-	TerraformRegistryConfigMapReference          *v1.SecretReference
+	TerraformRCConfigMapReference                *v1.SecretReference
 	TerraformCredentialsHelperConfigMapReference *v1.SecretReference
 
 	Backend backend.Backend
@@ -345,8 +345,8 @@ func initTFConfigurationMeta(req ctrl.Request, configuration v1beta2.Configurati
 		meta.TerraformCredentialsSecretReference = configuration.Spec.TerraformCredentialsSecretReference
 	}
 
-	if configuration.Spec.TerraformRegistryConfigMapReference != nil {
-		meta.TerraformRegistryConfigMapReference = configuration.Spec.TerraformRegistryConfigMapReference
+	if configuration.Spec.TerraformRCConfigMapReference != nil {
+		meta.TerraformRCConfigMapReference = configuration.Spec.TerraformRCConfigMapReference
 	}
 
 	if configuration.Spec.TerraformCredentialsHelperConfigMapReference != nil {
@@ -616,14 +616,14 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 		}
 	}
 
-	if meta.TerraformRegistryConfigMapReference != nil {
-		terraformRegistryConfig, err := GetTerraformRegistryConfigMap(ctx, k8sClient, meta.TerraformRegistryConfigMapReference)
+	if meta.TerraformRCConfigMapReference != nil {
+		terraformRegistryConfig, err := GetTerraformRegistryConfigMap(ctx, k8sClient, meta.TerraformRCConfigMapReference)
 		if terraformRegistryConfig == nil {
-			msg := string(types.InvalidTerraformRegistryConfigMapReference)
+			msg := string(types.InvalidTerraformRCConfigMapReference)
 			if err != nil {
 				msg = err.Error()
 			}
-			if updateStatusErr := meta.updateApplyStatus(ctx, k8sClient, types.InvalidTerraformRegistryConfigMapReference, msg); updateStatusErr != nil {
+			if updateStatusErr := meta.updateApplyStatus(ctx, k8sClient, types.InvalidTerraformRCConfigMapReference, msg); updateStatusErr != nil {
 				return errors.Wrap(updateStatusErr, msg)
 			}
 			return errors.New(msg)
@@ -819,7 +819,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 			})
 	}
 
-	if meta.TerraformRegistryConfigMapReference != nil {
+	if meta.TerraformRCConfigMapReference != nil {
 		initContainerVolumeMounts = append(initContainerVolumeMounts,
 			v1.VolumeMount{
 				Name:      TerraformRegistryConfigVolumeName,
@@ -1002,7 +1002,7 @@ func (meta *TFConfigurationMeta) assembleExecutorVolumes() []v1.Volume {
 		terraformCredentialsConfigVolume := meta.createTerraformCredentialsConfigVolume()
 		executorVolumes = append(executorVolumes, terraformCredentialsConfigVolume)
 	}
-	if meta.TerraformRegistryConfigMapReference != nil {
+	if meta.TerraformRCConfigMapReference != nil {
 		terraformRegistryConfigVolume := meta.createTerraformRegistryConfigVolume()
 		executorVolumes = append(executorVolumes, terraformRegistryConfigVolume)
 	}
@@ -1051,7 +1051,7 @@ func (meta *TFConfigurationMeta) createTerraformCredentialsConfigVolume() v1.Vol
 func (meta *TFConfigurationMeta) createTerraformRegistryConfigVolume() v1.Volume {
 	var terraformConfigMapDefaultMode int32 = 0400
 	terraformRegistryConfigMapVolumeSource := v1.ConfigMapVolumeSource{}
-	terraformRegistryConfigMapVolumeSource.Name = meta.TerraformRegistryConfigMapReference.Name
+	terraformRegistryConfigMapVolumeSource.Name = meta.TerraformRCConfigMapReference.Name
 	terraformRegistryConfigMapVolumeSource.DefaultMode = &terraformConfigMapDefaultMode
 	terraformRegistryConfigMapVolume := v1.Volume{Name: TerraformRegistryConfigVolumeName}
 	terraformRegistryConfigMapVolume.ConfigMap = &terraformRegistryConfigMapVolumeSource
