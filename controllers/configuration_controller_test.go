@@ -2967,7 +2967,7 @@ func TestCheckTerraformRCConfigMapReference(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			configMap, err := GetTerraformRegistryConfigMap(ctx, tc.args.k8sClient, tc.args.TerraformRCConfigMapReference)
+			configMap, err := GetTerraformRCConfigMap(ctx, tc.args.k8sClient, tc.args.TerraformRCConfigMapReference)
 
 			if err != nil {
 				assert.EqualError(t, err, tc.want.errMsg)

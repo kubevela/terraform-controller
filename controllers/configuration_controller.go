@@ -588,60 +588,10 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 		}
 	}
 
-	if meta.GitCredentialsSecretReference != nil {
-		gitCreds, err := GetGitCredentialsSecret(ctx, k8sClient, meta.GitCredentialsSecretReference)
-		if gitCreds == nil {
-			msg := string(types.InvalidGitCredentialsSecretReference)
-			if err != nil {
-				msg = err.Error()
-			}
-			if updateStatusErr := meta.updateApplyStatus(ctx, k8sClient, types.InvalidGitCredentialsSecretReference, msg); updateStatusErr != nil {
-				return errors.Wrap(updateStatusErr, msg)
-			}
-			return errors.New(msg)
-		}
-	}
-
-	if meta.TerraformCredentialsSecretReference != nil {
-		terraformCreds, err := GetTerraformCredentialsSecret(ctx, k8sClient, meta.TerraformCredentialsSecretReference)
-		if terraformCreds == nil {
-			msg := string(types.InvalidTerraformCredentialsSecretReference)
-			if err != nil {
-				msg = err.Error()
-			}
-			if updateStatusErr := meta.updateApplyStatus(ctx, k8sClient, types.InvalidTerraformCredentialsSecretReference, msg); updateStatusErr != nil {
-				return errors.Wrap(updateStatusErr, msg)
-			}
-			return errors.New(msg)
-		}
-	}
-
-	if meta.TerraformRCConfigMapReference != nil {
-		terraformRegistryConfig, err := GetTerraformRegistryConfigMap(ctx, k8sClient, meta.TerraformRCConfigMapReference)
-		if terraformRegistryConfig == nil {
-			msg := string(types.InvalidTerraformRCConfigMapReference)
-			if err != nil {
-				msg = err.Error()
-			}
-			if updateStatusErr := meta.updateApplyStatus(ctx, k8sClient, types.InvalidTerraformRCConfigMapReference, msg); updateStatusErr != nil {
-				return errors.Wrap(updateStatusErr, msg)
-			}
-			return errors.New(msg)
-		}
-	}
-
-	if meta.TerraformCredentialsHelperConfigMapReference != nil {
-		terraformCredentialsHelper, err := GetTerraformCredentialsHelperConfigMap(ctx, k8sClient, meta.TerraformCredentialsHelperConfigMapReference)
-		if terraformCredentialsHelper == nil {
-			msg := string(types.InvalidTerraformCredentialsHelperConfigMapReference)
-			if err != nil {
-				msg = err.Error()
-			}
-			if updateStatusErr := meta.updateApplyStatus(ctx, k8sClient, types.InvalidTerraformCredentialsHelperConfigMapReference, msg); updateStatusErr != nil {
-				return errors.Wrap(updateStatusErr, msg)
-			}
-			return errors.New(msg)
-		}
+	// validate secretreferences and config maps. 1. GitCredentialsSecretReference 2. TerraformCredentialsSecretReference 3. TerraformRCConfigMapReference
+	// 4. TerraformCredentialsHelperConfigMapReference
+	if err := meta.validateSecretAndConfigMap(ctx, k8sClient); err != nil {
+		return err
 	}
 
 	// Render configuration with backend
@@ -708,6 +658,81 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	}
 
 	return createTerraformExecutorClusterRole(ctx, k8sClient, fmt.Sprintf("%s-%s", meta.ControllerNamespace, ClusterRoleName))
+}
+
+func (meta *TFConfigurationMeta) validateSecretAndConfigMap(ctx context.Context, k8sClient client.Client) error {
+
+	secretConfigMapToCheck := []struct {
+		ref           *v1.SecretReference
+		notFoundState types.ConfigurationState
+		refType       string
+	}{
+		{
+			ref:           meta.GitCredentialsSecretReference,
+			notFoundState: types.InvalidGitCredentialsSecretReference,
+			refType:       "GitCredentialsSecretReference",
+		},
+		{
+			ref:           meta.TerraformCredentialsSecretReference,
+			notFoundState: types.InvalidTerraformCredentialsSecretReference,
+			refType:       "TerraformCredentialsSecretReference",
+		},
+		{
+			ref:           meta.TerraformRCConfigMapReference,
+			notFoundState: types.InvalidTerraformRCConfigMapReference,
+			refType:       "TerraformRCConfigMapReference",
+		},
+		{
+			ref:           meta.TerraformCredentialsHelperConfigMapReference,
+			notFoundState: types.InvalidTerraformCredentialsHelperConfigMapReference,
+			refType:       "TerraformCredentialsHelperConfigMapReference",
+		},
+	}
+
+	var checkErr error
+	var checkErrFlag bool
+	for _, check := range secretConfigMapToCheck {
+		if check.ref != nil {
+			switch check.refType {
+			case "GitCredentialsSecretReference":
+				gitCreds, err := GetGitCredentialsSecret(ctx, k8sClient, check.ref)
+				if gitCreds == nil {
+					checkErr = err
+					checkErrFlag = true
+				}
+			case "TerraformCredentialsSecretReference":
+				terraformCreds, err := GetTerraformCredentialsSecret(ctx, k8sClient, check.ref)
+				if terraformCreds == nil {
+					checkErr = err
+					checkErrFlag = true
+				}
+			case "TerraformRCConfigMapReference":
+				terraformRegistryConfig, err := GetTerraformRCConfigMap(ctx, k8sClient, check.ref)
+				if terraformRegistryConfig == nil {
+					checkErr = err
+					checkErrFlag = true
+				}
+			case "TerraformCredentialsHelperConfigMapReference":
+				terraformCredentialsHelper, err := GetTerraformCredentialsHelperConfigMap(ctx, k8sClient, check.ref)
+				if terraformCredentialsHelper == nil {
+					checkErr = err
+					checkErrFlag = true
+				}
+			}
+
+			if checkErrFlag {
+				msg := string(check.notFoundState)
+				if checkErr != nil {
+					msg = checkErr.Error()
+				}
+				if updateStatusErr := meta.updateApplyStatus(ctx, k8sClient, check.notFoundState, msg); updateStatusErr != nil {
+					return errors.Wrap(updateStatusErr, msg)
+				}
+				return errors.New(msg)
+			}
+		}
+	}
+	return nil
 }
 
 func (meta *TFConfigurationMeta) updateApplyStatus(ctx context.Context, k8sClient client.Client, state types.ConfigurationState, message string) error {
@@ -1460,9 +1485,8 @@ func GetGitCredentialsSecret(ctx context.Context, k8sClient client.Client, secre
 	secret, _, err := GetSecretOrConfigMap(ctx, k8sClient, true, secretRef, needSecretKeys, errMsg, keyErrMsg)
 	if secret != nil {
 		return secret, nil
-	} else {
-		return nil, err
 	}
+	return nil, err
 }
 
 // GetTerraformCredentialsSecret will get the secret containing the terraform credentials
@@ -1473,22 +1497,20 @@ func GetTerraformCredentialsSecret(ctx context.Context, k8sClient client.Client,
 	secret, _, err := GetSecretOrConfigMap(ctx, k8sClient, true, secretRef, needSecretKeys, errMsg, keyErrMsg)
 	if secret != nil {
 		return secret, nil
-	} else {
-		return nil, err
 	}
+	return nil, err
 }
 
-// GetTerraformRegistryConfigMap will get the config map containing the terraform registry configuration
-func GetTerraformRegistryConfigMap(ctx context.Context, k8sClient client.Client, configMapRef *v1.SecretReference) (*v1.ConfigMap, error) {
+// GetTerraformRCConfigMap will get the config map containing the terraform registry configuration
+func GetTerraformRCConfigMap(ctx context.Context, k8sClient client.Client, configMapRef *v1.SecretReference) (*v1.ConfigMap, error) {
 	neededKeys := []string{TerraformRegistryConfig}
 	errMsg := "Failed to get the terraform registry config configmap"
 	keyErrMsg := "not in terraform registry configuration configmap"
 	_, configMap, err := GetSecretOrConfigMap(ctx, k8sClient, false, configMapRef, neededKeys, errMsg, keyErrMsg)
 	if configMap != nil {
 		return configMap, nil
-	} else {
-		return nil, err
 	}
+	return nil, err
 }
 
 // GetTerraformCredentialsHelperConfigMap get the config map containing the terraform credentials helper
@@ -1498,9 +1520,8 @@ func GetTerraformCredentialsHelperConfigMap(ctx context.Context, k8sClient clien
 	_, configMap, err := GetSecretOrConfigMap(ctx, k8sClient, false, configMapRef, neededKeys, errMsg, "")
 	if configMap != nil {
 		return configMap, nil
-	} else {
-		return nil, err
 	}
+	return nil, err
 }
 
 func GetSecretOrConfigMap(ctx context.Context, k8sClient client.Client, isSecret bool, ref *v1.SecretReference, neededKeys []string, errMsg string, keyErrMsg string) (*v1.Secret, *v1.ConfigMap, error) {
@@ -1538,7 +1559,7 @@ func GetSecretOrConfigMap(ctx context.Context, k8sClient client.Client, isSecret
 	}
 	if isSecret {
 		return secret, nil, nil
-	} else {
-		return nil, configMap, nil
 	}
+
+	return nil, configMap, nil
 }
