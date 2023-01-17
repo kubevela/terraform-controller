@@ -2756,10 +2756,13 @@ func TestCheckGitCredentialsSecretReference(t *testing.T) {
 			},
 		},
 	}
+	neededKeys := []string{GitCredsKnownHosts, corev1.SSHAuthPrivateKey}
+	errMsg := "Failed to get git credentials secret"
+	keyErrMsg := "not in git credentials secret"
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			sec, err := GetGitCredentialsSecret(ctx, tc.args.k8sClient, tc.args.GitCredentialsSecretReference)
+			sec, err := GetSecretOrConfigMap(ctx, tc.args.k8sClient, true, tc.args.GitCredentialsSecretReference, neededKeys, errMsg, keyErrMsg)
 			if err != nil {
 				assert.EqualError(t, err, tc.want.errMsg)
 			}
@@ -2862,9 +2865,13 @@ func TestCheckTerraformCredentialsSecretReference(t *testing.T) {
 		},
 	}
 
+	neededKeys := []string{TerraformCredentials}
+	errMsg := "Failed to get terraform credentials secret"
+	keyErrMsg := "not in terraform credentials secret"
+
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			sec, err := GetTerraformCredentialsSecret(ctx, tc.args.k8sClient, tc.args.TerraformCredentialsSecretReference)
+			sec, err := GetSecretOrConfigMap(ctx, tc.args.k8sClient, true, tc.args.TerraformCredentialsSecretReference, neededKeys, errMsg, keyErrMsg)
 
 			if err != nil {
 				assert.EqualError(t, err, tc.want.errMsg)
@@ -2965,9 +2972,13 @@ func TestCheckTerraformRCConfigMapReference(t *testing.T) {
 		},
 	}
 
+	neededKeys := []string{TerraformRegistryConfig}
+	errMsg := "Failed to get the terraform registry config configmap"
+	keyErrMsg := "not in terraform registry configuration configmap"
+
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			configMap, err := GetTerraformRCConfigMap(ctx, tc.args.k8sClient, tc.args.TerraformRCConfigMapReference)
+			configMap, err := GetSecretOrConfigMap(ctx, tc.args.k8sClient, false, tc.args.TerraformRCConfigMapReference, neededKeys, errMsg, keyErrMsg)
 
 			if err != nil {
 				assert.EqualError(t, err, tc.want.errMsg)
@@ -3041,9 +3052,13 @@ func TestTerraformCredentialsHelperConfigMap(t *testing.T) {
 		},
 	}
 
+	neededKeys := []string{}
+	errMsg := "Failed to get the terraform credentials helper configmap"
+	keyErrMsg := ""
+
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			configMap, err := GetTerraformCredentialsHelperConfigMap(ctx, tc.args.k8sClient, tc.args.TerraformCredentialsHelperConfigMapReference)
+			configMap, err := GetSecretOrConfigMap(ctx, tc.args.k8sClient, false, tc.args.TerraformCredentialsHelperConfigMapReference, neededKeys, errMsg, keyErrMsg)
 
 			if err != nil {
 				assert.EqualError(t, err, tc.want.errMsg)
