@@ -588,7 +588,7 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 		}
 	}
 
-	/* validate the follwing secretreferences and config maps.
+	/* validate the following secret references and configmap references.
 	   1. GitCredentialsSecretReference
 	   2. TerraformCredentialsSecretReference
 	   3. TerraformRCConfigMapReference
@@ -672,45 +672,42 @@ func (meta *TFConfigurationMeta) validateSecretAndConfigMap(ctx context.Context,
 		neededKeys    []string
 		errMsg        string
 		keyErrMsg     string
+		errKey        string
 	}{
 		{
 			ref:           meta.GitCredentialsSecretReference,
 			notFoundState: types.InvalidGitCredentialsSecretReference,
 			isSecret:      true,
 			neededKeys:    []string{GitCredsKnownHosts, v1.SSHAuthPrivateKey},
-			errMsg:        "Failed to get git credentials secret",
-			keyErrMsg:     "not in git credentials secret",
+			errKey:        "git credentials",
 		},
 		{
 			ref:           meta.TerraformCredentialsSecretReference,
 			notFoundState: types.InvalidTerraformCredentialsSecretReference,
 			isSecret:      true,
 			neededKeys:    []string{TerraformCredentials},
-			errMsg:        "Failed to get terraform credentials secret",
-			keyErrMsg:     "not in terraform credentials secret",
+			errKey:        "terraform credentials",
 		},
 		{
 			ref:           meta.TerraformRCConfigMapReference,
 			notFoundState: types.InvalidTerraformRCConfigMapReference,
 			isSecret:      false,
 			neededKeys:    []string{TerraformRegistryConfig},
-			errMsg:        "Failed to get the terraform registry config configmap",
-			keyErrMsg:     "not in terraform registry configuration configmap",
+			errKey:        "terraformrc configuration",
 		},
 		{
 			ref:           meta.TerraformCredentialsHelperConfigMapReference,
 			notFoundState: types.InvalidTerraformCredentialsHelperConfigMapReference,
 			isSecret:      false,
 			neededKeys:    []string{},
-			errMsg:        "Failed to get the terraform credentials helper configmap",
-			keyErrMsg:     "",
+			errKey:        "terraform credentials helper",
 		},
 	}
 	for _, check := range secretConfigMapToCheck {
 		if check.ref != nil {
 			var object metav1.Object
 			var err error
-			object, err = GetSecretOrConfigMap(ctx, k8sClient, check.isSecret, check.ref, check.neededKeys, check.errMsg, check.keyErrMsg)
+			object, err = GetSecretOrConfigMap(ctx, k8sClient, check.isSecret, check.ref, check.neededKeys, check.errKey)
 			if object == nil {
 				msg := string(check.notFoundState)
 				if err != nil {
@@ -1010,7 +1007,7 @@ func (meta *TFConfigurationMeta) assembleExecutorVolumes() []v1.Volume {
 	inputTFConfigurationVolume := meta.createConfigurationVolume()
 	tfBackendVolume := meta.createTFBackendVolume()
 	executorVolumes := []v1.Volume{workingVolume, inputTFConfigurationVolume, tfBackendVolume}
-	SecretOrConfigMapReferences := []struct {
+	secretOrConfigMapReferences := []struct {
 		ref        *v1.SecretReference
 		volumeName string
 		isSecret   bool
@@ -1036,7 +1033,7 @@ func (meta *TFConfigurationMeta) assembleExecutorVolumes() []v1.Volume {
 			isSecret:   false,
 		},
 	}
-	for _, ref := range SecretOrConfigMapReferences {
+	for _, ref := range secretOrConfigMapReferences {
 		if ref.ref != nil {
 			executorVolumes = append(executorVolumes, meta.createSecretOrConfigMapVolume(ref.isSecret, ref.ref.Name, ref.volumeName))
 		}
@@ -1483,42 +1480,44 @@ func (meta *TFConfigurationMeta) RenderConfiguration(configuration *v1beta2.Conf
 	}
 }
 
-func GetSecretOrConfigMap(ctx context.Context, k8sClient client.Client, isSecret bool, ref *v1.SecretReference, neededKeys []string, errMsg string, keyErrMsg string) (metav1.Object, error) {
+func GetSecretOrConfigMap(ctx context.Context, k8sClient client.Client, isSecret bool, ref *v1.SecretReference, neededKeys []string, errKey string) (metav1.Object, error) {
 	secret := &v1.Secret{}
 	configMap := &v1.ConfigMap{}
 	var err error
+	// key to determine if it is a secret or config map
+	var typeKey string
 	if isSecret {
 		namespacedName := client.ObjectKey{Name: ref.Name, Namespace: ref.Namespace}
 		err = k8sClient.Get(ctx, namespacedName, secret)
+		typeKey = "secret"
 	} else {
 		namespacedName := client.ObjectKey{Name: ref.Name, Namespace: ref.Namespace}
 		err = k8sClient.Get(ctx, namespacedName, configMap)
+		typeKey = "configmap"
 	}
+	errMsg := fmt.Sprintf("Failed to get %s %s", errKey, typeKey)
 	if err != nil {
 		klog.ErrorS(err, errMsg, "Name", ref.Name, "Namespace", ref.Namespace)
 		return nil, errors.Wrap(err, errMsg)
 	}
-	if len(neededKeys) > 0 {
-		for _, key := range neededKeys {
-			var keyErr bool
-			if isSecret {
-				if _, ok := secret.Data[key]; !ok {
-					keyErr = true
-				}
-			} else {
-				if _, ok := configMap.Data[key]; !ok {
-					keyErr = true
-				}
+	for _, key := range neededKeys {
+		var keyErr bool
+		if isSecret {
+			if _, ok := secret.Data[key]; !ok {
+				keyErr = true
 			}
-			if keyErr {
-				keyErr := errors.Errorf("'%s' %s", key, keyErrMsg)
-				return nil, keyErr
+		} else {
+			if _, ok := configMap.Data[key]; !ok {
+				keyErr = true
 			}
+		}
+		if keyErr {
+			keyErr := errors.Errorf("'%s' %s", key, fmt.Sprintf("not in %s %s", errKey, typeKey))
+			return nil, keyErr
 		}
 	}
 	if isSecret {
 		return secret, nil
 	}
-
 	return configMap, nil
 }
