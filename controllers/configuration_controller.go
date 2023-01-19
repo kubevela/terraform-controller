@@ -1512,7 +1512,7 @@ func GetSecretOrConfigMap(ctx context.Context, k8sClient client.Client, isSecret
 			}
 		}
 		if keyErr {
-			keyErr := errors.Errorf("'%s' %s", key, fmt.Sprintf("not in %s %s", errKey, typeKey))
+			keyErr := errors.Errorf("'%s' not in %s %s", key, errKey, typeKey)
 			return nil, keyErr
 		}
 	}
