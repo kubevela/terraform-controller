@@ -1639,6 +1639,140 @@ func TestAssembleTerraformJobWithGitCredentialsSecretRef(t *testing.T) {
 	assert.Contains(t, spec.Volumes, gitAuthSecretVolume)
 }
 
+func TestAssembleTerraformJobWithTerraformRCAndCredentials(t *testing.T) {
+	meta := &TFConfigurationMeta{
+		Name:                "a",
+		ConfigurationCMName: "b",
+		BusyboxImage:        "c",
+		GitImage:            "d",
+		Namespace:           "e",
+		TerraformImage:      "f",
+		RemoteGit:           "g",
+		TerraformRCConfigMapReference: &corev1.SecretReference{
+			Namespace: "default",
+			Name:      "terraform-registry-config",
+		},
+		TerraformCredentialsSecretReference: &corev1.SecretReference{
+			Namespace: "default",
+			Name:      "terraform-credentials",
+		},
+		TerraformCredentialsHelperConfigMapReference: &corev1.SecretReference{
+			Namespace: "default",
+			Name:      "terraform-credentials-helper",
+		},
+	}
+
+	job := meta.assembleTerraformJob(TerraformApply)
+	spec := job.Spec.Template.Spec
+
+	var terraformSecretDefaultMode int32 = 0400
+
+	terraformRegistryConfigMapVolume := corev1.Volume{Name: TerraformRCConfigVolumeName}
+	terraformRegistryConfigMapVolume.ConfigMap = &corev1.ConfigMapVolumeSource{
+		LocalObjectReference: corev1.LocalObjectReference{
+			Name: "terraform-registry-config",
+		},
+		DefaultMode: &terraformSecretDefaultMode,
+	}
+
+	terraformRegistryConfigVolumeMount := corev1.VolumeMount{
+		Name:      TerraformRCConfigVolumeName,
+		MountPath: TerraformRCConfigVolumeMountPath,
+	}
+	terraformCredentialsSecretVolume := corev1.Volume{Name: TerraformCredentialsConfigVolumeName}
+	terraformCredentialsSecretVolume.Secret = &corev1.SecretVolumeSource{
+		SecretName:  "terraform-credentials",
+		DefaultMode: &terraformSecretDefaultMode,
+	}
+
+	terraformCredentialsSecretVolumeMount := corev1.VolumeMount{
+		Name:      TerraformCredentialsConfigVolumeName,
+		MountPath: TerraformCredentialsConfigVolumeMountPath,
+	}
+
+	terraformCredentialsHelperConfigVolume := corev1.Volume{Name: TerraformCredentialsHelperConfigVolumeName}
+	terraformCredentialsHelperConfigVolume.ConfigMap = &corev1.ConfigMapVolumeSource{
+		LocalObjectReference: corev1.LocalObjectReference{
+			Name: "terraform-credentials-helper",
+		},
+		DefaultMode: &terraformSecretDefaultMode,
+	}
+
+	terraformCredentialsHelperConfigVolumeMount := corev1.VolumeMount{
+		Name:      TerraformCredentialsHelperConfigVolumeName,
+		MountPath: TerraformCredentialsHelperConfigVolumeMountPath,
+	}
+
+	assert.Contains(t, spec.InitContainers[0].VolumeMounts, terraformCredentialsHelperConfigVolumeMount)
+	assert.Contains(t, spec.Volumes, terraformCredentialsHelperConfigVolume)
+
+	assert.Contains(t, spec.InitContainers[0].VolumeMounts, terraformRegistryConfigVolumeMount)
+	assert.Contains(t, spec.Volumes, terraformRegistryConfigMapVolume)
+
+	assert.Contains(t, spec.InitContainers[0].VolumeMounts, terraformCredentialsSecretVolumeMount)
+	assert.Contains(t, spec.Volumes, terraformCredentialsSecretVolume)
+
+	assert.Contains(t, spec.InitContainers[0].VolumeMounts, terraformRegistryConfigVolumeMount)
+	assert.Contains(t, spec.Volumes, terraformRegistryConfigMapVolume)
+}
+
+func TestAssembleTerraformJobWithTerraformRCAndCredentialsHelper(t *testing.T) {
+	meta := &TFConfigurationMeta{
+		Name:                "a",
+		ConfigurationCMName: "b",
+		BusyboxImage:        "c",
+		GitImage:            "d",
+		Namespace:           "e",
+		TerraformImage:      "f",
+		RemoteGit:           "g",
+		TerraformRCConfigMapReference: &corev1.SecretReference{
+			Namespace: "default",
+			Name:      "terraform-registry-config",
+		},
+		TerraformCredentialsHelperConfigMapReference: &corev1.SecretReference{
+			Namespace: "default",
+			Name:      "terraform-credentials-helper",
+		},
+	}
+
+	job := meta.assembleTerraformJob(TerraformApply)
+	spec := job.Spec.Template.Spec
+
+	var terraformSecretDefaultMode int32 = 0400
+
+	terraformRegistryConfigMapVolume := corev1.Volume{Name: TerraformRCConfigVolumeName}
+	terraformRegistryConfigMapVolume.ConfigMap = &corev1.ConfigMapVolumeSource{
+		LocalObjectReference: corev1.LocalObjectReference{
+			Name: "terraform-registry-config",
+		},
+		DefaultMode: &terraformSecretDefaultMode,
+	}
+
+	terraformRegistryConfigVolumeMount := corev1.VolumeMount{
+		Name:      TerraformRCConfigVolumeName,
+		MountPath: TerraformRCConfigVolumeMountPath,
+	}
+	terraformCredentialsHelperConfigVolume := corev1.Volume{Name: TerraformCredentialsHelperConfigVolumeName}
+	terraformCredentialsHelperConfigVolume.ConfigMap = &corev1.ConfigMapVolumeSource{
+		LocalObjectReference: corev1.LocalObjectReference{
+			Name: "terraform-credentials-helper",
+		},
+		DefaultMode: &terraformSecretDefaultMode,
+	}
+
+	terraformCredentialsHelperConfigVolumeMount := corev1.VolumeMount{
+		Name:      TerraformCredentialsHelperConfigVolumeName,
+		MountPath: TerraformCredentialsHelperConfigVolumeMountPath,
+	}
+
+	assert.Contains(t, spec.InitContainers[0].VolumeMounts, terraformRegistryConfigVolumeMount)
+	assert.Contains(t, spec.Volumes, terraformRegistryConfigMapVolume)
+
+	assert.Contains(t, spec.InitContainers[0].VolumeMounts, terraformCredentialsHelperConfigVolumeMount)
+	assert.Contains(t, spec.Volumes, terraformCredentialsHelperConfigVolume)
+
+}
+
 func TestTfStatePropertyToToProperty(t *testing.T) {
 	testcases := []TfStateProperty{
 		{
@@ -2644,10 +2778,120 @@ func TestCheckGitCredentialsSecretReference(t *testing.T) {
 			},
 		},
 	}
+	neededKeys := []string{GitCredsKnownHosts, corev1.SSHAuthPrivateKey}
+	errKey := "git credentials"
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			sec, err := GetGitCredentialsSecret(ctx, tc.args.k8sClient, tc.args.GitCredentialsSecretReference)
+			sec, err := GetSecretOrConfigMap(ctx, tc.args.k8sClient, true, tc.args.GitCredentialsSecretReference, neededKeys, errKey)
+			if err != nil {
+				assert.EqualError(t, err, tc.want.errMsg)
+			}
+			if tc.want.secret != nil {
+				assert.EqualValues(t, sec, tc.want.secret)
+			}
+		})
+	}
+}
+
+func TestCheckTerraformCredentialsSecretReference(t *testing.T) {
+	ctx := context.Background()
+	scheme := runtime.NewScheme()
+	corev1.AddToScheme(scheme)
+	k8sClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+
+	credentialstfrcjson := []byte("tfcreds")
+	terraformrc := []byte("tfrc")
+
+	secret := &corev1.Secret{
+		ObjectMeta: v1.ObjectMeta{
+			Namespace: "default",
+			Name:      "terraform-creds",
+		},
+		Data: map[string][]byte{
+			"credentials.tfrc.json": credentialstfrcjson,
+			"terraformrc":           terraformrc,
+		},
+		Type: corev1.SecretTypeSSHAuth,
+	}
+	assert.Nil(t, k8sClient.Create(ctx, secret))
+	assert.Nil(t, k8sClient.Get(ctx, client.ObjectKeyFromObject(secret), secret))
+
+	secretNotTerraformCreds := &corev1.Secret{
+		ObjectMeta: v1.ObjectMeta{
+			Namespace: "default",
+			Name:      "terraform-creds-no-creds",
+		},
+		Data: map[string][]byte{
+			"terraformrc": terraformrc,
+		},
+		Type: corev1.SecretTypeSSHAuth,
+	}
+
+	assert.Nil(t, k8sClient.Create(ctx, secretNotTerraformCreds))
+
+	type args struct {
+		k8sClient                           client.Client
+		TerraformCredentialsSecretReference *corev1.SecretReference
+	}
+
+	type want struct {
+		secret *corev1.Secret
+		errMsg string
+	}
+
+	testcases := []struct {
+		name string
+		args args
+		want want
+	}{
+		{
+			name: "secret not found",
+			args: args{
+				k8sClient: k8sClient,
+				TerraformCredentialsSecretReference: &corev1.SecretReference{
+					Namespace: "default",
+					Name:      "secret-not-exists",
+				},
+			},
+			want: want{
+				errMsg: "Failed to get terraform credentials secret: secrets \"secret-not-exists\" not found",
+			},
+		},
+		{
+			name: "key 'credentials.tfrc.json' not in terraform credentials secret",
+			args: args{
+				k8sClient: k8sClient,
+				TerraformCredentialsSecretReference: &corev1.SecretReference{
+					Namespace: "default",
+					Name:      "terraform-creds-no-creds",
+				},
+			},
+			want: want{
+				errMsg: fmt.Sprintf("'%s' not in terraform credentials secret", TerraformCredentials),
+			},
+		},
+		{
+			name: "secret exists",
+			args: args{
+				k8sClient: k8sClient,
+				TerraformCredentialsSecretReference: &corev1.SecretReference{
+					Namespace: "default",
+					Name:      "terraform-creds",
+				},
+			},
+			want: want{
+				secret: secret,
+			},
+		},
+	}
+
+	neededKeys := []string{TerraformCredentials}
+	errKey := "terraform credentials"
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			sec, err := GetSecretOrConfigMap(ctx, tc.args.k8sClient, true, tc.args.TerraformCredentialsSecretReference, neededKeys, errKey)
 
 			if err != nil {
 				assert.EqualError(t, err, tc.want.errMsg)
@@ -2657,4 +2901,383 @@ func TestCheckGitCredentialsSecretReference(t *testing.T) {
 			}
 		})
 	}
+
+}
+
+func TestCheckTerraformRCConfigMapReference(t *testing.T) {
+	ctx := context.Background()
+	scheme := runtime.NewScheme()
+	corev1.AddToScheme(scheme)
+	k8sClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+
+	configMap := &corev1.ConfigMap{
+		ObjectMeta: v1.ObjectMeta{
+			Namespace: "default",
+			Name:      "terraform-registry-config",
+		},
+		Data: map[string]string{
+			".terraformrc": "tfrc",
+		},
+	}
+
+	assert.Nil(t, k8sClient.Create(ctx, configMap))
+	assert.Nil(t, k8sClient.Get(ctx, client.ObjectKeyFromObject(configMap), configMap))
+
+	configMapNotTerraformRc := &corev1.ConfigMap{
+		ObjectMeta: v1.ObjectMeta{
+			Namespace: "default",
+			Name:      "terraform-registry-config-no-terraformrc",
+		},
+		Data: map[string]string{
+			"terraform": "tfrc",
+		},
+	}
+
+	assert.Nil(t, k8sClient.Create(ctx, configMapNotTerraformRc))
+	assert.Nil(t, k8sClient.Get(ctx, client.ObjectKeyFromObject(configMapNotTerraformRc), configMapNotTerraformRc))
+
+	type args struct {
+		k8sClient                     client.Client
+		TerraformRCConfigMapReference *corev1.SecretReference
+	}
+
+	type want struct {
+		configMap *corev1.ConfigMap
+		errMsg    string
+	}
+
+	testcases := []struct {
+		name string
+		args args
+		want want
+	}{
+		{
+			name: "configmap not found",
+			args: args{
+				k8sClient: k8sClient,
+				TerraformRCConfigMapReference: &corev1.SecretReference{
+					Namespace: "default",
+					Name:      "configmap-not-exists",
+				},
+			},
+			want: want{
+				errMsg: "Failed to get terraformrc configuration configmap: configmaps \"configmap-not-exists\" not found",
+			},
+		},
+		{
+			name: "key '.terraformrc' not in terraform registry config",
+			args: args{
+				k8sClient: k8sClient,
+				TerraformRCConfigMapReference: &corev1.SecretReference{
+					Namespace: "default",
+					Name:      "terraform-registry-config-no-terraformrc",
+				},
+			},
+			want: want{
+				errMsg: fmt.Sprintf("'%s' not in terraformrc configuration configmap", TerraformRegistryConfig),
+			},
+		},
+		{
+			name: "configmap exists",
+			args: args{
+				k8sClient: k8sClient,
+				TerraformRCConfigMapReference: &corev1.SecretReference{
+					Namespace: "default",
+					Name:      "terraform-registry-config",
+				},
+			},
+			want: want{
+				configMap: configMap,
+			},
+		},
+	}
+
+	neededKeys := []string{TerraformRegistryConfig}
+	errKey := "terraformrc configuration"
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			configMap, err := GetSecretOrConfigMap(ctx, tc.args.k8sClient, false, tc.args.TerraformRCConfigMapReference, neededKeys, errKey)
+
+			if err != nil {
+				assert.EqualError(t, err, tc.want.errMsg)
+			}
+			if tc.want.configMap != nil {
+				assert.EqualValues(t, configMap, tc.want.configMap)
+			}
+		})
+	}
+}
+
+func TestTerraformCredentialsHelperConfigMap(t *testing.T) {
+	ctx := context.Background()
+	scheme := runtime.NewScheme()
+	corev1.AddToScheme(scheme)
+	k8sClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+
+	configMap := &corev1.ConfigMap{
+		ObjectMeta: v1.ObjectMeta{
+			Namespace: "default",
+			Name:      "terraform-credentials-helper",
+		},
+		Data: map[string]string{
+			"terraform-credentials-artifactory": "tfrc",
+		},
+	}
+
+	assert.Nil(t, k8sClient.Create(ctx, configMap))
+	assert.Nil(t, k8sClient.Get(ctx, client.ObjectKeyFromObject(configMap), configMap))
+
+	type args struct {
+		k8sClient                                    client.Client
+		TerraformCredentialsHelperConfigMapReference *corev1.SecretReference
+	}
+
+	type want struct {
+		configMap *corev1.ConfigMap
+		errMsg    string
+	}
+
+	testcases := []struct {
+		name string
+		args args
+		want want
+	}{
+		{
+			name: "configmap not found",
+			args: args{
+				k8sClient: k8sClient,
+				TerraformCredentialsHelperConfigMapReference: &corev1.SecretReference{
+					Namespace: "default",
+					Name:      "terraform-registry",
+				},
+			},
+			want: want{
+				errMsg: "Failed to get terraform credentials helper configmap: configmaps \"terraform-registry\" not found",
+			},
+		},
+		{
+			name: "configmap exists",
+			args: args{
+				k8sClient: k8sClient,
+				TerraformCredentialsHelperConfigMapReference: &corev1.SecretReference{
+					Namespace: "default",
+					Name:      "terraform-credentials-helper",
+				},
+			},
+			want: want{
+				configMap: configMap,
+			},
+		},
+	}
+
+	neededKeys := []string{}
+	errKey := "terraform credentials helper"
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			configMap, err := GetSecretOrConfigMap(ctx, tc.args.k8sClient, false, tc.args.TerraformCredentialsHelperConfigMapReference, neededKeys, errKey)
+
+			if err != nil {
+				assert.EqualError(t, err, tc.want.errMsg)
+			}
+			if tc.want.configMap != nil {
+				assert.EqualValues(t, configMap, tc.want.configMap)
+			}
+		})
+	}
+}
+
+func TestCheckValidateSecretAndConfigMap(t *testing.T) {
+	ctx := context.Background()
+	scheme := runtime.NewScheme()
+	corev1.AddToScheme(scheme)
+	k8sClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+
+	privateKey := []byte("aaa")
+	knownHosts := []byte("zzz")
+	secretGitCreds := &corev1.Secret{
+		ObjectMeta: v1.ObjectMeta{
+			Namespace: "default",
+			Name:      "git-ssh",
+		},
+		Data: map[string][]byte{
+			corev1.SSHAuthPrivateKey: privateKey,
+			"known_hosts":            knownHosts,
+		},
+		Type: corev1.SecretTypeSSHAuth,
+	}
+	assert.Nil(t, k8sClient.Create(ctx, secretGitCreds))
+	assert.Nil(t, k8sClient.Get(ctx, client.ObjectKeyFromObject(secretGitCreds), secretGitCreds))
+
+	credentialstfrcjson := []byte("tfcreds")
+	terraformrc := []byte("tfrc")
+	secretTerraformCredentials := &corev1.Secret{
+		ObjectMeta: v1.ObjectMeta{
+			Namespace: "default",
+			Name:      "terraform-creds",
+		},
+		Data: map[string][]byte{
+			"credentials.tfrc.json": credentialstfrcjson,
+			"terraformrc":           terraformrc,
+		},
+		Type: corev1.SecretTypeSSHAuth,
+	}
+	assert.Nil(t, k8sClient.Create(ctx, secretTerraformCredentials))
+	assert.Nil(t, k8sClient.Get(ctx, client.ObjectKeyFromObject(secretTerraformCredentials), secretTerraformCredentials))
+
+	configMapTerraformRC := &corev1.ConfigMap{
+		ObjectMeta: v1.ObjectMeta{
+			Namespace: "default",
+			Name:      "terraform-registry-config",
+		},
+		Data: map[string]string{
+			".terraformrc": "tfrc",
+		},
+	}
+
+	assert.Nil(t, k8sClient.Create(ctx, configMapTerraformRC))
+	assert.Nil(t, k8sClient.Get(ctx, client.ObjectKeyFromObject(configMapTerraformRC), configMapTerraformRC))
+
+	configMapCredentialsHelper := &corev1.ConfigMap{
+		ObjectMeta: v1.ObjectMeta{
+			Namespace: "default",
+			Name:      "terraform-credentials-helper",
+		},
+		Data: map[string]string{
+			"terraform-credentials-artifactory": "tfrc",
+		},
+	}
+
+	assert.Nil(t, k8sClient.Create(ctx, configMapCredentialsHelper))
+	assert.Nil(t, k8sClient.Get(ctx, client.ObjectKeyFromObject(configMapCredentialsHelper), configMapCredentialsHelper))
+
+	type args struct {
+		k8sClient client.Client
+		meta      TFConfigurationMeta
+	}
+
+	type want struct {
+		configMap *corev1.ConfigMap
+		errMsg    string
+	}
+
+	testcases := []struct {
+		name string
+		args args
+		want want
+	}{
+		{
+			name: "configmap not found",
+			args: args{
+				k8sClient: k8sClient,
+				meta: TFConfigurationMeta{
+					Name:                "a",
+					ConfigurationCMName: "b",
+					BusyboxImage:        "c",
+					GitImage:            "d",
+					Namespace:           "e",
+					TerraformImage:      "f",
+					RemoteGit:           "g",
+					GitCredentialsSecretReference: &corev1.SecretReference{
+						Namespace: "default",
+						Name:      "git-ssh",
+					},
+					TerraformCredentialsSecretReference: &corev1.SecretReference{
+						Namespace: "default",
+						Name:      "terraform-creds",
+					},
+					TerraformRCConfigMapReference: &corev1.SecretReference{
+						Namespace: "default",
+						Name:      "terraform-registry-config",
+					},
+					TerraformCredentialsHelperConfigMapReference: &corev1.SecretReference{
+						Namespace: "default",
+						Name:      "terraform-credentials-helper",
+					},
+				},
+			},
+			want: want{
+				errMsg: "NoError",
+			},
+		},
+		{
+			name: "terraform credentials configmap not found",
+			args: args{
+				k8sClient: k8sClient,
+				meta: TFConfigurationMeta{
+					Name:                "a",
+					ConfigurationCMName: "b",
+					BusyboxImage:        "c",
+					GitImage:            "d",
+					Namespace:           "e",
+					TerraformImage:      "f",
+					RemoteGit:           "g",
+					GitCredentialsSecretReference: &corev1.SecretReference{
+						Namespace: "default",
+						Name:      "git-ssh",
+					},
+					TerraformCredentialsSecretReference: &corev1.SecretReference{
+						Namespace: "default",
+						Name:      "terraform-creds",
+					},
+					TerraformRCConfigMapReference: &corev1.SecretReference{
+						Namespace: "default",
+						Name:      "terraform-registry-config",
+					},
+					TerraformCredentialsHelperConfigMapReference: &corev1.SecretReference{
+						Namespace: "default",
+						Name:      "terraform-registry",
+					},
+				},
+			},
+			want: want{
+				errMsg: "Failed to get terraform credentials helper configmap: configmaps \"terraform-registry\" not found",
+			},
+		},
+		{
+			name: "terraformrc configmap not found",
+			args: args{
+				k8sClient: k8sClient,
+				meta: TFConfigurationMeta{
+					Name:                "a",
+					ConfigurationCMName: "b",
+					BusyboxImage:        "c",
+					GitImage:            "d",
+					Namespace:           "e",
+					TerraformImage:      "f",
+					RemoteGit:           "g",
+					GitCredentialsSecretReference: &corev1.SecretReference{
+						Namespace: "default",
+						Name:      "git-ssh",
+					},
+					TerraformCredentialsSecretReference: &corev1.SecretReference{
+						Namespace: "default",
+						Name:      "terraform-creds",
+					},
+					TerraformRCConfigMapReference: &corev1.SecretReference{
+						Namespace: "default",
+						Name:      "terraform-registry",
+					},
+					TerraformCredentialsHelperConfigMapReference: &corev1.SecretReference{
+						Namespace: "default",
+						Name:      "terraform-credentials-helper",
+					},
+				},
+			},
+			want: want{
+				errMsg: "Failed to get terraformrc configuration configmap: configmaps \"terraform-registry\" not found",
+			},
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.args.meta.validateSecretAndConfigMap(ctx, k8sClient)
+			if err != nil {
+				assert.EqualError(t, err, tc.want.errMsg)
+			}
+		})
+	}
+
 }
