@@ -670,8 +670,6 @@ func (meta *TFConfigurationMeta) validateSecretAndConfigMap(ctx context.Context,
 		notFoundState types.ConfigurationState
 		isSecret      bool
 		neededKeys    []string
-		errMsg        string
-		keyErrMsg     string
 		errKey        string
 	}{
 		{
