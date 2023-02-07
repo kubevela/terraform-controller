@@ -21,6 +21,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/oam-dev/terraform-controller/controllers/features"
+	"k8s.io/apiserver/pkg/util/feature"
 	"math"
 	"os"
 	"path/filepath"
@@ -170,6 +172,7 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	if isDeleting {
 		// terraform destroy
 		klog.InfoS("performing Configuration Destroy", "Namespace", req.Namespace, "Name", req.Name, "JobName", meta.DestroyJobName)
+		// if allow to delete halfway, we will not check the status of the apply job.
 
 		_, err := terraform.GetTerraformStatus(ctx, meta.ControllerNamespace, meta.DestroyJobName, terraformContainerName, terraformInitContainerName)
 		if err != nil {
@@ -404,11 +407,20 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, configur
 	}
 
 	// Sub-resources can be deleted directly without waiting destroy job is done means:
-	// - Configuration is deletable (no cloud resources are provisioned or force delete is set)
+	// - Configuration is deletable (no cloud resources are provisioned or force delete is set) WHEN not allow to delete halfway.
 	// - OR user want to keep the resource when delete the configuration CR
-	notWaitingDestroyJob := deletable || !meta.DeleteResource
+	// If allowed to delete halfway, there could be parts of cloud resources are provisioned, so we need to wait destroy job is done.
+	notWaitingDestroyJob := deletable && !feature.DefaultFeatureGate.Enabled(features.AllowDeleteHalfway) || !meta.DeleteResource
+	// If the configuration is deletable, and it is caused by AllowDeleteHalfway feature, the apply job may be still running, we should clean it first to avoid data race.
+	needCleanApplyJob := deletable && feature.DefaultFeatureGate.Enabled(features.AllowDeleteHalfway)
 
 	if !notWaitingDestroyJob {
+		if needCleanApplyJob {
+			err := deleteApplyJob(ctx, meta, k8sClient)
+			if err != nil {
+				return err
+			}
+		}
 		if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.DestroyJobName, Namespace: meta.ControllerNamespace}, &destroyJob); err != nil {
 			if kerrors.IsNotFound(err) {
 				if err := r.Client.Get(ctx, client.ObjectKey{Name: configuration.Name, Namespace: configuration.Namespace}, &v1beta2.Configuration{}); err == nil {
@@ -430,7 +442,7 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, configur
 	}
 
 	if configuration.Spec.ForceDelete != nil && *configuration.Spec.ForceDelete {
-		// Try to clean up more sub-resources as possible. Ignore the issues if it hit any.
+		// Try to clean up as more sub-resources as possible. Ignore the issues if it hit any.
 		if err := r.cleanUpSubResources(ctx, configuration, meta); err != nil {
 			klog.Warningf("Failed to clean up sub-resources, but it's ignored as the resources are being forced to delete: %s", err)
 		}

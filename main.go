@@ -17,10 +17,11 @@ limitations under the License.
 package main
 
 import (
-	"flag"
+	"k8s.io/apiserver/pkg/util/feature"
 	"os"
 	"time"
 
+	"github.com/spf13/pflag"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
@@ -52,15 +53,16 @@ func main() {
 	var namespace string
 	var controllerNamespace string
 
-	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false, "Enable leader election for controller manager, this will ensure there is only one active controller manager.")
-	flag.DurationVar(&syncPeriod, "informer-re-sync-interval", 10*time.Second, "controller shared informer lister full re-sync period")
-	flag.StringVar(&metricsAddr, "metrics-addr", ":38080", "The address the metric endpoint binds to.")
-	flag.StringVar(&namespace, "namespace", "", "Namespace to watch for resources, defaults to all namespaces")
-	flag.StringVar(&controllerNamespace, "controller-namespace", "", "Namespace to run the terraform jobs")
+	pflag.BoolVar(&enableLeaderElection, "enable-leader-election", false, "Enable leader election for controller manager, this will ensure there is only one active controller manager.")
+	pflag.DurationVar(&syncPeriod, "informer-re-sync-interval", 10*time.Second, "controller shared informer lister full re-sync period")
+	pflag.StringVar(&metricsAddr, "metrics-addr", ":38080", "The address the metric endpoint binds to.")
+	pflag.StringVar(&namespace, "namespace", "", "Namespace to watch for resources, defaults to all namespaces")
+	pflag.StringVar(&controllerNamespace, "controller-namespace", "", "Namespace to run the terraform jobs")
+	feature.DefaultMutableFeatureGate.AddFlag(pflag.CommandLine)
 
 	// embed klog
 	klog.InitFlags(nil)
-	flag.Parse()
+	pflag.Parse()
 
 	ctrl.SetLogger(klogr.New())
 
