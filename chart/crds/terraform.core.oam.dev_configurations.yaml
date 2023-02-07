@@ -4,7 +4,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.6.0
+    controller-gen.kubebuilder.io/version: v0.6.2
   creationTimestamp: null
   name: configurations.terraform.core.oam.dev
 spec:
@@ -218,7 +218,10 @@ spec:
       status: {}
   - additionalPrinterColumns:
     - jsonPath: .status.apply.state
-      name: STATE
+      name: APPLY
+      type: string
+    - jsonPath: .status.destroy.state
+      name: DESTROY
       type: string
     - jsonPath: .metadata.creationTimestamp
       name: AGE

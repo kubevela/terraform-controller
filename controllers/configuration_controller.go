@@ -410,9 +410,9 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, configur
 	// - Configuration is deletable (no cloud resources are provisioned or force delete is set) WHEN not allow to delete halfway.
 	// - OR user want to keep the resource when delete the configuration CR
 	// If allowed to delete halfway, there could be parts of cloud resources are provisioned, so we need to wait destroy job is done.
-	notWaitingDestroyJob := deletable && !feature.DefaultFeatureGate.Enabled(features.AllowDeleteHalfway) || !meta.DeleteResource
-	// If the configuration is deletable, and it is caused by AllowDeleteHalfway feature, the apply job may be still running, we should clean it first to avoid data race.
-	needCleanApplyJob := deletable && feature.DefaultFeatureGate.Enabled(features.AllowDeleteHalfway)
+	notWaitingDestroyJob := deletable && !feature.DefaultFeatureGate.Enabled(features.AllowDeleteProvisioningResource) || !meta.DeleteResource
+	// If the configuration is deletable, and it is caused by AllowDeleteProvisioningResource feature, the apply job may be still running, we should clean it first to avoid data race.
+	needCleanApplyJob := deletable && feature.DefaultFeatureGate.Enabled(features.AllowDeleteProvisioningResource)
 
 	if !notWaitingDestroyJob {
 		if needCleanApplyJob {

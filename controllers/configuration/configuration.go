@@ -84,11 +84,11 @@ func Get(ctx context.Context, k8sClient client.Client, namespacedName apitypes.N
 
 // IsDeletable will check whether the Configuration can be deleted immediately
 // If deletable, it means
-// - feature gate AllowDeleteHalfway is enabled
+// - feature gate AllowDeleteProvisioningResource is enabled
 // - no external cloud resources are provisioned
 // - it's in force-delete state
 func IsDeletable(ctx context.Context, k8sClient client.Client, configuration *v1beta2.Configuration) (bool, error) {
-	if feature.DefaultFeatureGate.Enabled(features.AllowDeleteHalfway) {
+	if feature.DefaultFeatureGate.Enabled(features.AllowDeleteProvisioningResource) {
 		return true, nil
 	}
 	if configuration.Spec.ForceDelete != nil && *configuration.Spec.ForceDelete {

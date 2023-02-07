@@ -15,6 +15,7 @@ import (
 
 // Available is the available status of Configuration
 const Available = "Available"
+const Provisioning = "ProvisioningAndChecking"
 
 // Regression test for the e2e.
 func Regression(t *testing.T, testcases []string, retryTimes int) {

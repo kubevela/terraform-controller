@@ -23,11 +23,11 @@ import (
 )
 
 const (
-	AllowDeleteHalfway featuregate.Feature = "AllowDeleteHalfway"
+	AllowDeleteProvisioningResource featuregate.Feature = "AllowDeleteProvisioningResource"
 )
 
 var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
-	AllowDeleteHalfway: {Default: false, PreRelease: featuregate.Alpha},
+	AllowDeleteProvisioningResource: {Default: false, PreRelease: featuregate.Alpha},
 }
 
 func init() {
