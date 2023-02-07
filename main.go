@@ -17,12 +17,12 @@ limitations under the License.
 package main
 
 import (
-	"k8s.io/apiserver/pkg/util/feature"
 	"os"
 	"time"
 
 	"github.com/spf13/pflag"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apiserver/pkg/util/feature"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/klogr"

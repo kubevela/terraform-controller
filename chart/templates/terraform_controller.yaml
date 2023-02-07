@@ -24,6 +24,7 @@ spec:
             {{- if .Values.controllerNamespace }}
             - --controller-namespace={{ .Values.controllerNamespace }}
             {{- end }}
+            - --feature-gates=AllowDeleteHalfway={{ .Values.featureGates.allowDeleteHalfway }}
           env:
             - name: CONTROLLER_NAMESPACE
               valueFrom:

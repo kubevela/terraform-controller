@@ -25,3 +25,9 @@ backend:
   namespace: vela-system
 
 githubBlocked: "'false'"
+
+featureGates:
+  # Enable the feature of allowing to delete a configuration whose cloud resources is not fully provisioned, or error happens
+  # This guarantees that the partial cloud resources will be deleted when the configuration is deleted
+  # Default value is true
+  allowDeleteHalfway: true

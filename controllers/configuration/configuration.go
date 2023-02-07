@@ -3,14 +3,13 @@ package configuration
 import (
 	"context"
 	"fmt"
-	"github.com/oam-dev/terraform-controller/controllers/features"
-	"k8s.io/apiserver/pkg/util/feature"
 	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	apitypes "k8s.io/apimachinery/pkg/types"
+	"k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -18,6 +17,7 @@ import (
 	crossplane "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
 	"github.com/oam-dev/terraform-controller/api/v1beta2"
+	"github.com/oam-dev/terraform-controller/controllers/features"
 	"github.com/oam-dev/terraform-controller/controllers/provider"
 )
 
