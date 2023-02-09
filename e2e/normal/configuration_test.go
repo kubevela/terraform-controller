@@ -91,17 +91,6 @@ func testBase(t *testing.T, configuration ConfigurationAttr, injector Injector, 
 			}
 			output, err = exec.Command("bash", "-c", "kubectl get pod").CombinedOutput()
 			lines = strings.Split(string(output), "\n")
-			for _, line := range lines {
-				fields = strings.Fields(line)
-				if len(fields) == 0 {
-					continue
-				}
-				if strings.HasPrefix(fields[0], "random-e2e-git-creds-secret-ref-apply") {
-					output, _ = exec.Command("bash", "-c", fmt.Sprintf("kubectl get pod -o yaml %s", fields[0])).CombinedOutput()
-					t.Log(string(output))
-				}
-			}
-			assert.NilError(t, err)
 			t.Log(string(output))
 			if i == 119 {
 				t.Error("Configuration is not ready")
