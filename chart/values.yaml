@@ -16,10 +16,10 @@ jobNodeSelector: ""
 resources:
   limits:
     cpu: "500m"
-    memory: "1Gi"
+    memory: "500Mi"
   requests:
-    cpu: "500m"
-    memory: "1Gi"
+    cpu: "250m"
+    memory: "250Mi"
 
 backend:
   namespace: vela-system
