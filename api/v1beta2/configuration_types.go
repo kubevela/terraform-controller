@@ -165,7 +165,8 @@ type S3BackendConf struct {
 // Configuration is the Schema for the configurations API
 // +kubebuilder:storageversion
 // +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:name="STATE",type="string",JSONPath=".status.apply.state"
+// +kubebuilder:printcolumn:name="APPLY",type="string",JSONPath=".status.apply.state"
+// +kubebuilder:printcolumn:name="DESTROY",type="string",JSONPath=".status.destroy.state"
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
 type Configuration struct {
 	metav1.TypeMeta   `json:",inline"`

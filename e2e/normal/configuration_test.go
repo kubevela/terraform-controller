@@ -31,9 +31,10 @@ var (
 		"examples/alibaba/eip/configuration_eip_remote_subdirectory.yaml",
 		"examples/alibaba/oss/configuration_hcl_bucket.yaml",
 	}
-	testConfigurationsForceDelete             = "examples/random/configuration_force_delete.yaml"
-	testConfigurationsGitCredsSecretReference = "../examples/random/configuration_git_ssh.yaml"
-	chartNamespace                            = "terraform"
+	testConfigurationsForceDelete                = "examples/random/configuration_force_delete.yaml"
+	testConfigurationsGitCredsSecretReference    = "examples/random/configuration_git_ssh.yaml"
+	testConfigurationDeleteProvisioningResources = "examples/random/configuration_delete_provisioning_resources.yaml"
+	chartNamespace                               = "terraform"
 )
 
 type ConfigurationAttr struct {
@@ -57,7 +58,9 @@ type DoFunc = func(ctx *TestContext)
 
 type Injector struct {
 	BeforeApplyConfiguration DoFunc
+	CheckConfiguration       DoFunc
 	CleanUp                  DoFunc
+
 	// add more actions and check points if needed
 }
 
@@ -69,6 +72,32 @@ func invoke(do DoFunc, ctx *TestContext) {
 
 func testBase(t *testing.T, configuration ConfigurationAttr, injector Injector, useCustomBackend bool) {
 	klog.Infof("%s test begins……", configuration.Name)
+
+	waitConfigurationAvailable := func(ctx *TestContext) {
+		for i := 0; i < 120; i++ {
+			var fields []string
+			output, err := exec.Command("bash", "-c", "kubectl get configuration").CombinedOutput()
+			assert.NilError(t, err)
+
+			lines := strings.Split(string(output), "\n")
+			for i, line := range lines {
+				if i == 0 {
+					continue
+				}
+				fields = strings.Fields(line)
+				if len(fields) == 3 && fields[0] == configuration.Name && fields[1] == Available {
+					return
+				}
+			}
+			output, err = exec.Command("bash", "-c", "kubectl get pod").CombinedOutput()
+			lines = strings.Split(string(output), "\n")
+			t.Log(string(output))
+			if i == 119 {
+				t.Error("Configuration is not ready")
+			}
+			time.Sleep(time.Second * 5)
+		}
+	}
 
 	backendSecretNamespace := configuration.BackendStateSecretNS
 	if backendSecretNamespace == "" {
@@ -94,34 +123,17 @@ func testBase(t *testing.T, configuration ConfigurationAttr, injector Injector, 
 	klog.Info("1. Applying Configuration")
 	invoke(injector.BeforeApplyConfiguration, testCtx)
 	pwd, _ := os.Getwd()
-	configuration.YamlPath = filepath.Join(pwd, "..", configuration.YamlPath)
+	configuration.YamlPath = filepath.Join(pwd, "../..", configuration.YamlPath)
 	cmd := fmt.Sprintf("kubectl apply -f %s", configuration.YamlPath)
-	err = exec.Command("bash", "-c", cmd).Start()
-	assert.NilError(t, err)
+	output, err := exec.Command("bash", "-c", cmd).CombinedOutput()
+	assert.NilError(t, err, string(output))
 
 	klog.Info("2. Checking Configuration status")
-	for i := 0; i < 120; i++ {
-		var fields []string
-		output, err := exec.Command("bash", "-c", "kubectl get configuration").Output()
-		assert.NilError(t, err)
-
-		lines := strings.Split(string(output), "\n")
-		for i, line := range lines {
-			if i == 0 {
-				continue
-			}
-			fields = strings.Fields(line)
-			if len(fields) == 3 && fields[0] == configuration.Name && fields[1] == Available {
-				goto continueCheck
-			}
-		}
-		if i == 119 {
-			t.Error("Configuration is not ready")
-		}
-		time.Sleep(time.Second * 5)
+	if injector.CheckConfiguration == nil {
+		injector.CheckConfiguration = waitConfigurationAvailable
 	}
+	invoke(injector.CheckConfiguration, testCtx)
 
-continueCheck:
 	klog.Info("3. Checking the status of Configs and Secrets")
 
 	klog.Info("- Checking ConfigMap which stores .tf")
@@ -134,9 +146,11 @@ continueCheck:
 		assert.NilError(t, err)
 	}
 
-	klog.Info("- Checking Secret which stores outputs")
-	_, err = clientSet.CoreV1().Secrets("default").Get(ctx, configuration.OutputsSecretName, v1.GetOptions{})
-	assert.NilError(t, err)
+	if configuration.OutputsSecretName != "" {
+		klog.Info("- Checking Secret which stores outputs")
+		_, err = clientSet.CoreV1().Secrets("default").Get(ctx, configuration.OutputsSecretName, v1.GetOptions{})
+		assert.NilError(t, err)
+	}
 
 	klog.Info("- Checking Secret which stores variables")
 	_, err = clientSet.CoreV1().Secrets("default").Get(ctx, configuration.VariableSecretName, v1.GetOptions{})
@@ -144,8 +158,8 @@ continueCheck:
 
 	klog.Info("4. Deleting Configuration")
 	cmd = fmt.Sprintf("kubectl delete -f %s", configuration.YamlPath)
-	err = exec.Command("bash", "-c", cmd).Start()
-	assert.NilError(t, err)
+	output, err = exec.Command("bash", "-c", cmd).CombinedOutput()
+	assert.NilError(t, err, string(output))
 
 	klog.Info("5. Checking Configuration is deleted")
 	for i := 0; i < 60; i++ {
@@ -153,8 +167,8 @@ continueCheck:
 			fields  []string
 			existed bool
 		)
-		output, err := exec.Command("bash", "-c", "kubectl get configuration").Output()
-		assert.NilError(t, err)
+		output, err := exec.Command("bash", "-c", "kubectl get configuration").CombinedOutput()
+		assert.NilError(t, err, string(output))
 
 		lines := strings.Split(string(output), "\n")
 
@@ -181,8 +195,10 @@ continueCheck:
 
 	klog.Info("6. Checking Secrets and ConfigMap which should all be deleted")
 
-	_, err = clientSet.CoreV1().Secrets("default").Get(ctx, configuration.OutputsSecretName, v1.GetOptions{})
-	assert.Equal(t, kerrors.IsNotFound(err), true)
+	if configuration.OutputsSecretName != "" {
+		_, err = clientSet.CoreV1().Secrets("default").Get(ctx, configuration.OutputsSecretName, v1.GetOptions{})
+		assert.Equal(t, kerrors.IsNotFound(err), true)
+	}
 
 	_, err = clientSet.CoreV1().Secrets("default").Get(ctx, configuration.VariableSecretName, v1.GetOptions{})
 	assert.Equal(t, kerrors.IsNotFound(err), true)
@@ -221,14 +237,14 @@ func TestInlineCredentialsConfigurationUseCustomBackendKubernetes(t *testing.T) 
 		VariableSecretName:     "variable-random-e2e-custom-backend-kubernetes",
 	}
 	beforeApply := func(ctx *TestContext) {
-		cmd := exec.Command("bash", "-c", "kubectl create ns a")
-		err := cmd.Run()
-		assert.NilError(t, err)
+		output, err := exec.Command("bash", "-c", "kubectl create ns a").CombinedOutput()
+		if err != nil && !strings.Contains(string(output), "already exists") {
+			assert.NilError(t, err, string(output))
+		}
 	}
 	cleanUp := func(ctx *TestContext) {
-		cmd := exec.Command("bash", "-c", "kubectl delete ns a")
-		err := cmd.Run()
-		assert.NilError(t, err)
+		output, err := exec.Command("bash", "-c", "kubectl delete ns a").CombinedOutput()
+		assert.NilError(t, err, string(output))
 	}
 	testBase(
 		t,
@@ -260,7 +276,7 @@ func TestForceDeleteConfiguration(t *testing.T) {
 			fields  []string
 			existed bool
 		)
-		output, err := exec.Command("bash", "-c", "kubectl get configuration").Output()
+		output, err := exec.Command("bash", "-c", "kubectl get configuration").CombinedOutput()
 		assert.NilError(t, err)
 
 		lines := strings.Split(string(output), "\n")
@@ -300,17 +316,19 @@ func TestGitCredentialsSecretReference(t *testing.T) {
 	clientSet, err := client.Init()
 	assert.NilError(t, err)
 	pwd, _ := os.Getwd()
-	gitServer := filepath.Join(pwd, "..", "../examples/git-credentials")
+	gitServer := filepath.Join(pwd, "../..", "examples/git-credentials")
 	gitServerApplyCmd := fmt.Sprintf("kubectl apply -f %s", gitServer)
 	gitServerDeleteCmd := fmt.Sprintf("kubectl delete -f %s", gitServer)
 	gitSshAuthSecretYaml := filepath.Join(gitServer, "git-ssh-auth-secret.yaml")
 
 	beforeApply := func(ctx *TestContext) {
-		err = exec.Command("bash", "-c", gitServerApplyCmd).Run()
-		assert.NilError(t, err)
+		output, err := exec.Command("bash", "-c", gitServerApplyCmd).CombinedOutput()
+		assert.NilError(t, err, string(output))
 
 		klog.Info("- Checking git-server pod status")
 		for i := 0; i < 120; i++ {
+			serverReady := false
+			pushReady := false
 			pod, _ := clientSet.CoreV1().Pods("default").Get(ctx, "git-server", v1.GetOptions{})
 			conditions := pod.Status.Conditions
 			var index int
@@ -322,6 +340,13 @@ func TestGitCredentialsSecretReference(t *testing.T) {
 				}
 			}
 			if conditions[index].Status == "True" && conditions[index].Type == coreV1.PodReady {
+				serverReady = true
+			}
+			job, _ := clientSet.BatchV1().Jobs("default").Get(ctx, "git-push", v1.GetOptions{})
+			if job.Status.Succeeded == 1 {
+				pushReady = true
+			}
+			if serverReady && pushReady {
 				break
 			}
 			if i == 119 {
@@ -331,7 +356,7 @@ func TestGitCredentialsSecretReference(t *testing.T) {
 		}
 
 		getKnownHostsCmd := "kubectl exec pod/git-server -- ssh-keyscan git-server"
-		knownHosts, err := exec.Command("bash", "-c", getKnownHostsCmd).Output()
+		knownHosts, err := exec.Command("bash", "-c", getKnownHostsCmd).CombinedOutput()
 		assert.NilError(t, err)
 
 		gitSshAuthSecretTmpl := filepath.Join(gitServer, "templates/git-ssh-auth-secret.tmpl")
@@ -360,6 +385,63 @@ func TestGitCredentialsSecretReference(t *testing.T) {
 		},
 		false,
 	)
+}
+
+func TestAllowDeleteProvisioningResoruce(t *testing.T) {
+	configuration := ConfigurationAttr{
+		Name:                   "random-e2e-delete-provisioning-resources",
+		YamlPath:               testConfigurationDeleteProvisioningResources,
+		TFConfigMapName:        "tf-random-e2e-delete-provisioning-resources",
+		BackendStateSecretName: "tfstate-default-random-e2e-delete-provisioning-resources",
+		// won't generate output at all
+		OutputsSecretName:  "",
+		VariableSecretName: "variable-random-e2e-delete-provisioning-resources",
+	}
+	checkConfigurationIsProvisioning := func(ctx *TestContext) {
+
+		for i := 0; i < 20; i++ {
+			cfgProvisioning := false
+			backendExist := false
+			klog.Info("Check configuration is provisioning")
+			var fields []string
+			output, err := exec.Command("bash", "-c", "kubectl get configuration").CombinedOutput()
+			assert.NilError(t, err)
+
+			lines := strings.Split(string(output), "\n")
+			for i, line := range lines {
+				if i == 0 {
+					continue
+				}
+				fields = strings.Fields(line)
+				if len(fields) == 3 && fields[0] == configuration.Name && fields[1] == Provisioning {
+					cfgProvisioning = true
+				}
+			}
+			_, err = ctx.ClientSet.CoreV1().Secrets(ctx.BackendSecretNamespace).Get(ctx, configuration.BackendStateSecretName, v1.GetOptions{})
+			if err == nil {
+				backendExist = true
+			}
+
+			if cfgProvisioning && backendExist {
+				return
+			}
+
+			if i == 119 {
+				t.Error("Configuration is not ready")
+			}
+			time.Sleep(time.Second * 5)
+		}
+
+	}
+	testBase(
+		t,
+		configuration,
+		Injector{
+			CheckConfiguration: checkConfigurationIsProvisioning,
+		},
+		false,
+	)
+
 }
 
 //func TestBasicConfigurationRegression(t *testing.T) {

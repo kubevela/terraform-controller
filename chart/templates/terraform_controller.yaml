@@ -24,6 +24,7 @@ spec:
             {{- if .Values.controllerNamespace }}
             - --controller-namespace={{ .Values.controllerNamespace }}
             {{- end }}
+            - --feature-gates=AllowDeleteProvisioningResource={{ .Values.featureGates.AllowDeleteProvisioningResource }}
           env:
             - name: CONTROLLER_NAMESPACE
               valueFrom:

@@ -9,6 +9,7 @@ import (
 	"github.com/pkg/errors"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	apitypes "k8s.io/apimachinery/pkg/types"
+	"k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -16,6 +17,7 @@ import (
 	crossplane "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
 	"github.com/oam-dev/terraform-controller/api/v1beta2"
+	"github.com/oam-dev/terraform-controller/controllers/features"
 	"github.com/oam-dev/terraform-controller/controllers/provider"
 )
 
@@ -82,9 +84,13 @@ func Get(ctx context.Context, k8sClient client.Client, namespacedName apitypes.N
 
 // IsDeletable will check whether the Configuration can be deleted immediately
 // If deletable, it means
+// - feature gate AllowDeleteProvisioningResource is enabled
 // - no external cloud resources are provisioned
 // - it's in force-delete state
 func IsDeletable(ctx context.Context, k8sClient client.Client, configuration *v1beta2.Configuration) (bool, error) {
+	if feature.DefaultFeatureGate.Enabled(features.AllowDeleteProvisioningResource) {
+		return true, nil
+	}
 	if configuration.Spec.ForceDelete != nil && *configuration.Spec.ForceDelete {
 		return true, nil
 	}

@@ -35,6 +35,7 @@ func GetTerraformStatus(ctx context.Context, jobNamespace, jobName, containerNam
 	return state, errors.New(errMsg)
 }
 
+// analyzeTerraformLog will analyze the logs of Terraform apply pod, returns true if check is ok.
 func analyzeTerraformLog(logs string, stage types.Stage) (bool, types.ConfigurationState, string) {
 	lines := strings.Split(logs, "\n")
 	for i, line := range lines {
