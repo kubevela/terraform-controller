@@ -7,7 +7,7 @@ image:
 
 gitImage: alpine/git:latest
 busyboxImage: busybox:latest
-terraformImage: oamdev/docker-terraform:1.1.2
+terraformImage: oamdev/docker-terraform:1.1.5
 controllerNamespace: ""
 
 # "{\"nat\": \"true\"}"
