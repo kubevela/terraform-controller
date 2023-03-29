@@ -279,6 +279,7 @@ type TFConfigurationMeta struct {
 	TerraformCredentialsSecretReference          *v1.SecretReference
 	TerraformRCConfigMapReference                *v1.SecretReference
 	TerraformCredentialsHelperConfigMapReference *v1.SecretReference
+	VolumeSpec                                   *v1beta2.VolumeSpec
 
 	Backend backend.Backend
 	// JobNodeSelector Expose the node selector of job to the controller level
@@ -354,6 +355,10 @@ func initTFConfigurationMeta(req ctrl.Request, configuration v1beta2.Configurati
 
 	if configuration.Spec.TerraformCredentialsHelperConfigMapReference != nil {
 		meta.TerraformCredentialsHelperConfigMapReference = configuration.Spec.TerraformCredentialsHelperConfigMapReference
+	}
+
+	if configuration.Spec.VolumeSpec != nil {
+		meta.VolumeSpec = configuration.Spec.VolumeSpec
 	}
 
 	return meta
@@ -930,7 +935,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 			"-c",
 			fmt.Sprintf("terraform %s -lock=false -auto-approve", executionType),
 		},
-		VolumeMounts: []v1.VolumeMount{
+		VolumeMounts: append([]v1.VolumeMount{
 			{
 				Name:      meta.Name,
 				MountPath: WorkingVolumeMountPath,
@@ -939,7 +944,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 				Name:      InputTFConfigurationVolumeName,
 				MountPath: InputTFConfigurationVolumeMountPath,
 			},
-		},
+		}, meta.VolumeSpec.VolumeMounts...),
 		Env: meta.Envs,
 	}
 
@@ -1048,6 +1053,11 @@ func (meta *TFConfigurationMeta) assembleExecutorVolumes() []v1.Volume {
 			executorVolumes = append(executorVolumes, meta.createSecretOrConfigMapVolume(ref.isSecret, ref.ref.Name, ref.volumeName))
 		}
 	}
+
+	if meta.VolumeSpec != nil {
+		executorVolumes = append(executorVolumes, meta.VolumeSpec.Volumes...)
+	}
+
 	return executorVolumes
 }
 
