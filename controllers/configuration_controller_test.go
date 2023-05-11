@@ -2371,10 +2371,36 @@ func TestCheckWhetherConfigurationChanges(t *testing.T) {
 					Namespace:           "b",
 					ControllerNamespace: "b",
 				},
-				configurationType: "xxx",
+				configurationType: "HCL",
 			},
 			want: want{
-				errMsg: "not found",
+				errMsg: "",
+			},
+		},
+		"configuration type is remote": {
+			args: args{
+				meta: &TFConfigurationMeta{
+					ConfigurationCMName: "aaa",
+					Namespace:           "b",
+					ControllerNamespace: "b",
+				},
+				configurationType: "Remote",
+			},
+			want: want{
+				errMsg: "",
+			},
+		},
+		"create configuration for the first time": {
+			args: args{
+				meta: &TFConfigurationMeta{
+					ConfigurationCMName: "aa",
+					Namespace:           "b",
+					ControllerNamespace: "b",
+				},
+				configurationType: "HCL",
+			},
+			want: want{
+				errMsg: "",
 			},
 		},
 	}
@@ -2385,6 +2411,11 @@ func TestCheckWhetherConfigurationChanges(t *testing.T) {
 				if !strings.Contains(err.Error(), tc.want.errMsg) {
 					t.Errorf("CheckWhetherConfigurationChanges() error = %v, wantErr %v", err, tc.want.errMsg)
 				}
+			}
+
+			if tc.want.errMsg == "" {
+				assert.Nil(t, err)
+				assert.False(t, tc.args.meta.ConfigurationChanged)
 			}
 		})
 	}
