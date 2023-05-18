@@ -25,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -288,6 +289,9 @@ type TFConfigurationMeta struct {
 	TerraformImage string
 	BusyboxImage   string
 	GitImage       string
+
+	// BackoffLimit specifies the number of retries to mark the Job as failed
+	BackoffLimit int32
 
 	// ResourceQuota series Variables are for Setting Compute Resources required by this container
 	ResourceQuota ResourceQuota
@@ -561,6 +565,13 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 		meta.GitImage = "alpine/git:latest"
 	}
 
+	meta.BackoffLimit = math.MaxInt32
+	if backoffLimit := os.Getenv("JOB_BACKOFF_LIMIT"); backoffLimit != "" {
+		if backoffLimitNumber, parserErr := strconv.ParseInt(backoffLimit, 10, 32); parserErr == nil {
+			meta.BackoffLimit = int32(backoffLimitNumber)
+		}
+	}
+
 	if err := r.preCheckResourcesSetting(meta); err != nil {
 		return err
 	}
@@ -815,7 +826,6 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 		initContainers          []v1.Container
 		parallelism             int32 = 1
 		completions             int32 = 1
-		backoffLimit            int32 = math.MaxInt32
 	)
 
 	executorVolumes := meta.assembleExecutorVolumes()
@@ -984,7 +994,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 		Spec: batchv1.JobSpec{
 			Parallelism:  &parallelism,
 			Completions:  &completions,
-			BackoffLimit: &backoffLimit,
+			BackoffLimit: &meta.BackoffLimit,
 			Template: v1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{

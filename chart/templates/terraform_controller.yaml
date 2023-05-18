@@ -40,6 +40,10 @@ spec:
               value: {{ .Values.gitImage}}
             - name: GITHUB_BLOCKED
               value: {{ .Values.githubBlocked }}
+            {{ if .Values.jobBackoffLimit }}
+            - name: JOB_BACKOFF_LIMIT
+              value: {{ .Values.jobBackoffLimit }}
+            {{ end }}
             {{ if .Values.jobNodeSelector }}
             - name: JOB_NODE_SELECTOR
               value: {{ .Values.jobNodeSelector }}
