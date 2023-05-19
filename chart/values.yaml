@@ -12,6 +12,7 @@ controllerNamespace: ""
 
 # "{\"nat\": \"true\"}"
 jobNodeSelector: ""
+jobBackoffLimit: ""
 
 resources:
   limits:
