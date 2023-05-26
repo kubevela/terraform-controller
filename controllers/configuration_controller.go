@@ -728,6 +728,20 @@ func (meta *TFConfigurationMeta) validateSecretAndConfigMap(ctx context.Context,
 				}
 				return errors.New(msg)
 			}
+			// fix: The configmap or secret that the pod restricts from mounting must be in the same namespace as the pod,
+			//      otherwise the volume mount will fail.
+			if object.GetNamespace() != meta.ControllerNamespace {
+				objectKind := "ConfigMap"
+				if check.isSecret {
+					objectKind = "Secret"
+				}
+				msg := fmt.Sprintf("Invalid %s '%s/%s', whose namespace '%s' is different from the configuration, cannot mount the volume.",
+					objectKind, object.GetNamespace(), object.GetName(), meta.ControllerNamespace)
+				if updateStatusErr := meta.updateApplyStatus(ctx, k8sClient, check.notFoundState, msg); updateStatusErr != nil {
+					return errors.Wrap(updateStatusErr, msg)
+				}
+				return errors.New(msg)
+			}
 		}
 	}
 	return nil
