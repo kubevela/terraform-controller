@@ -3304,7 +3304,8 @@ func TestCheckValidateSecretAndConfigMap(t *testing.T) {
 				},
 			},
 			want: want{
-				errMsg: "Invalid Secret 'default/git-ssh', whose namespace 'vela-system' is different from the configuration, cannot mount the volume.",
+				errMsg: "Invalid Secret 'default/git-ssh', whose namespace 'vela-system' is different from the Configuration, cannot mount the volume," +
+					" you can fix this issue by creating the Secret/ConfigMap in the 'vela-system' namespace.",
 			},
 		},
 	}

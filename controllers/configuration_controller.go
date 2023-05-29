@@ -735,8 +735,9 @@ func (meta *TFConfigurationMeta) validateSecretAndConfigMap(ctx context.Context,
 				if check.isSecret {
 					objectKind = "Secret"
 				}
-				msg := fmt.Sprintf("Invalid %s '%s/%s', whose namespace '%s' is different from the configuration, cannot mount the volume.",
-					objectKind, object.GetNamespace(), object.GetName(), meta.ControllerNamespace)
+				msg := fmt.Sprintf("Invalid %s '%s/%s', whose namespace '%s' is different from the Configuration, cannot mount the volume,"+
+					" you can fix this issue by creating the Secret/ConfigMap in the '%s' namespace.",
+					objectKind, object.GetNamespace(), object.GetName(), meta.ControllerNamespace, meta.ControllerNamespace)
 				if updateStatusErr := meta.updateApplyStatus(ctx, k8sClient, check.notFoundState, msg); updateStatusErr != nil {
 					return errors.Wrap(updateStatusErr, msg)
 				}
