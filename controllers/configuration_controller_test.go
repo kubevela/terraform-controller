@@ -512,7 +512,7 @@ func TestConfigurationReconcile(t *testing.T) {
 		},
 	}
 
-	stateData, _ := base64.StdEncoding.DecodeString("H4sIAAAAAAAA/0SMwa7CIBBF9/0KMutH80ArDb9ijKHDYEhqMQO4afrvBly4POfc3H0QAt7EOaYNrDj/NS7E7ELi5/1XQI3/o4beM3F0K1ihO65xI/egNsLThLPRWi6agkR/CVIppaSZJrfgbBx6//1ItbxqyWDFfnTBlFNlpKaut+EYPgEAAP//xUXpvZsAAAA=")
+	stateData, _ := base64.StdEncoding.DecodeString("H4sIAAAAAAAA/4SQzarbMBCF934KoXUdPKNf+1VKCWNp5AocO8hyaSl592KlcBd3cZfnHPHpY/52QshfXI68b3IS+tuVK5dCaS+P+8ci4TbcULb94JJplZPAFte8MS18PQrKBO8Q+xk59SHa1AMA9M4YmoN3FGJ8M/azPs96yElcCkLIsG+V8sblnqOc3uXlRuvZ0GxSSuiCRUYbw2gGHRFGPxitEgJYQDQ0a68I2ChNo1cAZJ2bR20UtW8bsv55NuJRS94W2erXe5X5QQs3A/FZ4fhJaOwUgZTVMRjto1HGpSGSQuuD955hdDDPcR6NY1ZpQJ/YwagTRAvBpsi8LXn7Pa1U+ahfWHX/zWThYz9L4Otg3390r+5fAAAA//8hmcuNuQEAAA==")
 
 	backendSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -578,6 +578,13 @@ func TestConfigurationReconcile(t *testing.T) {
 		},
 		Spec: v1beta2.ConfigurationSpec{
 			HCL: "c",
+			Backend: &v1beta2.Backend{
+				BackendType: "kubernetes",
+				Kubernetes: &v1beta2.KubernetesBackendConf{
+					SecretSuffix: "a",
+					Namespace:    &backendSecret.Namespace,
+				},
+			},
 		},
 		Status: v1beta2.ConfigurationStatus{
 			Apply: v1beta2.ConfigurationApplyStatus{
@@ -601,7 +608,7 @@ func TestConfigurationReconcile(t *testing.T) {
 	}
 
 	r4 := &ConfigurationReconciler{}
-	r4.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(secret, provider, configuration4, destroyJob4).Build()
+	r4.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(secret, provider, configuration4, destroyJob4, backendSecret).Build()
 
 	configuration5 := &v1beta2.Configuration{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1821,6 +1828,138 @@ func TestTfStatePropertyToToProperty(t *testing.T) {
 		if testcase.Type == "map" {
 			assert.Equal(t, property.Value, `{"test1":"abc","test2":123}`)
 		}
+	}
+}
+
+func TestIsTFStateGenerated(t *testing.T) {
+	type args struct {
+		ctx           context.Context
+		k8sClient     client.Client
+		configuration v1beta2.Configuration
+		meta          *TFConfigurationMeta
+	}
+	type want struct {
+		generated bool
+	}
+
+	ctx := context.Background()
+
+	k8sClient1 := fake.NewClientBuilder().Build()
+	meta1 := &TFConfigurationMeta{
+		Backend: &backend.K8SBackend{
+			Client:       k8sClient1,
+			SecretSuffix: "a",
+			SecretNS:     "default",
+		},
+	}
+
+	secret2 := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "tfstate-default-a",
+			Namespace: "default",
+		},
+		Type: corev1.SecretTypeOpaque,
+	}
+	k8sClient2 := fake.NewClientBuilder().WithObjects(secret2).Build()
+	meta2 := &TFConfigurationMeta{
+		Backend: &backend.K8SBackend{
+			Client:       k8sClient2,
+			SecretSuffix: "a",
+			SecretNS:     "default",
+		},
+	}
+
+	tfStateData3, _ := base64.StdEncoding.DecodeString("H4sIAAAAAAAA/0SMwa7CIBBF9/0KMutH80ArDb9ijKHDYEhqMQO4afrvBly4POfc3H0QAt7EOaYNrDj/NS7E7ELi5/1XQI3/o4beM3F0K1ihO65xI/egNsLThLPRWi6agkR/CVIppaSZJrfgbBx6//1ItbxqyWDFfnTBlFNlpKaut+EYPgEAAP//xUXpvZsAAAA=")
+	secret3 := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "tfstate-default-a",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"tfstate": tfStateData3,
+		},
+		Type: corev1.SecretTypeOpaque,
+	}
+	k8sClient3 := fake.NewClientBuilder().WithObjects(secret3).Build()
+	meta3 := &TFConfigurationMeta{
+		Backend: &backend.K8SBackend{
+			Client:       k8sClient3,
+			SecretSuffix: "a",
+			SecretNS:     "default",
+		},
+	}
+
+	tfStateData4, _ := base64.StdEncoding.DecodeString("H4sIAAAAAAAA/4SQzarbMBCF934KoXUdPKNf+1VKCWNp5AocO8hyaSl592KlcBd3cZfnHPHpY/52QshfXI68b3IS+tuVK5dCaS+P+8ci4TbcULb94JJplZPAFte8MS18PQrKBO8Q+xk59SHa1AMA9M4YmoN3FGJ8M/azPs96yElcCkLIsG+V8sblnqOc3uXlRuvZ0GxSSuiCRUYbw2gGHRFGPxitEgJYQDQ0a68I2ChNo1cAZJ2bR20UtW8bsv55NuJRS94W2erXe5X5QQs3A/FZ4fhJaOwUgZTVMRjto1HGpSGSQuuD955hdDDPcR6NY1ZpQJ/YwagTRAvBpsi8LXn7Pa1U+ahfWHX/zWThYz9L4Otg3390r+5fAAAA//8hmcuNuQEAAA==")
+	secret4 := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "tfstate-default-a",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"tfstate": tfStateData4,
+		},
+		Type: corev1.SecretTypeOpaque,
+	}
+	k8sClient4 := fake.NewClientBuilder().WithObjects(secret4).Build()
+	meta4 := &TFConfigurationMeta{
+		Backend: &backend.K8SBackend{
+			Client:       k8sClient4,
+			SecretSuffix: "a",
+			SecretNS:     "default",
+		},
+	}
+
+	testcases := map[string]struct {
+		args args
+		want want
+	}{
+		"could not find backend secret": {
+			args: args{
+				ctx:       ctx,
+				k8sClient: k8sClient1,
+				meta:      meta1,
+			},
+			want: want{
+				generated: false,
+			},
+		},
+		"no data in a backend secret": {
+			args: args{
+				ctx:       ctx,
+				k8sClient: k8sClient2,
+				meta:      meta2,
+			},
+			want: want{
+				generated: false,
+			},
+		},
+		"outputs in the backend secret are empty.": {
+			args: args{
+				ctx:       ctx,
+				k8sClient: k8sClient3,
+				meta:      meta3,
+			},
+			want: want{
+				generated: false,
+			},
+		},
+		"outputs in the backend secret are not empty": {
+			args: args{
+				ctx:       ctx,
+				k8sClient: k8sClient4,
+				meta:      meta4,
+			},
+			want: want{
+				generated: true,
+			},
+		},
+	}
+
+	for name, tc := range testcases {
+		t.Run(name, func(t *testing.T) {
+			generated := tc.args.meta.isTFStateGenerated(tc.args.ctx)
+			assert.Equal(t, tc.want.generated, generated)
+		})
 	}
 }
 

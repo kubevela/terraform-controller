@@ -182,11 +182,21 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			}
 		}
 
-		if err := r.terraformDestroy(ctx, configuration, meta); err != nil {
-			if err.Error() == types.MessageDestroyJobNotCompleted {
-				return ctrl.Result{RequeueAfter: 3 * time.Second}, nil
+		// fix: The failure of terraformApply does not mean that it has never been successful,
+		//     but if the 'tfstate' file does not exist, then there is no need for terraformDestroy,
+		//     which can quickly clean up resources.
+		if meta.isTFStateGenerated(ctx) {
+			if err := r.terraformDestroy(ctx, configuration, meta); err != nil {
+				if err.Error() == types.MessageDestroyJobNotCompleted {
+					return ctrl.Result{RequeueAfter: 3 * time.Second}, nil
+				}
+				return ctrl.Result{RequeueAfter: 3 * time.Second}, errors.Wrap(err, "continue reconciling to destroy cloud resource")
 			}
-			return ctrl.Result{RequeueAfter: 3 * time.Second}, errors.Wrap(err, "continue reconciling to destroy cloud resource")
+		} else {
+			klog.Infof("No need to execute terraform destroy command, because tfstate file not found: %s/%s", configuration.Namespace, configuration.Name)
+			if err := r.cleanUpSubResources(ctx, configuration, meta); err != nil {
+				klog.Warningf("Failed to clean up sub-resources, but it's ignored as the resources are being forced to delete: %s", err)
+			}
 		}
 
 		configuration, err := tfcfg.Get(ctx, r.Client, req.NamespacedName)
@@ -1108,6 +1118,27 @@ func (tp *TfStateProperty) ToProperty() (v1beta2.Property, error) {
 // TFState is Terraform State
 type TFState struct {
 	Outputs map[string]TfStateProperty `json:"outputs"`
+}
+
+func (meta *TFConfigurationMeta) isTFStateGenerated(ctx context.Context) bool {
+	// 1. exist backend
+	if meta.Backend == nil {
+		return false
+	}
+	// 2. and exist tfstate file
+	tfStateJSON, err := meta.Backend.GetTFStateJSON(ctx)
+	if err != nil {
+		return false
+	}
+	// 3. and outputs not empty
+	var tfState TFState
+	if err := json.Unmarshal(tfStateJSON, &tfState); err != nil {
+		return false
+	}
+	if len(tfState.Outputs) == 0 {
+		return false
+	}
+	return true
 }
 
 //nolint:funlen
