@@ -3179,6 +3179,7 @@ func TestCheckValidateSecretAndConfigMap(t *testing.T) {
 					Namespace:           "e",
 					TerraformImage:      "f",
 					RemoteGit:           "g",
+					ControllerNamespace: "default",
 					GitCredentialsSecretReference: &corev1.SecretReference{
 						Namespace: "default",
 						Name:      "git-ssh",
@@ -3213,6 +3214,7 @@ func TestCheckValidateSecretAndConfigMap(t *testing.T) {
 					Namespace:           "e",
 					TerraformImage:      "f",
 					RemoteGit:           "g",
+					ControllerNamespace: "default",
 					GitCredentialsSecretReference: &corev1.SecretReference{
 						Namespace: "default",
 						Name:      "git-ssh",
@@ -3247,6 +3249,7 @@ func TestCheckValidateSecretAndConfigMap(t *testing.T) {
 					Namespace:           "e",
 					TerraformImage:      "f",
 					RemoteGit:           "g",
+					ControllerNamespace: "default",
 					GitCredentialsSecretReference: &corev1.SecretReference{
 						Namespace: "default",
 						Name:      "git-ssh",
@@ -3267,6 +3270,42 @@ func TestCheckValidateSecretAndConfigMap(t *testing.T) {
 			},
 			want: want{
 				errMsg: "Failed to get terraformrc configuration configmap: configmaps \"terraform-registry\" not found",
+			},
+		},
+		{
+			name: "git-ssh secret invalid namespace",
+			args: args{
+				k8sClient: k8sClient,
+				meta: TFConfigurationMeta{
+					Name:                "a",
+					ConfigurationCMName: "b",
+					BusyboxImage:        "c",
+					GitImage:            "d",
+					Namespace:           "e",
+					TerraformImage:      "f",
+					RemoteGit:           "g",
+					ControllerNamespace: "vela-system",
+					GitCredentialsSecretReference: &corev1.SecretReference{
+						Namespace: "default",
+						Name:      "git-ssh",
+					},
+					TerraformCredentialsSecretReference: &corev1.SecretReference{
+						Namespace: "default",
+						Name:      "terraform-creds",
+					},
+					TerraformRCConfigMapReference: &corev1.SecretReference{
+						Namespace: "default",
+						Name:      "terraform-registry-config",
+					},
+					TerraformCredentialsHelperConfigMapReference: &corev1.SecretReference{
+						Namespace: "default",
+						Name:      "terraform-credentials-helper",
+					},
+				},
+			},
+			want: want{
+				errMsg: "Invalid Secret 'default/git-ssh', whose namespace 'vela-system' is different from the Configuration, cannot mount the volume," +
+					" you can fix this issue by creating the Secret/ConfigMap in the 'vela-system' namespace.",
 			},
 		},
 	}
