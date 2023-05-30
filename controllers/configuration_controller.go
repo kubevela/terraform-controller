@@ -182,9 +182,7 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			}
 		}
 
-		// fix: The failure of terraformApply does not mean that it has never been successful,
-		//     but if the 'tfstate' file does not exist, then there is no need for terraformDestroy,
-		//     which can quickly clean up resources.
+		// If no tfState has been generated, then perform a quick cleanup without dispatching destroying job.
 		if meta.isTFStateGenerated(ctx) {
 			if err := r.terraformDestroy(ctx, configuration, meta); err != nil {
 				if err.Error() == types.MessageDestroyJobNotCompleted {
@@ -195,7 +193,7 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		} else {
 			klog.Infof("No need to execute terraform destroy command, because tfstate file not found: %s/%s", configuration.Namespace, configuration.Name)
 			if err := r.cleanUpSubResources(ctx, configuration, meta); err != nil {
-				klog.Warningf("Failed to clean up sub-resources, but it's ignored as the resources are being forced to delete: %s", err)
+				klog.Warningf("Ignoring error when clean up sub-resources, for no resource is actually created: %s", err)
 			}
 		}
 
@@ -1132,13 +1130,10 @@ func (meta *TFConfigurationMeta) isTFStateGenerated(ctx context.Context) bool {
 	}
 	// 3. and outputs not empty
 	var tfState TFState
-	if err := json.Unmarshal(tfStateJSON, &tfState); err != nil {
+	if err = json.Unmarshal(tfStateJSON, &tfState); err != nil {
 		return false
 	}
-	if len(tfState.Outputs) == 0 {
-		return false
-	}
-	return true
+	return len(tfState.Outputs) > 0
 }
 
 //nolint:funlen
