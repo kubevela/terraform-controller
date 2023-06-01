@@ -183,11 +183,19 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			}
 		}
 
-		if err := r.terraformDestroy(ctx, configuration, meta); err != nil {
-			if err.Error() == types.MessageDestroyJobNotCompleted {
-				return ctrl.Result{RequeueAfter: 3 * time.Second}, nil
+		// If no tfState has been generated, then perform a quick cleanup without dispatching destroying job.
+		if meta.isTFStateGenerated(ctx) {
+			if err := r.terraformDestroy(ctx, configuration, meta); err != nil {
+				if err.Error() == types.MessageDestroyJobNotCompleted {
+					return ctrl.Result{RequeueAfter: 3 * time.Second}, nil
+				}
+				return ctrl.Result{RequeueAfter: 3 * time.Second}, errors.Wrap(err, "continue reconciling to destroy cloud resource")
 			}
-			return ctrl.Result{RequeueAfter: 3 * time.Second}, errors.Wrap(err, "continue reconciling to destroy cloud resource")
+		} else {
+			klog.Infof("No need to execute terraform destroy command, because tfstate file not found: %s/%s", configuration.Namespace, configuration.Name)
+			if err := r.cleanUpSubResources(ctx, configuration, meta); err != nil {
+				klog.Warningf("Ignoring error when clean up sub-resources, for no resource is actually created: %s", err)
+			}
 		}
 
 		configuration, err := tfcfg.Get(ctx, r.Client, req.NamespacedName)
@@ -1133,6 +1141,24 @@ func (tp *TfStateProperty) ToProperty() (v1beta2.Property, error) {
 // TFState is Terraform State
 type TFState struct {
 	Outputs map[string]TfStateProperty `json:"outputs"`
+}
+
+func (meta *TFConfigurationMeta) isTFStateGenerated(ctx context.Context) bool {
+	// 1. exist backend
+	if meta.Backend == nil {
+		return false
+	}
+	// 2. and exist tfstate file
+	tfStateJSON, err := meta.Backend.GetTFStateJSON(ctx)
+	if err != nil {
+		return false
+	}
+	// 3. and outputs not empty
+	var tfState TFState
+	if err = json.Unmarshal(tfStateJSON, &tfState); err != nil {
+		return false
+	}
+	return len(tfState.Outputs) > 0
 }
 
 //nolint:funlen
