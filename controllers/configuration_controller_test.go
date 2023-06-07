@@ -652,6 +652,78 @@ func TestConfigurationReconcile(t *testing.T) {
 		WithObjects(namespace, secret, provider, configuration6).
 		Build()
 
+	// for case "Configuration changed, and reconcile"
+	appliedConfigurationCM := &corev1.ConfigMap{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "tf-a",
+			Namespace: req.Namespace,
+		},
+		Data: map[string]string{types.TerraformHCLConfigurationName: `Here is the original hcl
+
+terraform {
+  backend "kubernetes" {
+    secret_suffix     = "a"
+    in_cluster_config = true
+    namespace         = "b"
+  }
+}
+`,
+		},
+	}
+	varMap := map[string]string{"name": "abc"}
+	appliedEnvVariable := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf(TFVariableSecret, req.Name),
+			Namespace: req.Namespace,
+		},
+		Data: map[string][]byte{
+			"TF_VAR_name":             []byte(varMap["name"]),
+			"ALICLOUD_ACCESS_KEY":     []byte(ak.AccessKeyID),
+			"ALICLOUD_SECRET_KEY":     []byte(ak.AccessKeySecret),
+			"ALICLOUD_REGION":         []byte(provider.Spec.Region),
+			"ALICLOUD_SECURITY_TOKEN": []byte(""),
+		},
+		Type: corev1.SecretTypeOpaque,
+	}
+	appliedJobName := req.Name + "-" + string(TerraformApply)
+	appliedJob := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      appliedJobName,
+			Namespace: req.Namespace,
+			UID:       "111",
+		},
+		Status: batchv1.JobStatus{
+			Succeeded: int32(1),
+		},
+	}
+	varData, _ := json.Marshal(varMap)
+	configuration7 := &v1beta2.Configuration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "a",
+			Namespace: "b",
+		},
+		Spec: v1beta2.ConfigurationSpec{
+			HCL:      "Here is the changed hcl",
+			Variable: &runtime.RawExtension{Raw: varData},
+			ProviderReference: &crossplane.Reference{
+				Name:      "default",
+				Namespace: "default",
+			},
+			WriteConnectionSecretToReference: &crossplane.SecretReference{
+				Name:      "db-conn",
+				Namespace: "default",
+			},
+		},
+		Status: v1beta2.ConfigurationStatus{
+			Apply: v1beta2.ConfigurationApplyStatus{
+				State: types.Available,
+			},
+		},
+	}
+	r7 := &ConfigurationReconciler{}
+	r7.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(secret, provider, backendSecret,
+		appliedJob, appliedEnvVariable, appliedConfigurationCM, configuration7).Build()
+
 	type args struct {
 		req reconcile.Request
 		r   *ConfigurationReconciler
@@ -717,6 +789,23 @@ func TestConfigurationReconcile(t *testing.T) {
 				if err != nil {
 					t.Error("Failed to retrieve jobs from builds namespace")
 				}
+			},
+		},
+		{
+			name: "Configuration changed, and reconcile",
+			args: args{
+				req: req,
+				r:   r7,
+			},
+			check: func(t *testing.T, cc client.Client) {
+				job := &batchv1.Job{}
+				if err = cc.Get(context.TODO(), k8stypes.NamespacedName{Name: appliedJobName, Namespace: req.Namespace}, job); err != nil {
+					t.Error("Failed to retrieve the new job")
+				}
+				assert.Equal(t, job.Name, appliedJob.Name, "Not expected job name")
+				assert.Equal(t, job.Namespace, appliedJob.Namespace, "Not expected job namespace")
+				assert.NotEqual(t, job.UID, appliedJob.UID, "No new job created")
+				assert.NotEqual(t, job.Status.Succeeded, appliedJob.Status.Succeeded, "Not expected job status")
 			},
 		},
 	}
