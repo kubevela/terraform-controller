@@ -213,7 +213,7 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	var tfExecutionJob = &batchv1.Job{}
 	if err := meta.getApplyJob(ctx, r.Client, tfExecutionJob); err == nil {
-		if !meta.EnvChanged && tfExecutionJob.Status.Succeeded == int32(1) {
+		if !meta.EnvChanged && !meta.ConfigurationChanged && tfExecutionJob.Status.Succeeded == int32(1) {
 			err = meta.updateApplyStatus(ctx, r.Client, types.Available, types.MessageCloudResourceDeployed)
 			return ctrl.Result{}, err
 		}
@@ -635,24 +635,20 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 	}
 	meta.CompleteConfiguration, meta.Backend = completeConfiguration, backendConf
 
+	// Check whether configuration(hcl/json) is changed
+	if err := meta.CheckWhetherConfigurationChanges(ctx, k8sClient, configurationType); err != nil {
+		return err
+	}
+
 	if configuration.ObjectMeta.DeletionTimestamp.IsZero() {
 		if err := meta.storeTFConfiguration(ctx, k8sClient); err != nil {
 			return err
 		}
 	}
 
-	// Check whether configuration(hcl/json) is changed
-	if err := meta.CheckWhetherConfigurationChanges(ctx, k8sClient, configurationType); err != nil {
-		return err
-	}
-
 	if meta.ConfigurationChanged {
 		klog.InfoS("Configuration hanged, reloading...")
-		if err := meta.updateApplyStatus(ctx, k8sClient, types.ConfigurationReloading, types.ConfigurationReloadingAsHCLChanged); err != nil {
-			return err
-		}
-		// store configuration to ConfigMap
-		return meta.storeTFConfiguration(ctx, k8sClient)
+		return meta.updateApplyStatus(ctx, k8sClient, types.ConfigurationReloading, types.ConfigurationReloadingAsHCLChanged)
 	}
 
 	// Check whether env changes
@@ -1462,17 +1458,17 @@ func (meta *TFConfigurationMeta) storeTFConfiguration(ctx context.Context, k8sCl
 
 // CheckWhetherConfigurationChanges will check whether configuration is changed
 func (meta *TFConfigurationMeta) CheckWhetherConfigurationChanges(ctx context.Context, k8sClient client.Client, configurationType types.ConfigurationType) error {
-	var cm v1.ConfigMap
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.ConfigurationCMName, Namespace: meta.ControllerNamespace}, &cm); err != nil {
-		return err
-	}
-
-	var configurationChanged bool
 	switch configurationType {
 	case types.ConfigurationHCL:
-		configurationChanged = cm.Data[types.TerraformHCLConfigurationName] != meta.CompleteConfiguration
-		meta.ConfigurationChanged = configurationChanged
-		if configurationChanged {
+		var cm v1.ConfigMap
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.ConfigurationCMName, Namespace: meta.ControllerNamespace}, &cm); err != nil {
+			if kerrors.IsNotFound(err) {
+				return nil
+			}
+			return err
+		}
+		meta.ConfigurationChanged = cm.Data[types.TerraformHCLConfigurationName] != meta.CompleteConfiguration
+		if meta.ConfigurationChanged {
 			klog.InfoS("Configuration HCL changed", "ConfigMap", cm.Data[types.TerraformHCLConfigurationName],
 				"RenderedCompletedConfiguration", meta.CompleteConfiguration)
 		}
