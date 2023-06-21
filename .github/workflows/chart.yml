@@ -1,0 +1,48 @@
+name: HelmChart
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch: {}
+
+jobs:
+  publish-charts:
+    env:
+      HELM_CHART: chart/
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@master
+      - name: Install Helm
+        uses: azure/setup-helm@v1
+        with:
+          version: v3.4.0
+      - name: Get the version
+        id: get_version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+      - name: Tag helm chart image
+        run: |
+          image_tag=${{ steps.get_version.outputs.VERSION }}
+          chart_version=${{ steps.get_version.outputs.VERSION }}
+          sed -i "s/latest/${image_tag}/g" $HELM_CHART/values.yaml
+          chart_semver=${chart_version#"v"}
+          sed -i "s/0.1.0/$chart_semver/g" $HELM_CHART/Chart.yaml
+      - uses: jnwng/github-app-installation-token-action@v2
+        id: get_app_token
+        with:
+          appId: 340472
+          installationId: 38064967
+          privateKey: ${{ secrets.GH_KUBEVELA_APP_PRIVATE_KEY }}
+      - name: Sync Chart Repo
+        run: |
+          git config --global user.email "135009839+kubevela[bot]@users.noreply.github.com"
+          git config --global user.name "kubevela[bot]"
+          git clone https://x-access-token:${{ steps.get_app_token.outputs.token }}@github.com/kubevela/charts.git kubevela-charts
+          helm package $HELM_CHART --destination ./kubevela-charts/docs/
+          helm repo index --url https://kubevela.github.io/charts ./kubevela-charts/docs/
+          cd kubevela-charts/
+          git add docs/
+          chart_version=${GITHUB_REF#refs/tags/}
+          git commit -m "update terraform-controller chart ${chart_version}"
+          git push https://x-access-token:${{ steps.get_app_token.outputs.token }}@github.com/kubevela/charts.git
