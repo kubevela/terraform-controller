@@ -2,7 +2,7 @@ replicaCount: 1
 
 image:
   repository: oamdev/terraform-controller
-  tag: 0.2.8
+  tag: latest
   pullPolicy: Always
 
 gitImage: alpine/git:latest
