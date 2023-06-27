@@ -1,9 +1,6 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - "v*"
   workflow_dispatch: { }
 
 env:
@@ -19,7 +16,7 @@ jobs:
     env:
       BACKUP_RESTORE_TOOL_VERSION_KEY: github.com/kubevela/terraform-controller/version.BackupRestoreToolVersion
       BACKUP_RESTORE_TOOL_VERSION: cat hack/tool/backup_restore/VERSION
-      GO_BUILD_ENV: GO111MODULE=on CGO_ENABLED=0
+      GO_BUILD_ENV: GO111MODULE=on
       DIST_DIRS: find * -type d -exec
     steps:
       - name: Checkout
