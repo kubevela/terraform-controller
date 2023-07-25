@@ -25,7 +25,7 @@ jobs:
         run: |
           image_tag=${{ steps.get_version.outputs.VERSION }}
           chart_version=${{ steps.get_version.outputs.VERSION }}
-          sed -i "s/latest/${image_tag}/g" $HELM_CHART/values.yaml
+          sed -i "s/tag: latest/tag: ${image_tag}/g" $HELM_CHART/values.yaml
           chart_semver=${chart_version#"v"}
           sed -i "s/0.1.0/$chart_semver/g" $HELM_CHART/Chart.yaml
       - uses: jnwng/github-app-installation-token-action@v2
