@@ -2,6 +2,8 @@ package configuration
 
 import (
 	"context"
+	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -394,4 +396,336 @@ func TestSetRegion(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGetConfigurationsWithSameBackendReference(t *testing.T) {
+	ctx := context.Background()
+	s := runtime.NewScheme()
+	_ = v1beta2.AddToScheme(s)
+	k8sClient := fake.NewClientBuilder().WithScheme(s).Build()
+
+	var (
+		region    = "cn"
+		namespace = "default"
+	)
+
+	configuration1 := v1beta2.Configuration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "c1",
+			Namespace: "default",
+		},
+		Spec: v1beta2.ConfigurationSpec{},
+	}
+	assert.Nil(t, k8sClient.Create(ctx, &configuration1))
+
+	configuration2 := v1beta2.Configuration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "c2",
+			Namespace: "default",
+		},
+		Spec: v1beta2.ConfigurationSpec{
+			Backend: &v1beta2.Backend{
+				SecretSuffix: "s1",
+			},
+		},
+	}
+	assert.Nil(t, k8sClient.Create(ctx, &configuration2))
+
+	configuration3 := v1beta2.Configuration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "c3",
+			Namespace: "default",
+		},
+		Spec: v1beta2.ConfigurationSpec{
+			Backend: &v1beta2.Backend{
+				SecretSuffix: "s2",
+			},
+		},
+	}
+	assert.Nil(t, k8sClient.Create(ctx, &configuration3))
+
+	configuration4 := v1beta2.Configuration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "c4",
+			Namespace: "default",
+		},
+		Spec: v1beta2.ConfigurationSpec{
+			Backend: &v1beta2.Backend{
+				SecretSuffix: "s2",
+			},
+		},
+	}
+	assert.Nil(t, k8sClient.Create(ctx, &configuration4))
+
+	configuration5 := v1beta2.Configuration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "c5",
+			Namespace: "default",
+		},
+		Spec: v1beta2.ConfigurationSpec{
+			Backend: &v1beta2.Backend{
+				Inline: "inline",
+			},
+		},
+	}
+	assert.Nil(t, k8sClient.Create(ctx, &configuration5))
+
+	configuration6 := v1beta2.Configuration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "c6",
+			Namespace: "default",
+		},
+		Spec: v1beta2.ConfigurationSpec{
+			Backend: &v1beta2.Backend{
+				Inline: "inline",
+			},
+		},
+	}
+	assert.Nil(t, k8sClient.Create(ctx, &configuration6))
+
+	configuration7 := v1beta2.Configuration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "c7",
+			Namespace: "default",
+		},
+		Spec: v1beta2.ConfigurationSpec{
+			Backend: &v1beta2.Backend{
+				BackendType: "s3",
+				S3: &v1beta2.S3BackendConf{
+					Region: &region,
+					Bucket: "test",
+					Key:    "test",
+				},
+			},
+		},
+	}
+	assert.Nil(t, k8sClient.Create(ctx, &configuration7))
+
+	configuration8 := v1beta2.Configuration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "c8",
+			Namespace: "default",
+		},
+		Spec: v1beta2.ConfigurationSpec{
+			Backend: &v1beta2.Backend{
+				BackendType: "s3",
+				S3: &v1beta2.S3BackendConf{
+					Region: &region,
+					Bucket: "test",
+					Key:    "test",
+				},
+			},
+		},
+	}
+	assert.Nil(t, k8sClient.Create(ctx, &configuration8))
+
+	configuration9 := v1beta2.Configuration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "c9",
+			Namespace: "default",
+		},
+		Spec: v1beta2.ConfigurationSpec{
+			Backend: &v1beta2.Backend{
+				BackendType: "s3",
+				S3: &v1beta2.S3BackendConf{
+					Region: &region,
+					Bucket: "test2",
+					Key:    "test2",
+				},
+			},
+		},
+	}
+	assert.Nil(t, k8sClient.Create(ctx, &configuration9))
+
+	configuration10 := v1beta2.Configuration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "c10",
+			Namespace: "default",
+		},
+		Spec: v1beta2.ConfigurationSpec{
+			Backend: &v1beta2.Backend{
+				BackendType: "kubernetes",
+				Kubernetes: &v1beta2.KubernetesBackendConf{
+					SecretSuffix: "k8s",
+					Namespace:    &namespace,
+				},
+			},
+		},
+	}
+	assert.Nil(t, k8sClient.Create(ctx, &configuration10))
+
+	configuration11 := v1beta2.Configuration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "c11",
+			Namespace: "default",
+		},
+		Spec: v1beta2.ConfigurationSpec{
+			Backend: &v1beta2.Backend{
+				BackendType: "kubernetes",
+				Kubernetes: &v1beta2.KubernetesBackendConf{
+					SecretSuffix: "k8s",
+					Namespace:    &namespace,
+				},
+			},
+		},
+	}
+	assert.Nil(t, k8sClient.Create(ctx, &configuration11))
+
+	configuration12 := v1beta2.Configuration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "c12",
+			Namespace: "default",
+		},
+		Spec: v1beta2.ConfigurationSpec{
+			Backend: &v1beta2.Backend{
+				BackendType: "kubernetes",
+				Kubernetes: &v1beta2.KubernetesBackendConf{
+					SecretSuffix: "k8s2",
+					Namespace:    &namespace,
+				},
+			},
+		},
+	}
+	assert.Nil(t, k8sClient.Create(ctx, &configuration12))
+
+	type args struct {
+		backend *v1beta2.Backend
+	}
+
+	type want struct {
+		references []*crossplane.Reference
+		errMsg     string
+	}
+
+	emptyReferences := make([]*crossplane.Reference, 0)
+
+	testcases := map[string]struct {
+		args args
+		want want
+	}{
+		"Using the default backend": {
+			args: args{
+				backend: nil,
+			},
+			want: want{
+				references: emptyReferences,
+				errMsg:     "",
+			},
+		},
+		"Configured with secret suffix": {
+			args: args{
+				backend: &v1beta2.Backend{SecretSuffix: "s2"},
+			},
+			want: want{
+				references: []*crossplane.Reference{
+					{
+						Name:      "c3",
+						Namespace: "default",
+					},
+					{
+						Name:      "c4",
+						Namespace: "default",
+					},
+				},
+				errMsg: "",
+			},
+		},
+		"Configured with inline": {
+			args: args{
+				backend: &v1beta2.Backend{Inline: "inline"},
+			},
+			want: want{
+				references: []*crossplane.Reference{
+					{
+						Name:      "c5",
+						Namespace: "default",
+					},
+					{
+						Name:      "c6",
+						Namespace: "default",
+					},
+				},
+				errMsg: "",
+			},
+		},
+		"Using S3 as the backend": {
+			args: args{
+				backend: &v1beta2.Backend{
+					BackendType: "s3",
+					S3: &v1beta2.S3BackendConf{
+						Region: &region,
+						Bucket: "test",
+						Key:    "test",
+					},
+				},
+			},
+			want: want{
+				references: []*crossplane.Reference{
+					{
+						Name:      "c7",
+						Namespace: "default",
+					},
+					{
+						Name:      "c8",
+						Namespace: "default",
+					},
+				},
+				errMsg: "",
+			},
+		},
+		"Using Kubernetes as the backend": {
+			args: args{
+				backend: &v1beta2.Backend{
+					BackendType: "kubernetes",
+					Kubernetes: &v1beta2.KubernetesBackendConf{
+						SecretSuffix: "k8s",
+						Namespace:    &namespace,
+					},
+				},
+			},
+			want: want{
+				references: []*crossplane.Reference{
+					{
+						Name:      "c10",
+						Namespace: "default",
+					},
+					{
+						Name:      "c11",
+						Namespace: "default",
+					},
+				},
+				errMsg: "",
+			},
+		},
+	}
+	for name, tc := range testcases {
+		t.Run(name, func(t *testing.T) {
+			refs, err := GetConfigurationsWithSameBackendReference(ctx, k8sClient, &v1beta2.Configuration{
+				Spec: v1beta2.ConfigurationSpec{
+					Backend: tc.args.backend,
+				},
+			})
+			if tc.want.errMsg != "" && !strings.Contains(err.Error(), tc.want.errMsg) {
+				t.Errorf("GetConfigurationsWithSameBackendReference() error = %v, wantErr %v", err, tc.want.errMsg)
+			}
+			if !reflect.DeepEqual(refs, tc.want.references) {
+				wantReferencesStr := ""
+				for _, r := range tc.want.references {
+					if wantReferencesStr != "" {
+						wantReferencesStr += ","
+					}
+					wantReferencesStr += fmt.Sprintf("%v", r)
+				}
+				referencesStr := ""
+				for _, r := range refs {
+					if referencesStr != "" {
+						referencesStr += ","
+					}
+					referencesStr += fmt.Sprintf("%v", r)
+				}
+				t.Errorf("GetConfigurationsWithSameBackendReference() want = [%s], got [%s]", wantReferencesStr, referencesStr)
+			}
+		})
+	}
+
 }

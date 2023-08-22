@@ -183,8 +183,11 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			}
 		}
 
+		backendOtherReferences, _ := tfcfg.GetConfigurationsWithSameBackendReference(ctx, r.Client, &configuration)
+
 		// If no tfState has been generated, then perform a quick cleanup without dispatching destroying job.
-		if meta.isTFStateGenerated(ctx) {
+		// OR. Has other configurations referencing the same backend, then perform a quick cleanup without dispatching destroying job.
+		if meta.isTFStateGenerated(ctx) && len(backendOtherReferences) == 0 {
 			if err := r.terraformDestroy(ctx, configuration, meta); err != nil {
 				if err.Error() == types.MessageDestroyJobNotCompleted {
 					return ctrl.Result{RequeueAfter: 3 * time.Second}, nil
@@ -192,7 +195,10 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 				return ctrl.Result{RequeueAfter: 3 * time.Second}, errors.Wrap(err, "continue reconciling to destroy cloud resource")
 			}
 		} else {
-			klog.Infof("No need to execute terraform destroy command, because tfstate file not found: %s/%s", configuration.Namespace, configuration.Name)
+			klog.Infof("No need to execute terraform destroy command, because tfstate file not generated or has other configurations referencing the same backend, configuration: %s/%s", configuration.Namespace, configuration.Name)
+			if len(backendOtherReferences) > 0 {
+				meta.Backend = nil
+			}
 			if err := r.cleanUpSubResources(ctx, configuration, meta); err != nil {
 				klog.Warningf("Ignoring error when clean up sub-resources, for no resource is actually created: %s", err)
 			}
