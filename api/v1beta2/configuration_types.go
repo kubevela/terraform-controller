@@ -88,6 +88,16 @@ type ConfigurationSpec struct {
 
 	// TerraformCredentialsHelperConfigMapReference specifies the reference to a configmap containing the terraform registry credentials helper
 	TerraformCredentialsHelperConfigMapReference *v1.SecretReference `json:"terraformCredentialsHelperConfigMapReference,omitempty"`
+
+	// VolumeSpec to mount volumes to the pod.
+	VolumeSpec *VolumeSpec `json:"volumeSpec,omitempty"`
+}
+
+type VolumeSpec struct {
+	// Volumes represents a named volume in a pod that may be accessed by any container in the pod.
+	Volumes []v1.Volume `json:"volumes,omitempty"`
+	// VolumeMount describes a mounting of a Volume within a container.
+	VolumeMounts []v1.VolumeMount `json:"volumeMounts,omitempty"`
 }
 
 // ConfigurationStatus defines the observed state of Configuration
