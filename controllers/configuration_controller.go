@@ -1145,16 +1145,8 @@ func (meta *TFConfigurationMeta) isTFStateGenerated(ctx context.Context) bool {
 		return false
 	}
 	// 2. and exist tfstate file
-	tfStateJSON, err := meta.Backend.GetTFStateJSON(ctx)
-	if err != nil {
-		return false
-	}
-	// 3. and outputs not empty
-	var tfState TFState
-	if err = json.Unmarshal(tfStateJSON, &tfState); err != nil {
-		return false
-	}
-	return len(tfState.Outputs) > 0
+	_, err := meta.Backend.GetTFStateJSON(ctx)
+	return err == nil
 }
 
 //nolint:funlen
