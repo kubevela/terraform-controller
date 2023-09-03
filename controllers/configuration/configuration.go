@@ -3,6 +3,7 @@ package configuration
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 
@@ -158,4 +159,73 @@ func GetProviderNamespacedName(configuration v1beta2.Configuration) *crossplane.
 		Name:      provider.DefaultName,
 		Namespace: provider.DefaultNamespace,
 	}
+}
+
+// GetConfigurationsWithSameBackendReference will get configurations referencing the same backend
+func GetConfigurationsWithSameBackendReference(ctx context.Context, k8sClient client.Client, configuration *v1beta2.Configuration) ([]*crossplane.Reference, error) {
+	var (
+		configurationRefs = make([]*crossplane.Reference, 0)
+		selector          func(referenceBackend, backend *v1beta2.Backend) bool
+	)
+
+	backend := configuration.Spec.Backend
+	if backend == nil {
+		return configurationRefs, nil
+	}
+
+	switch {
+	case backend.Inline != "":
+		selector = func(referenceBackend, backend *v1beta2.Backend) bool {
+			if backend == nil {
+				return false
+			}
+			return referenceBackend.Inline == backend.Inline
+		}
+	case backend.BackendType == "s3" && backend.S3 != nil:
+		selector = func(referenceBackend, backend *v1beta2.Backend) bool {
+			if backend == nil {
+				return false
+			}
+			return referenceBackend.BackendType == backend.BackendType && reflect.DeepEqual(referenceBackend.S3, backend.S3)
+		}
+	case backend.BackendType == "kubernetes" && backend.Kubernetes != nil:
+		selector = func(referenceBackend, backend *v1beta2.Backend) bool {
+			if backend == nil {
+				return false
+			}
+			return referenceBackend.BackendType == backend.BackendType && reflect.DeepEqual(referenceBackend.Kubernetes, backend.Kubernetes)
+		}
+	case backend.SecretSuffix != "":
+		selector = func(referenceBackend, backend *v1beta2.Backend) bool {
+			if backend == nil {
+				return false
+			}
+			return referenceBackend.SecretSuffix == backend.SecretSuffix
+		}
+	}
+
+	if selector == nil {
+		return configurationRefs, nil
+	}
+
+	configurations := &v1beta2.ConfigurationList{}
+	if err := k8sClient.List(ctx, configurations); err != nil {
+		return configurationRefs, client.IgnoreNotFound(err)
+	}
+
+	for _, item := range configurations.Items {
+		if item.Name == configuration.Name && item.Namespace == configuration.Namespace {
+			continue
+		}
+		// reflect.DeepEqual(backend, item.Spec.Backend) This approach may not yield accurate results.
+		if !selector(backend, item.Spec.Backend) {
+			continue
+		}
+		configurationRefs = append(configurationRefs, &crossplane.Reference{
+			Name:      item.Name,
+			Namespace: item.Namespace,
+		})
+	}
+
+	return configurationRefs, nil
 }
