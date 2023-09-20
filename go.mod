@@ -3,7 +3,7 @@ module github.com/oam-dev/terraform-controller
 go 1.17
 
 require (
-	github.com/agiledragon/gomonkey/v2 v2.4.0
+	github.com/agiledragon/gomonkey/v2 v2.9.0
 	github.com/aliyun/alibaba-cloud-sdk-go v1.61.1384
 	github.com/aws/aws-sdk-go v1.44.23
 	github.com/ghodss/yaml v1.0.0

@@ -74,10 +74,11 @@ func testBase(t *testing.T, configuration ConfigurationAttr, injector Injector, 
 	klog.Infof("%s test begins……", configuration.Name)
 
 	waitConfigurationAvailable := func(ctx *TestContext) {
-		for i := 0; i < 120; i++ {
+		for i := 0; i < 60; i++ {
 			var fields []string
 			output, err := exec.Command("bash", "-c", "kubectl get configuration").CombinedOutput()
 			assert.NilError(t, err)
+			t.Log("get configuration\n", string(output))
 
 			lines := strings.Split(string(output), "\n")
 			for i, line := range lines {
@@ -91,11 +92,14 @@ func testBase(t *testing.T, configuration ConfigurationAttr, injector Injector, 
 			}
 			output, err = exec.Command("bash", "-c", "kubectl get pod").CombinedOutput()
 			lines = strings.Split(string(output), "\n")
-			t.Log(string(output))
-			if i == 119 {
-				t.Error("Configuration is not ready")
+			t.Log("get pod\n", string(output))
+			if i == 59 {
+				t.Error("Configuration is not ready, getting controller's log")
+				output, err = exec.Command("bash", "-c", "kubectl logs -n terraform deploy/terraform-controller").CombinedOutput()
+				assert.NilError(t, err)
+				t.Log(string(output))
 			}
-			time.Sleep(time.Second * 5)
+			time.Sleep(time.Second * 2)
 		}
 	}
 

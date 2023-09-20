@@ -33,6 +33,9 @@ type Option func(spec v1beta2.Configuration, meta *TFConfigurationMeta)
 // ControllerNamespaceOption will set the controller namespace for TFConfigurationMeta
 func ControllerNamespaceOption(controllerNamespace string) Option {
 	return func(configuration v1beta2.Configuration, meta *TFConfigurationMeta) {
+		if controllerNamespace == "" {
+			return
+		}
 		uid := string(configuration.GetUID())
 		// @step: since we are using a single namespace to run these, we must ensure the names
 		// are unique across the namespace
@@ -281,10 +284,6 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 		{
 			Name:      BackendVolumeName,
 			MountPath: BackendVolumeMountPath,
-		},
-		{
-			Name:      GitAuthConfigVolumeName,
-			MountPath: GitAuthConfigVolumeMountPath,
 		},
 	}
 

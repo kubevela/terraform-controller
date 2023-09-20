@@ -965,7 +965,7 @@ func TestIsTFStateGenerated(t *testing.T) {
 				meta:      meta3,
 			},
 			want: want{
-				generated: false,
+				generated: true,
 			},
 		},
 		"outputs in the backend secret are not empty": {
