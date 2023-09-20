@@ -20,12 +20,13 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/oam-dev/terraform-controller/controllers/process"
-	"github.com/oam-dev/terraform-controller/controllers/util"
 	"math"
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/oam-dev/terraform-controller/controllers/process"
+	"github.com/oam-dev/terraform-controller/controllers/util"
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
@@ -50,59 +51,8 @@ import (
 )
 
 const (
-	defaultNamespace = "default"
-	// terraformContainerName is the name of the container that executes the terraform in the pod
-	terraformContainerName     = "terraform-executor"
-	terraformInitContainerName = "terraform-init"
-	// GitAuthConfigVolumeName is the volume name for git auth configurtaion
-	GitAuthConfigVolumeName = "git-auth-configuration"
-	// GitAuthConfigVolumeMountPath is the volume mount path for git auth configurtaion
-	GitAuthConfigVolumeMountPath = "/root/.ssh"
-	// TerraformCredentialsConfigVolumeName is the volume name for terraform auth configurtaion
-	TerraformCredentialsConfigVolumeName = "terraform-credentials-configuration"
-	// TerraformCredentialsConfigVolumeMountPath is the volume mount path for terraform auth configurtaion
-	TerraformCredentialsConfigVolumeMountPath = "/root/.terraform.d"
-	// TerraformRCConfigVolumeName is the volume name of the terraform registry configuration
-	TerraformRCConfigVolumeName = "terraform-rc-configuration"
-	// TerraformRCConfigVolumeMountPath is the volume mount path for registry configuration
-	TerraformRCConfigVolumeMountPath = "/root"
-	// TerraformCredentialsHelperConfigVolumeName is the volume name for terraform auth configurtaion
-	TerraformCredentialsHelperConfigVolumeName = "terraform-credentials-helper-configuration"
-	// TerraformCredentialsHelperConfigVolumeMountPath is the volume mount path for terraform auth configurtaion
-	TerraformCredentialsHelperConfigVolumeMountPath = "/root/.terraform.d/plugins"
-)
-
-const (
-	// TFInputConfigMapName is the CM name for Terraform Input Configuration
-	TFInputConfigMapName = "tf-%s"
-	// TFVariableSecret is the Secret name for variables, including credentials from Provider
-	TFVariableSecret = "variable-%s"
-)
-
-// TerraformExecutionType is the type for Terraform execution
-type TerraformExecutionType string
-
-const (
-	// TerraformApply is the name to mark `terraform apply`
-	TerraformApply TerraformExecutionType = "apply"
-	// TerraformDestroy is the name to mark `terraform destroy`
-	TerraformDestroy TerraformExecutionType = "destroy"
-)
-
-const (
+	defaultNamespace       = "default"
 	configurationFinalizer = "configuration.finalizers.terraform-controller"
-	// ClusterRoleName is the name of the ClusterRole for Terraform Job
-	ClusterRoleName = "tf-executor-clusterrole"
-	// ServiceAccountName is the name of the ServiceAccount for Terraform Job
-	ServiceAccountName = "tf-executor-service-account"
-)
-
-const (
-	GitCredsKnownHosts = "known_hosts"
-	// Terraform credentials
-	TerraformCredentials = "credentials.tfrc.json"
-	// Terraform Registry Configuration
-	TerraformRegistryConfig = ".terraformrc"
 )
 
 // ConfigurationReconciler reconciles a Configuration object.
@@ -126,19 +76,7 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	meta := process.New(req, configuration, r.Client)
-	if r.ControllerNamespace != "" {
-		uid := string(configuration.GetUID())
-		// @step: since we are using a single namespace to run these, we must ensure the names
-		// are unique across the namespace
-		meta.KeepLegacySubResourceMetas()
-		meta.ApplyJobName = uid + "-" + string(TerraformApply)
-		meta.DestroyJobName = uid + "-" + string(TerraformDestroy)
-		meta.ConfigurationCMName = fmt.Sprintf(TFInputConfigMapName, uid)
-		meta.VariableSecretName = fmt.Sprintf(TFVariableSecret, uid)
-		meta.ControllerNamespace = r.ControllerNamespace
-		meta.ControllerNSSpecified = true
-	}
+	meta := process.New(req, configuration, r.Client, process.ControllerNamespaceOption(r.ControllerNamespace))
 
 	// add finalizer
 	var isDeleting = !configuration.ObjectMeta.DeletionTimestamp.IsZero()
@@ -161,7 +99,7 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		klog.InfoS("performing Configuration Destroy", "Namespace", req.Namespace, "Name", req.Name, "JobName", meta.DestroyJobName)
 		// if allow to delete halfway, we will not check the status of the apply job.
 
-		_, err := terraform.GetTerraformStatus(ctx, meta.ControllerNamespace, meta.DestroyJobName, terraformContainerName, terraformInitContainerName)
+		_, err := terraform.GetTerraformStatus(ctx, meta.ControllerNamespace, meta.DestroyJobName, process.TerraformContainerName, process.TerraformInitContainerName)
 		if err != nil {
 			klog.ErrorS(err, "Terraform destroy failed")
 			if updateErr := meta.UpdateDestroyStatus(ctx, r.Client, types.ConfigurationDestroyFailed, err.Error()); updateErr != nil {
@@ -213,7 +151,7 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		}
 		return ctrl.Result{RequeueAfter: 3 * time.Second}, errors.Wrap(err, "failed to create/update cloud resource")
 	}
-	state, err := terraform.GetTerraformStatus(ctx, meta.ControllerNamespace, meta.ApplyJobName, terraformContainerName, terraformInitContainerName)
+	state, err := terraform.GetTerraformStatus(ctx, meta.ControllerNamespace, meta.ApplyJobName, process.TerraformContainerName, process.TerraformInitContainerName)
 	if err != nil {
 		klog.ErrorS(err, "Terraform apply failed")
 		if updateErr := meta.UpdateApplyStatus(ctx, r.Client, state, err.Error()); updateErr != nil {
@@ -542,7 +480,7 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 		return err
 	}
 
-	return util.CreateTerraformExecutorClusterRole(ctx, k8sClient, fmt.Sprintf("%s-%s", meta.ControllerNamespace, ClusterRoleName))
+	return util.CreateTerraformExecutorClusterRole(ctx, k8sClient, fmt.Sprintf("%s-%s", meta.ControllerNamespace, process.ClusterRoleName))
 }
 
 // SetupWithManager setups with a manager

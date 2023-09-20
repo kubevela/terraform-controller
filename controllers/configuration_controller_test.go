@@ -5,6 +5,11 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"reflect"
+	"strings"
+	"testing"
+	"time"
+
 	"github.com/agiledragon/gomonkey/v2"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/sts"
 	"github.com/oam-dev/terraform-controller/api/types"
@@ -24,14 +29,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
-	"reflect"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"strings"
-	"testing"
-	"time"
 )
 
 func TestConfigurationReconcile(t *testing.T) {
@@ -129,7 +130,7 @@ func TestConfigurationReconcile(t *testing.T) {
 
 	applyingJob2 := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      req.Name + "-" + string(TerraformApply),
+			Name:      req.Name + "-" + string(process.TerraformApply),
 			Namespace: req.Namespace,
 		},
 		Status: batchv1.JobStatus{
@@ -152,7 +153,7 @@ func TestConfigurationReconcile(t *testing.T) {
 
 	variableSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf(TFVariableSecret, req.Name),
+			Name:      fmt.Sprintf(process.TFVariableSecret, req.Name),
 			Namespace: req.Namespace,
 		},
 		Data: map[string][]byte{
@@ -305,7 +306,7 @@ terraform {
 	varMap := map[string]string{"name": "abc"}
 	appliedEnvVariable := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf(TFVariableSecret, req.Name),
+			Name:      fmt.Sprintf(process.TFVariableSecret, req.Name),
 			Namespace: req.Namespace,
 		},
 		Data: map[string][]byte{
@@ -317,7 +318,7 @@ terraform {
 		},
 		Type: corev1.SecretTypeOpaque,
 	}
-	appliedJobName := req.Name + "-" + string(TerraformApply)
+	appliedJobName := req.Name + "-" + string(process.TerraformApply)
 	appliedJob := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      appliedJobName,
@@ -1164,7 +1165,7 @@ func TestTerraformDestroy(t *testing.T) {
 	}
 	baseVariableSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf(TFVariableSecret, secretSuffix),
+			Name:      fmt.Sprintf(process.TFVariableSecret, secretSuffix),
 			Namespace: controllerNamespace,
 		},
 		Type: corev1.SecretTypeOpaque,
@@ -1188,7 +1189,7 @@ func TestTerraformDestroy(t *testing.T) {
 			Name:      baseProvider.Name,
 			Namespace: baseProvider.Namespace,
 		},
-		VariableSecretName:  fmt.Sprintf(TFVariableSecret, secretSuffix),
+		VariableSecretName:  fmt.Sprintf(process.TFVariableSecret, secretSuffix),
 		ConfigurationCMName: configurationCMName,
 		// True is default value if user ignores configuration.Spec.DeleteResource
 		DeleteResource: true,
@@ -1199,7 +1200,7 @@ func TestTerraformDestroy(t *testing.T) {
 		ApplyJobName:        applyJobName,
 		DestroyJobName:      destroyJobName,
 		ConfigurationCMName: configurationCMName,
-		VariableSecretName:  fmt.Sprintf(TFVariableSecret, secretSuffix),
+		VariableSecretName:  fmt.Sprintf(process.TFVariableSecret, secretSuffix),
 	}
 
 	baseConfiguration := &v1beta2.Configuration{

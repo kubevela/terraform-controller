@@ -37,7 +37,6 @@ const (
 )
 
 const (
-	configurationFinalizer = "configuration.finalizers.terraform-controller"
 	// ClusterRoleName is the name of the ClusterRole for Terraform Job
 	ClusterRoleName = "tf-executor-clusterrole"
 	// ServiceAccountName is the name of the ServiceAccount for Terraform Job
@@ -46,9 +45,9 @@ const (
 
 const (
 	defaultNamespace = "default"
-	// terraformContainerName is the name of the container that executes the terraform in the pod
-	terraformContainerName     = "terraform-executor"
-	terraformInitContainerName = "terraform-init"
+	// TerraformContainerName is the name of the container that executes terraform in the pod
+	TerraformContainerName     = "terraform-executor"
+	TerraformInitContainerName = "terraform-init"
 	// GitAuthConfigVolumeName is the volume name for git auth configurtaion
 	GitAuthConfigVolumeName = "git-auth-configuration"
 	// GitAuthConfigVolumeMountPath is the volume mount path for git auth configurtaion

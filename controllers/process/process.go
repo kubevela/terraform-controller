@@ -4,13 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/oam-dev/terraform-controller/api/types"
-	"github.com/oam-dev/terraform-controller/api/v1beta1"
-	"github.com/oam-dev/terraform-controller/api/v1beta2"
-	tfcfg "github.com/oam-dev/terraform-controller/controllers/configuration"
-	"github.com/oam-dev/terraform-controller/controllers/configuration/backend"
-	"github.com/oam-dev/terraform-controller/controllers/provider"
-	"github.com/oam-dev/terraform-controller/controllers/util"
+	"os"
+	"path/filepath"
+	"reflect"
+
 	"github.com/pkg/errors"
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
@@ -19,14 +16,38 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
-	"os"
-	"path/filepath"
-	"reflect"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/oam-dev/terraform-controller/api/types"
+	"github.com/oam-dev/terraform-controller/api/v1beta1"
+	"github.com/oam-dev/terraform-controller/api/v1beta2"
+	tfcfg "github.com/oam-dev/terraform-controller/controllers/configuration"
+	"github.com/oam-dev/terraform-controller/controllers/configuration/backend"
+	"github.com/oam-dev/terraform-controller/controllers/provider"
+	"github.com/oam-dev/terraform-controller/controllers/util"
 )
 
-func New(req ctrl.Request, configuration v1beta2.Configuration, k8sClient client.Client) *TFConfigurationMeta {
+type Option func(spec v1beta2.Configuration, meta *TFConfigurationMeta)
+
+// ControllerNamespaceOption will set the controller namespace for TFConfigurationMeta
+func ControllerNamespaceOption(controllerNamespace string) Option {
+	return func(configuration v1beta2.Configuration, meta *TFConfigurationMeta) {
+		uid := string(configuration.GetUID())
+		// @step: since we are using a single namespace to run these, we must ensure the names
+		// are unique across the namespace
+		meta.KeepLegacySubResourceMetas()
+		meta.ApplyJobName = uid + "-" + string(TerraformApply)
+		meta.DestroyJobName = uid + "-" + string(TerraformDestroy)
+		meta.ConfigurationCMName = fmt.Sprintf(TFInputConfigMapName, uid)
+		meta.VariableSecretName = fmt.Sprintf(TFVariableSecret, uid)
+		meta.ControllerNamespace = controllerNamespace
+		meta.ControllerNSSpecified = true
+	}
+}
+
+// New will create a new TFConfigurationMeta to process the configuration
+func New(req ctrl.Request, configuration v1beta2.Configuration, k8sClient client.Client, option ...Option) *TFConfigurationMeta {
 	var meta = &TFConfigurationMeta{
 		ControllerNamespace: req.Namespace,
 		Namespace:           req.Namespace,
@@ -84,6 +105,9 @@ func New(req ctrl.Request, configuration v1beta2.Configuration, k8sClient client
 		meta.TerraformCredentialsHelperConfigMapReference = configuration.Spec.TerraformCredentialsHelperConfigMapReference
 	}
 
+	for _, opt := range option {
+		opt(configuration, meta)
+	}
 	return meta
 }
 
@@ -338,7 +362,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 
 	// run `terraform init`
 	tfPreApplyInitContainer = v1.Container{
-		Name:            terraformInitContainerName,
+		Name:            TerraformInitContainerName,
 		Image:           meta.TerraformImage,
 		ImagePullPolicy: v1.PullIfNotPresent,
 		Command: []string{
@@ -352,7 +376,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 	initContainers = append(initContainers, tfPreApplyInitContainer)
 
 	container := v1.Container{
-		Name:            terraformContainerName,
+		Name:            TerraformContainerName,
 		Image:           meta.TerraformImage,
 		ImagePullPolicy: v1.PullIfNotPresent,
 		Command: []string{
