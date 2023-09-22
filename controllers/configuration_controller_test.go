@@ -1466,6 +1466,14 @@ func TestTerraformDestroy(t *testing.T) {
 		},
 		Type: corev1.SecretTypeOpaque,
 	}
+	backendSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("tfstate-default-%s", secretSuffix),
+			Namespace: "default",
+		},
+		Type: corev1.SecretTypeOpaque,
+	}
+
 	ConfigurationCMInLegacyNS := baseConfigurationCM.DeepCopy()
 	ConfigurationCMInLegacyNS.Namespace = legacyNamespace
 	variableSecretInLegacyNS := baseVariableSecret.DeepCopy()
@@ -1563,7 +1571,7 @@ func TestTerraformDestroy(t *testing.T) {
 			deletedResources: []client.Object{baseConfigurationCM, baseVariableSecret},
 		},
 		{
-			name: "destroy job has completes, cleanup resources",
+			name: "destroy job has been completed, and cleanup resources",
 			args: args{
 				configuration: configurationWithConnSecret,
 				meta:          &baseMeta,
@@ -1573,14 +1581,15 @@ func TestTerraformDestroy(t *testing.T) {
 			deletedResources: []client.Object{baseConfigurationCM, completeDestroyJob, baseVariableSecret, connectionSecret},
 		},
 		{
-			name: "destroy job has completes, cleanup resources but backend secret",
+			name: "destroy job has been completed, and cleanup resources except for the backend secret",
 			args: args{
 				configuration: configurationWithConnSecret,
 				meta:          &metaWithDeleteResourceIsFalse,
 			},
 			want:             want{},
-			objects:          []client.Object{readyProvider, configurationWithConnSecret, baseConfigurationCM, completeDestroyJob, baseVariableSecret, connectionSecret},
+			objects:          []client.Object{readyProvider, configurationWithConnSecret, baseConfigurationCM, completeDestroyJob, baseVariableSecret, connectionSecret, backendSecret},
 			deletedResources: []client.Object{baseConfigurationCM, completeDestroyJob, baseVariableSecret, connectionSecret},
+			keptResources:    []client.Object{backendSecret},
 		},
 		{
 			name: "force delete configuration",
