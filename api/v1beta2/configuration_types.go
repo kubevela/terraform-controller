@@ -21,7 +21,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
-	state "github.com/oam-dev/terraform-controller/api/types"
+	apitypes "github.com/oam-dev/terraform-controller/api/types"
 	types "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
 )
 
@@ -104,9 +104,9 @@ type ConfigurationStatus struct {
 
 // ConfigurationApplyStatus is the status for Configuration apply
 type ConfigurationApplyStatus struct {
-	State   state.ConfigurationState `json:"state,omitempty"`
-	Message string                   `json:"message,omitempty"`
-	Outputs map[string]Property      `json:"outputs,omitempty"`
+	State   apitypes.ConfigurationState `json:"state,omitempty"`
+	Message string                      `json:"message,omitempty"`
+	Outputs map[string]Property         `json:"outputs,omitempty"`
 	// Region is the region for the cloud resources created by this Configuration. If spec.region is not empty, it's the
 	// value of it. Otherwise, it's the value of spec.providerReference.region.
 	Region string `json:"region,omitempty"`
@@ -114,8 +114,8 @@ type ConfigurationApplyStatus struct {
 
 // ConfigurationDestroyStatus is the status for Configuration destroy
 type ConfigurationDestroyStatus struct {
-	State   state.ConfigurationState `json:"state,omitempty"`
-	Message string                   `json:"message,omitempty"`
+	State   apitypes.ConfigurationState `json:"state,omitempty"`
+	Message string                      `json:"message,omitempty"`
 }
 
 // Property is the property for an output

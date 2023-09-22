@@ -104,8 +104,7 @@ deletion:
 
 			time.Sleep(time.Second * 5)
 			continue
-		} else {
-			break
 		}
+		break
 	}
 }

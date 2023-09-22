@@ -51,9 +51,9 @@ const (
 
 // AlibabaCloudCredentials are credentials for Alibaba Cloud
 type AlibabaCloudCredentials struct {
-	AccessKeyID     string `yaml:"accessKeyID"`
-	AccessKeySecret string `yaml:"accessKeySecret"`
-	SecurityToken   string `yaml:"securityToken"`
+	AccessKeyID     string `yaml:"accessKeyID" json:"accessKeyID,omitempty"`
+	AccessKeySecret string `yaml:"accessKeySecret" json:"accessKeySecret,omitempty"`
+	SecurityToken   string `yaml:"securityToken" json:"securityToken,omitempty"`
 }
 
 // GetProviderCredentials gets provider credentials by cloud provider name

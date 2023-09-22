@@ -52,7 +52,7 @@ jobs:
         run: |
           kubectl cluster-info
           echo "current-context:" $(kubectl config current-context)
-          helm upgrade --install --create-namespace --namespace terraform terraform-controller ./chart --set image.tag=e2e --set image.pullPolicy=IfNotPresent --set backend.namespace=terraform
+          helm upgrade --install --create-namespace --namespace terraform terraform-controller ./chart --set image.tag=e2e --set image.pullPolicy=IfNotPresent --set backend.namespace=terraform --wait
           helm test -n terraform terraform-controller --timeout 5m
           kubectl get pod -n terraform -l "app=terraform-controller"
 

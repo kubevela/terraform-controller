@@ -2,9 +2,10 @@ package controllernamespace
 
 import (
 	"context"
-	types2 "github.com/oam-dev/terraform-controller/api/types"
 	"strings"
 	"time"
+
+	types2 "github.com/oam-dev/terraform-controller/api/types"
 
 	crossplane "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
 	. "github.com/onsi/ginkgo"

@@ -1,8 +1,9 @@
 package gitee
 
 import (
-	"github.com/oam-dev/terraform-controller/e2e/normal"
 	"testing"
+
+	"github.com/oam-dev/terraform-controller/e2e/normal"
 )
 
 var (
