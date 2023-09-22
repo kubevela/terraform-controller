@@ -1492,6 +1492,9 @@ func TestTerraformDestroy(t *testing.T) {
 		VariableSecretName:  fmt.Sprintf(TFVariableSecret, secretSuffix),
 	}
 
+	metaWithDeleteResourceIsFalse := baseMeta
+	metaWithDeleteResourceIsFalse.DeleteResource = false
+
 	baseConfiguration := &v1beta2.Configuration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "base-conf",
@@ -1564,6 +1567,16 @@ func TestTerraformDestroy(t *testing.T) {
 			args: args{
 				configuration: configurationWithConnSecret,
 				meta:          &baseMeta,
+			},
+			want:             want{},
+			objects:          []client.Object{readyProvider, configurationWithConnSecret, baseConfigurationCM, completeDestroyJob, baseVariableSecret, connectionSecret},
+			deletedResources: []client.Object{baseConfigurationCM, completeDestroyJob, baseVariableSecret, connectionSecret},
+		},
+		{
+			name: "destroy job has completes, cleanup resources but backend secret",
+			args: args{
+				configuration: configurationWithConnSecret,
+				meta:          &metaWithDeleteResourceIsFalse,
 			},
 			want:             want{},
 			objects:          []client.Object{readyProvider, configurationWithConnSecret, baseConfigurationCM, completeDestroyJob, baseVariableSecret, connectionSecret},

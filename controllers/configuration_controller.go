@@ -502,7 +502,7 @@ func (r *ConfigurationReconciler) cleanUpSubResources(ctx context.Context, confi
 	}
 
 	// 6. delete Kubernetes backend secret
-	if meta.Backend != nil {
+	if meta.Backend != nil && meta.DeleteResource {
 		if err := meta.Backend.CleanUp(ctx); err != nil {
 			return err
 		}
