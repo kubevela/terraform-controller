@@ -1,4 +1,4 @@
-package process
+package types
 
 const (
 	// WorkingVolumeMountPath is the mount path for working volume
@@ -44,7 +44,7 @@ const (
 )
 
 const (
-	defaultNamespace = "default"
+	DefaultNamespace = "default"
 	// TerraformContainerName is the name of the container that executes terraform in the pod
 	TerraformContainerName     = "terraform-executor"
 	TerraformInitContainerName = "terraform-init"

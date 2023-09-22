@@ -440,7 +440,7 @@ func TestAssembleTerraformJob(t *testing.T) {
 			URL: "g",
 		},
 	}
-	job := meta.assembleTerraformJob(TerraformApply)
+	job := meta.assembleTerraformJob(types.TerraformApply)
 	containers := job.Spec.Template.Spec.InitContainers
 	assert.Equal(t, containers[0].Image, "c")
 	assert.Equal(t, containers[1].Image, "d")
@@ -460,7 +460,7 @@ func TestAssembleTerraformJobWithNodeSelectorSetting(t *testing.T) {
 		JobNodeSelector: map[string]string{"ssd": "true"},
 	}
 
-	job := meta.assembleTerraformJob(TerraformApply)
+	job := meta.assembleTerraformJob(types.TerraformApply)
 	spec := job.Spec.Template.Spec
 	assert.Equal(t, spec.NodeSelector, map[string]string{"ssd": "true"})
 }
@@ -616,7 +616,7 @@ func TestAssembleTerraformJobWithResourcesSetting(t *testing.T) {
 		},
 	}
 
-	job := meta.assembleTerraformJob(TerraformApply)
+	job := meta.assembleTerraformJob(types.TerraformApply)
 	initContainers := job.Spec.Template.Spec.InitContainers
 	assert.Equal(t, initContainers[0].Image, "c")
 	assert.Equal(t, initContainers[1].Image, "d")
@@ -649,19 +649,19 @@ func TestAssembleTerraformJobWithGitCredentialsSecretRef(t *testing.T) {
 		},
 	}
 
-	job := meta.assembleTerraformJob(TerraformApply)
+	job := meta.assembleTerraformJob(types.TerraformApply)
 	spec := job.Spec.Template.Spec
 
 	var gitSecretDefaultMode int32 = 0400
-	gitAuthSecretVolume := corev1.Volume{Name: GitAuthConfigVolumeName}
+	gitAuthSecretVolume := corev1.Volume{Name: types.GitAuthConfigVolumeName}
 	gitAuthSecretVolume.Secret = &corev1.SecretVolumeSource{
 		SecretName:  "git-ssh",
 		DefaultMode: &gitSecretDefaultMode,
 	}
 
 	gitSecretVolumeMount := corev1.VolumeMount{
-		Name:      GitAuthConfigVolumeName,
-		MountPath: GitAuthConfigVolumeMountPath,
+		Name:      types.GitAuthConfigVolumeName,
+		MountPath: types.GitAuthConfigVolumeMountPath,
 	}
 	assert.Contains(t, spec.InitContainers[1].VolumeMounts, gitSecretVolumeMount)
 	assert.Contains(t, spec.Volumes, gitAuthSecretVolume)
@@ -692,12 +692,12 @@ func TestAssembleTerraformJobWithTerraformRCAndCredentials(t *testing.T) {
 		},
 	}
 
-	job := meta.assembleTerraformJob(TerraformApply)
+	job := meta.assembleTerraformJob(types.TerraformApply)
 	spec := job.Spec.Template.Spec
 
 	var terraformSecretDefaultMode int32 = 0400
 
-	terraformRegistryConfigMapVolume := corev1.Volume{Name: TerraformRCConfigVolumeName}
+	terraformRegistryConfigMapVolume := corev1.Volume{Name: types.TerraformRCConfigVolumeName}
 	terraformRegistryConfigMapVolume.ConfigMap = &corev1.ConfigMapVolumeSource{
 		LocalObjectReference: corev1.LocalObjectReference{
 			Name: "terraform-registry-config",
@@ -706,21 +706,21 @@ func TestAssembleTerraformJobWithTerraformRCAndCredentials(t *testing.T) {
 	}
 
 	terraformRegistryConfigVolumeMount := corev1.VolumeMount{
-		Name:      TerraformRCConfigVolumeName,
-		MountPath: TerraformRCConfigVolumeMountPath,
+		Name:      types.TerraformRCConfigVolumeName,
+		MountPath: types.TerraformRCConfigVolumeMountPath,
 	}
-	terraformCredentialsSecretVolume := corev1.Volume{Name: TerraformCredentialsConfigVolumeName}
+	terraformCredentialsSecretVolume := corev1.Volume{Name: types.TerraformCredentialsConfigVolumeName}
 	terraformCredentialsSecretVolume.Secret = &corev1.SecretVolumeSource{
 		SecretName:  "terraform-credentials",
 		DefaultMode: &terraformSecretDefaultMode,
 	}
 
 	terraformCredentialsSecretVolumeMount := corev1.VolumeMount{
-		Name:      TerraformCredentialsConfigVolumeName,
-		MountPath: TerraformCredentialsConfigVolumeMountPath,
+		Name:      types.TerraformCredentialsConfigVolumeName,
+		MountPath: types.TerraformCredentialsConfigVolumeMountPath,
 	}
 
-	terraformCredentialsHelperConfigVolume := corev1.Volume{Name: TerraformCredentialsHelperConfigVolumeName}
+	terraformCredentialsHelperConfigVolume := corev1.Volume{Name: types.TerraformCredentialsHelperConfigVolumeName}
 	terraformCredentialsHelperConfigVolume.ConfigMap = &corev1.ConfigMapVolumeSource{
 		LocalObjectReference: corev1.LocalObjectReference{
 			Name: "terraform-credentials-helper",
@@ -729,8 +729,8 @@ func TestAssembleTerraformJobWithTerraformRCAndCredentials(t *testing.T) {
 	}
 
 	terraformCredentialsHelperConfigVolumeMount := corev1.VolumeMount{
-		Name:      TerraformCredentialsHelperConfigVolumeName,
-		MountPath: TerraformCredentialsHelperConfigVolumeMountPath,
+		Name:      types.TerraformCredentialsHelperConfigVolumeName,
+		MountPath: types.TerraformCredentialsHelperConfigVolumeMountPath,
 	}
 
 	assert.Contains(t, spec.InitContainers[0].VolumeMounts, terraformCredentialsHelperConfigVolumeMount)
@@ -767,12 +767,12 @@ func TestAssembleTerraformJobWithTerraformRCAndCredentialsHelper(t *testing.T) {
 		},
 	}
 
-	job := meta.assembleTerraformJob(TerraformApply)
+	job := meta.assembleTerraformJob(types.TerraformApply)
 	spec := job.Spec.Template.Spec
 
 	var terraformSecretDefaultMode int32 = 0400
 
-	terraformRegistryConfigMapVolume := corev1.Volume{Name: TerraformRCConfigVolumeName}
+	terraformRegistryConfigMapVolume := corev1.Volume{Name: types.TerraformRCConfigVolumeName}
 	terraformRegistryConfigMapVolume.ConfigMap = &corev1.ConfigMapVolumeSource{
 		LocalObjectReference: corev1.LocalObjectReference{
 			Name: "terraform-registry-config",
@@ -781,10 +781,10 @@ func TestAssembleTerraformJobWithTerraformRCAndCredentialsHelper(t *testing.T) {
 	}
 
 	terraformRegistryConfigVolumeMount := corev1.VolumeMount{
-		Name:      TerraformRCConfigVolumeName,
-		MountPath: TerraformRCConfigVolumeMountPath,
+		Name:      types.TerraformRCConfigVolumeName,
+		MountPath: types.TerraformRCConfigVolumeMountPath,
 	}
-	terraformCredentialsHelperConfigVolume := corev1.Volume{Name: TerraformCredentialsHelperConfigVolumeName}
+	terraformCredentialsHelperConfigVolume := corev1.Volume{Name: types.TerraformCredentialsHelperConfigVolumeName}
 	terraformCredentialsHelperConfigVolume.ConfigMap = &corev1.ConfigMapVolumeSource{
 		LocalObjectReference: corev1.LocalObjectReference{
 			Name: "terraform-credentials-helper",
@@ -793,8 +793,8 @@ func TestAssembleTerraformJobWithTerraformRCAndCredentialsHelper(t *testing.T) {
 	}
 
 	terraformCredentialsHelperConfigVolumeMount := corev1.VolumeMount{
-		Name:      TerraformCredentialsHelperConfigVolumeName,
-		MountPath: TerraformCredentialsHelperConfigVolumeMountPath,
+		Name:      types.TerraformCredentialsHelperConfigVolumeName,
+		MountPath: types.TerraformCredentialsHelperConfigVolumeMountPath,
 	}
 
 	assert.Contains(t, spec.InitContainers[0].VolumeMounts, terraformRegistryConfigVolumeMount)
@@ -1448,7 +1448,7 @@ func TestAssembleAndTriggerJob(t *testing.T) {
 	type prepare func(t *testing.T)
 	type args struct {
 		k8sClient     client.Client
-		executionType TerraformExecutionType
+		executionType types.TerraformExecutionType
 		prepare
 	}
 	type want struct {
@@ -1471,7 +1471,7 @@ func TestAssembleAndTriggerJob(t *testing.T) {
 	}{
 		"failed to create ServiceAccount": {
 			args: args{
-				executionType: TerraformApply,
+				executionType: types.TerraformApply,
 			},
 			want: want{
 				errMsg: "failed to create ServiceAccount for Terraform executor",
@@ -1943,7 +1943,7 @@ func TestCheckGitCredentialsSecretReference(t *testing.T) {
 				},
 			},
 			want: want{
-				errMsg: fmt.Sprintf("'%s' not in git credentials secret", GitCredsKnownHosts),
+				errMsg: fmt.Sprintf("'%s' not in git credentials secret", types.GitCredsKnownHosts),
 			},
 		},
 		{
@@ -1973,7 +1973,7 @@ func TestCheckGitCredentialsSecretReference(t *testing.T) {
 			},
 		},
 	}
-	neededKeys := []string{GitCredsKnownHosts, corev1.SSHAuthPrivateKey}
+	neededKeys := []string{types.GitCredsKnownHosts, corev1.SSHAuthPrivateKey}
 	errKey := "git credentials"
 
 	for _, tc := range testcases {
@@ -2063,7 +2063,7 @@ func TestCheckTerraformCredentialsSecretReference(t *testing.T) {
 				},
 			},
 			want: want{
-				errMsg: fmt.Sprintf("'%s' not in terraform credentials secret", TerraformCredentials),
+				errMsg: fmt.Sprintf("'%s' not in terraform credentials secret", types.TerraformCredentials),
 			},
 		},
 		{
@@ -2081,7 +2081,7 @@ func TestCheckTerraformCredentialsSecretReference(t *testing.T) {
 		},
 	}
 
-	neededKeys := []string{TerraformCredentials}
+	neededKeys := []string{types.TerraformCredentials}
 	errKey := "terraform credentials"
 
 	for _, tc := range testcases {
@@ -2169,7 +2169,7 @@ func TestCheckTerraformRCConfigMapReference(t *testing.T) {
 				},
 			},
 			want: want{
-				errMsg: fmt.Sprintf("'%s' not in terraformrc configuration configmap", TerraformRegistryConfig),
+				errMsg: fmt.Sprintf("'%s' not in terraformrc configuration configmap", types.TerraformRegistryConfig),
 			},
 		},
 		{
@@ -2187,7 +2187,7 @@ func TestCheckTerraformRCConfigMapReference(t *testing.T) {
 		},
 	}
 
-	neededKeys := []string{TerraformRegistryConfig}
+	neededKeys := []string{types.TerraformRegistryConfig}
 	errKey := "terraformrc configuration"
 
 	for _, tc := range testcases {
