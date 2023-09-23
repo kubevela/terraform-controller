@@ -2,8 +2,9 @@ package container
 
 import (
 	"fmt"
-	"github.com/oam-dev/terraform-controller/api/types"
 	"path/filepath"
+
+	"github.com/oam-dev/terraform-controller/api/types"
 
 	v1 "k8s.io/api/core/v1"
 )
@@ -42,8 +43,16 @@ func (a *Assembler) GitContainer() v1.Container {
 }
 
 func (a *Assembler) getCloneCommand() []string {
+	var cmd string
 	hclPath := filepath.Join(types.BackendVolumeMountPath, a.Git.Path)
-	cloneCommand := fmt.Sprintf("git clone %s %s && cp -r %s/* %s", a.Git.URL, types.BackendVolumeMountPath, hclPath, types.WorkingVolumeMountPath)
+	copyCommand := fmt.Sprintf("cp -r %s/* %s", hclPath, types.WorkingVolumeMountPath)
+
+	checkoutCommand := ""
+	checkoutObject := getCheckoutObj(a.Git.Ref)
+	if checkoutObject != "" {
+		checkoutCommand = fmt.Sprintf("git checkout %s", checkoutObject)
+	}
+	cloneCommand := fmt.Sprintf("git clone %s %s", a.Git.URL, types.BackendVolumeMountPath)
 
 	// Check for git credentials, mount the SSH known hosts and private key, add private key into the SSH authentication agent
 	if a.GitCredential {
@@ -51,10 +60,26 @@ func (a *Assembler) getCloneCommand() []string {
 		cloneCommand = fmt.Sprintf("%s && %s", sshCommand, cloneCommand)
 	}
 
+	cmd = cloneCommand
+
+	if checkoutCommand != "" {
+		cmd = fmt.Sprintf("%s && %s", cmd, checkoutCommand)
+	}
+	cmd = fmt.Sprintf("%s && %s", cmd, copyCommand)
+
 	command := []string{
 		"sh",
 		"-c",
-		cloneCommand,
+		cmd,
 	}
 	return command
+}
+
+func getCheckoutObj(ref types.GitRef) string {
+	if ref.Commit != "" {
+		return ref.Commit
+	} else if ref.Tag != "" {
+		return ref.Tag
+	}
+	return ref.Branch
 }

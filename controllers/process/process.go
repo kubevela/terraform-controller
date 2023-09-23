@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/oam-dev/terraform-controller/controllers/process/container"
 	"os"
 	"reflect"
+
+	"github.com/oam-dev/terraform-controller/controllers/process/container"
 
 	"github.com/pkg/errors"
 	batchv1 "k8s.io/api/batch/v1"
