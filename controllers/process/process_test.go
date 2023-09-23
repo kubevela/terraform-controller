@@ -78,7 +78,7 @@ func TestInitTFConfigurationMeta(t *testing.T) {
 				ApplyJobName:        "abc-apply",
 				DestroyJobName:      "abc-destroy",
 
-				Git: Git{
+				Git: types.Git{
 					Path: ".",
 				},
 				ProviderReference: &crossplane.Reference{
@@ -99,7 +99,7 @@ func TestInitTFConfigurationMeta(t *testing.T) {
 				ApplyJobName:        "abc-apply",
 				DestroyJobName:      "abc-destroy",
 
-				Git: Git{
+				Git: types.Git{
 					Path: "alibaba/rds",
 				},
 				ProviderReference: &crossplane.Reference{
@@ -436,7 +436,7 @@ func TestAssembleTerraformJob(t *testing.T) {
 		GitImage:            "d",
 		Namespace:           "e",
 		TerraformImage:      "f",
-		Git: Git{
+		Git: types.Git{
 			URL: "g",
 		},
 	}
@@ -454,7 +454,7 @@ func TestAssembleTerraformJobWithNodeSelectorSetting(t *testing.T) {
 		GitImage:            "d",
 		Namespace:           "e",
 		TerraformImage:      "f",
-		Git: Git{
+		Git: types.Git{
 			URL: "g",
 		},
 		JobNodeSelector: map[string]string{"ssd": "true"},
@@ -600,11 +600,11 @@ func TestAssembleTerraformJobWithResourcesSetting(t *testing.T) {
 		GitImage:            "d",
 		Namespace:           "e",
 		TerraformImage:      "f",
-		Git: Git{
+		Git: types.Git{
 			URL: "g",
 		},
 
-		ResourceQuota: ResourceQuota{
+		ResourceQuota: types.ResourceQuota{
 			ResourcesLimitsCPU:              "10m",
 			ResourcesLimitsCPUQuantity:      quantityLimitsCPU,
 			ResourcesLimitsMemory:           "10Mi",
@@ -640,7 +640,7 @@ func TestAssembleTerraformJobWithGitCredentialsSecretRef(t *testing.T) {
 		GitImage:            "d",
 		Namespace:           "e",
 		TerraformImage:      "f",
-		Git: Git{
+		Git: types.Git{
 			URL: "g",
 		},
 		GitCredentialsSecretReference: &corev1.SecretReference{
@@ -675,7 +675,7 @@ func TestAssembleTerraformJobWithTerraformRCAndCredentials(t *testing.T) {
 		GitImage:            "d",
 		Namespace:           "e",
 		TerraformImage:      "f",
-		Git: Git{
+		Git: types.Git{
 			URL: "g",
 		},
 		TerraformRCConfigMapReference: &corev1.SecretReference{
@@ -733,16 +733,18 @@ func TestAssembleTerraformJobWithTerraformRCAndCredentials(t *testing.T) {
 		MountPath: types.TerraformCredentialsHelperConfigVolumeMountPath,
 	}
 
-	assert.Contains(t, spec.InitContainers[0].VolumeMounts, terraformCredentialsHelperConfigVolumeMount)
+	terraformInitContainerMounts := spec.InitContainers[2].VolumeMounts
+
+	assert.Contains(t, terraformInitContainerMounts, terraformCredentialsHelperConfigVolumeMount)
 	assert.Contains(t, spec.Volumes, terraformCredentialsHelperConfigVolume)
 
-	assert.Contains(t, spec.InitContainers[0].VolumeMounts, terraformRegistryConfigVolumeMount)
+	assert.Contains(t, terraformInitContainerMounts, terraformRegistryConfigVolumeMount)
 	assert.Contains(t, spec.Volumes, terraformRegistryConfigMapVolume)
 
-	assert.Contains(t, spec.InitContainers[0].VolumeMounts, terraformCredentialsSecretVolumeMount)
+	assert.Contains(t, terraformInitContainerMounts, terraformCredentialsSecretVolumeMount)
 	assert.Contains(t, spec.Volumes, terraformCredentialsSecretVolume)
 
-	assert.Contains(t, spec.InitContainers[0].VolumeMounts, terraformRegistryConfigVolumeMount)
+	assert.Contains(t, terraformInitContainerMounts, terraformRegistryConfigVolumeMount)
 	assert.Contains(t, spec.Volumes, terraformRegistryConfigMapVolume)
 }
 
@@ -754,7 +756,7 @@ func TestAssembleTerraformJobWithTerraformRCAndCredentialsHelper(t *testing.T) {
 		GitImage:            "d",
 		Namespace:           "e",
 		TerraformImage:      "f",
-		Git: Git{
+		Git: types.Git{
 			URL: "g",
 		},
 		TerraformRCConfigMapReference: &corev1.SecretReference{
@@ -797,10 +799,11 @@ func TestAssembleTerraformJobWithTerraformRCAndCredentialsHelper(t *testing.T) {
 		MountPath: types.TerraformCredentialsHelperConfigVolumeMountPath,
 	}
 
-	assert.Contains(t, spec.InitContainers[0].VolumeMounts, terraformRegistryConfigVolumeMount)
+	terraformInitContainerMounts := spec.InitContainers[2].VolumeMounts
+	assert.Contains(t, terraformInitContainerMounts, terraformRegistryConfigVolumeMount)
 	assert.Contains(t, spec.Volumes, terraformRegistryConfigMapVolume)
 
-	assert.Contains(t, spec.InitContainers[0].VolumeMounts, terraformCredentialsHelperConfigVolumeMount)
+	assert.Contains(t, terraformInitContainerMounts, terraformCredentialsHelperConfigVolumeMount)
 	assert.Contains(t, spec.Volumes, terraformCredentialsHelperConfigVolume)
 
 }

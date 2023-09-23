@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	initcontainer "github.com/oam-dev/terraform-controller/controllers/process/init-container"
+	"github.com/oam-dev/terraform-controller/controllers/process/container"
 	"os"
 	"reflect"
 
@@ -12,7 +12,6 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
@@ -264,119 +263,31 @@ func (meta *TFConfigurationMeta) UpdateTerraformJobIfNeeded(ctx context.Context,
 
 func (meta *TFConfigurationMeta) assembleTerraformJob(executionType types.TerraformExecutionType) *batchv1.Job {
 	var (
-		initContainer           v1.Container
-		tfPreApplyInitContainer v1.Container
-		initContainers          []v1.Container
-		parallelism             int32 = 1
-		completions             int32 = 1
+		initContainers []v1.Container
+		parallelism    int32 = 1
+		completions    int32 = 1
 	)
 
 	executorVolumes := meta.assembleExecutorVolumes()
-	initContainerVolumeMounts := []v1.VolumeMount{
-		{
-			Name:      meta.Name,
-			MountPath: types.WorkingVolumeMountPath,
-		},
-		{
-			Name:      types.InputTFConfigurationVolumeName,
-			MountPath: types.InputTFConfigurationVolumeMountPath,
-		},
-		{
-			Name:      types.BackendVolumeName,
-			MountPath: types.BackendVolumeMountPath,
-		},
-	}
 
-	if meta.TerraformCredentialsSecretReference != nil {
-		initContainerVolumeMounts = append(initContainerVolumeMounts,
-			v1.VolumeMount{
-				Name:      types.TerraformCredentialsConfigVolumeName,
-				MountPath: types.TerraformCredentialsConfigVolumeMountPath,
-			})
-	}
+	assembler := container.NewAssembler().
+		TerraformCredReference(meta.TerraformCredentialsSecretReference).
+		TerraformRCReference(meta.TerraformRCConfigMapReference).
+		TerraformCredentialsHelperReference(meta.TerraformCredentialsHelperConfigMapReference).
+		GitCredReference(meta.GitCredentialsSecretReference).
+		SetGit(meta.Git).
+		SetBusyboxImage(meta.BusyboxImage).
+		SetTerraformImage(meta.TerraformImage).
+		SetGitImage(meta.GitImage).
+		SetEnvs(meta.Envs)
 
-	if meta.TerraformRCConfigMapReference != nil {
-		initContainerVolumeMounts = append(initContainerVolumeMounts,
-			v1.VolumeMount{
-				Name:      types.TerraformRCConfigVolumeName,
-				MountPath: types.TerraformRCConfigVolumeMountPath,
-			})
-	}
-
-	if meta.TerraformCredentialsHelperConfigMapReference != nil {
-		initContainerVolumeMounts = append(initContainerVolumeMounts,
-			v1.VolumeMount{
-				Name:      types.TerraformCredentialsHelperConfigVolumeName,
-				MountPath: types.TerraformCredentialsHelperConfigVolumeMountPath,
-			})
-	}
-
-	initContainers = append(initContainers, initcontainer.InputInitContainer(meta))
-
+	initContainers = append(initContainers, assembler.InputContainer())
 	if meta.Git.URL != "" {
-		initContainers = append(initContainers, initcontainer.GitInitContainer(meta))
+		initContainers = append(initContainers, assembler.GitContainer())
 	}
+	initContainers = append(initContainers, assembler.InitContainer())
 
-	// run `terraform init`
-	tfPreApplyInitContainer = v1.Container{
-		Name:            types.TerraformInitContainerName,
-		Image:           meta.TerraformImage,
-		ImagePullPolicy: v1.PullIfNotPresent,
-		Command: []string{
-			"sh",
-			"-c",
-			"terraform init",
-		},
-		VolumeMounts: initContainerVolumeMounts,
-		Env:          meta.Envs,
-	}
-	initContainers = append(initContainers, tfPreApplyInitContainer)
-
-	container := v1.Container{
-		Name:            types.TerraformContainerName,
-		Image:           meta.TerraformImage,
-		ImagePullPolicy: v1.PullIfNotPresent,
-		Command: []string{
-			"bash",
-			"-c",
-			fmt.Sprintf("terraform %s -lock=false -auto-approve", executionType),
-		},
-		VolumeMounts: []v1.VolumeMount{
-			{
-				Name:      meta.Name,
-				MountPath: types.WorkingVolumeMountPath,
-			},
-			{
-				Name:      types.InputTFConfigurationVolumeName,
-				MountPath: types.InputTFConfigurationVolumeMountPath,
-			},
-		},
-		Env: meta.Envs,
-	}
-
-	if meta.ResourceQuota.ResourcesLimitsCPU != "" || meta.ResourceQuota.ResourcesLimitsMemory != "" ||
-		meta.ResourceQuota.ResourcesRequestsCPU != "" || meta.ResourceQuota.ResourcesRequestsMemory != "" {
-		resourceRequirements := v1.ResourceRequirements{}
-		if meta.ResourceQuota.ResourcesLimitsCPU != "" || meta.ResourceQuota.ResourcesLimitsMemory != "" {
-			resourceRequirements.Limits = map[v1.ResourceName]resource.Quantity{}
-			if meta.ResourceQuota.ResourcesLimitsCPU != "" {
-				resourceRequirements.Limits["cpu"] = meta.ResourceQuota.ResourcesLimitsCPUQuantity
-			}
-			if meta.ResourceQuota.ResourcesLimitsMemory != "" {
-				resourceRequirements.Limits["memory"] = meta.ResourceQuota.ResourcesLimitsMemoryQuantity
-			}
-		}
-		if meta.ResourceQuota.ResourcesRequestsCPU != "" || meta.ResourceQuota.ResourcesLimitsMemory != "" {
-			resourceRequirements.Requests = map[v1.ResourceName]resource.Quantity{}
-			if meta.ResourceQuota.ResourcesRequestsCPU != "" {
-				resourceRequirements.Requests["cpu"] = meta.ResourceQuota.ResourcesRequestsCPUQuantity
-			}
-			if meta.ResourceQuota.ResourcesRequestsMemory != "" {
-				resourceRequirements.Requests["memory"] = meta.ResourceQuota.ResourcesRequestsMemoryQuantity
-			}
-		}
-		container.Resources = resourceRequirements
-	}
+	applyContainer := assembler.ApplyContainer(executionType, meta.ResourceQuota)
 
 	name := meta.ApplyJobName
 	if executionType == types.TerraformDestroy {
@@ -411,7 +322,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType types.Terraf
 					InitContainers: initContainers,
 					// Container terraform-executor will first copy predefined terraform.d to working directory, and
 					// then run terraform init/apply.
-					Containers:         []v1.Container{container},
+					Containers:         []v1.Container{applyContainer},
 					ServiceAccountName: types.ServiceAccountName,
 					Volumes:            executorVolumes,
 					RestartPolicy:      v1.RestartPolicyOnFailure,

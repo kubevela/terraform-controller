@@ -30,7 +30,7 @@ func getPods(ctx context.Context, client kubernetes.Interface, namespace, jobNam
 func getPodLog(ctx context.Context, client kubernetes.Interface, namespace, jobName, containerName, initContainerName string) (types.Stage, string, error) {
 	var (
 		targetContainer = containerName
-		stage           = types.TerraformApply
+		stage           = types.ApplyStage
 	)
 	pods, err := getPods(ctx, client, namespace, jobName)
 	if err != nil || pods == nil || len(pods.Items) == 0 {
@@ -44,7 +44,7 @@ func getPodLog(ctx context.Context, client kubernetes.Interface, namespace, jobN
 		for _, c := range pod.Status.InitContainerStatuses {
 			if c.Name == initContainerName && !c.Ready {
 				targetContainer = initContainerName
-				stage = types.TerraformInit
+				stage = types.InitStage
 				break
 			}
 		}

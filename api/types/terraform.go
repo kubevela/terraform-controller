@@ -1,5 +1,7 @@
 package types
 
+import "k8s.io/apimachinery/pkg/api/resource"
+
 const (
 	// TerraformHCLConfigurationName is the file name for Terraform hcl Configuration
 	TerraformHCLConfigurationName = "main.tf"
@@ -15,9 +17,26 @@ const (
 	ConfigurationRemote ConfigurationType = "Remote"
 )
 
+type Git struct {
+	URL  string
+	Path string
+	Ref  GitRef
+}
+
 // GitRef specifies the git reference
 type GitRef struct {
 	Branch string `json:"branch,omitempty"`
 	Tag    string `json:"tag,omitempty"`
 	Commit string `json:"commit,omitempty"`
+}
+
+type ResourceQuota struct {
+	ResourcesLimitsCPU              string
+	ResourcesLimitsCPUQuantity      resource.Quantity
+	ResourcesLimitsMemory           string
+	ResourcesLimitsMemoryQuantity   resource.Quantity
+	ResourcesRequestsCPU            string
+	ResourcesRequestsCPUQuantity    resource.Quantity
+	ResourcesRequestsMemory         string
+	ResourcesRequestsMemoryQuantity resource.Quantity
 }

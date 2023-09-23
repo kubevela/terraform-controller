@@ -1,22 +1,19 @@
 package types
 
 const (
-	// WorkingVolumeMountPath is the mount path for working volume
-	WorkingVolumeMountPath = "/data"
-	// InputTFConfigurationVolumeName is the volume name for input Terraform Configuration
-	InputTFConfigurationVolumeName = "tf-input-configuration"
-	// BackendVolumeName is the volume name for Terraform backend
-	BackendVolumeName = "tf-backend"
-	// InputTFConfigurationVolumeMountPath is the volume mount path for input Terraform Configuration
-	InputTFConfigurationVolumeMountPath = "/opt/tf-configuration"
-	// BackendVolumeMountPath is the volume mount path for Terraform backend
-	BackendVolumeMountPath = "/opt/tf-backend"
+	DefaultNamespace = "default"
 
 	GitCredsKnownHosts = "known_hosts"
-	// Terraform credentials
+	// TerraformCredentials -
 	TerraformCredentials = "credentials.tfrc.json"
-	// Terraform Registry Configuration
+	// TerraformRegistryConfig -
 	TerraformRegistryConfig = ".terraformrc"
+)
+
+const (
+	// TerraformContainerName is the name of the container that executes terraform in the pod
+	TerraformContainerName     = "terraform-executor"
+	TerraformInitContainerName = "terraform-init"
 )
 
 const (
@@ -43,23 +40,36 @@ const (
 	ServiceAccountName = "tf-executor-service-account"
 )
 
+// Volume names and mount paths
 const (
-	DefaultNamespace = "default"
-	// TerraformContainerName is the name of the container that executes terraform in the pod
-	TerraformContainerName     = "terraform-executor"
-	TerraformInitContainerName = "terraform-init"
+	// WorkingVolumeMountPath is the mount path for working volume
+	WorkingVolumeMountPath = "/data"
+
+	// InputTFConfigurationVolumeName is the volume name for input Terraform Configuration
+	InputTFConfigurationVolumeName = "tf-input-configuration"
+	// InputTFConfigurationVolumeMountPath is the volume mount path for input Terraform Configuration
+	InputTFConfigurationVolumeMountPath = "/opt/tf-configuration"
+
+	// BackendVolumeName is the volume name for Terraform backend
+	BackendVolumeName = "tf-backend"
+	// BackendVolumeMountPath is the volume mount path for Terraform backend
+	BackendVolumeMountPath = "/opt/tf-backend"
+
 	// GitAuthConfigVolumeName is the volume name for git auth configurtaion
 	GitAuthConfigVolumeName = "git-auth-configuration"
 	// GitAuthConfigVolumeMountPath is the volume mount path for git auth configurtaion
 	GitAuthConfigVolumeMountPath = "/root/.ssh"
+
 	// TerraformCredentialsConfigVolumeName is the volume name for terraform auth configurtaion
 	TerraformCredentialsConfigVolumeName = "terraform-credentials-configuration"
 	// TerraformCredentialsConfigVolumeMountPath is the volume mount path for terraform auth configurtaion
 	TerraformCredentialsConfigVolumeMountPath = "/root/.terraform.d"
+
 	// TerraformRCConfigVolumeName is the volume name of the terraform registry configuration
 	TerraformRCConfigVolumeName = "terraform-rc-configuration"
 	// TerraformRCConfigVolumeMountPath is the volume mount path for registry configuration
 	TerraformRCConfigVolumeMountPath = "/root"
+
 	// TerraformCredentialsHelperConfigVolumeName is the volume name for terraform auth configurtaion
 	TerraformCredentialsHelperConfigVolumeName = "terraform-credentials-helper-configuration"
 	// TerraformCredentialsHelperConfigVolumeMountPath is the volume mount path for terraform auth configurtaion

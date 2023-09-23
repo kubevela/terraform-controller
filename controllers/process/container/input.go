@@ -1,20 +1,19 @@
-package init_container
+package container
 
 import (
 	"fmt"
 	"github.com/oam-dev/terraform-controller/api/types"
-	"github.com/oam-dev/terraform-controller/controllers/process"
 	v1 "k8s.io/api/core/v1"
 )
 
 const InputContainerName = "prepare-input-terraform-configurations"
 
-// InputInitContainer prepare input .tf files
-func InputInitContainer(meta *process.TFConfigurationMeta) v1.Container {
+// InputContainer prepare input .tf files, copy them to the working directory
+func (a *Assembler) InputContainer() v1.Container {
 	mounts := []v1.VolumeMount{
 
 		{
-			Name:      meta.Name,
+			Name:      a.Name,
 			MountPath: types.WorkingVolumeMountPath,
 		},
 		{
@@ -24,7 +23,7 @@ func InputInitContainer(meta *process.TFConfigurationMeta) v1.Container {
 	}
 	return v1.Container{
 		Name:            InputContainerName,
-		Image:           meta.BusyboxImage,
+		Image:           a.BusyboxImage,
 		ImagePullPolicy: v1.PullIfNotPresent,
 		Command: []string{
 			"sh",
