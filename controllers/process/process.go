@@ -271,7 +271,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType types.Terraf
 
 	executorVolumes := meta.assembleExecutorVolumes()
 
-	assembler := container.NewAssembler().
+	assembler := container.NewAssembler(meta.Name).
 		TerraformCredReference(meta.TerraformCredentialsSecretReference).
 		TerraformRCReference(meta.TerraformRCConfigMapReference).
 		TerraformCredentialsHelperReference(meta.TerraformCredentialsHelperConfigMapReference).

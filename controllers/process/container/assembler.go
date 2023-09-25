@@ -22,8 +22,8 @@ type Assembler struct {
 	Envs []v1.EnvVar
 }
 
-func NewAssembler() *Assembler {
-	return &Assembler{}
+func NewAssembler(name string) *Assembler {
+	return &Assembler{Name: name}
 }
 
 func (a *Assembler) GitCredReference(ptr *v1.SecretReference) *Assembler {
