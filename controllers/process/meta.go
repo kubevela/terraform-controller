@@ -8,7 +8,6 @@ import (
 	"github.com/oam-dev/terraform-controller/controllers/configuration/backend"
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -23,17 +22,6 @@ type LegacySubResources struct {
 	VariableSecretName  string
 }
 
-type ResourceQuota struct {
-	ResourcesLimitsCPU              string
-	ResourcesLimitsCPUQuantity      resource.Quantity
-	ResourcesLimitsMemory           string
-	ResourcesLimitsMemoryQuantity   resource.Quantity
-	ResourcesRequestsCPU            string
-	ResourcesRequestsCPUQuantity    resource.Quantity
-	ResourcesRequestsMemory         string
-	ResourcesRequestsMemoryQuantity resource.Quantity
-}
-
 // TFConfigurationMeta is all the metadata of a Configuration
 type TFConfigurationMeta struct {
 	Name                                         string
@@ -41,7 +29,7 @@ type TFConfigurationMeta struct {
 	ControllerNamespace                          string
 	ConfigurationType                            types.ConfigurationType
 	CompleteConfiguration                        string
-	Git                                          Git
+	Git                                          types.Git
 	ConfigurationChanged                         bool
 	EnvChanged                                   bool
 	ConfigurationCMName                          string
@@ -73,18 +61,12 @@ type TFConfigurationMeta struct {
 	BackoffLimit int32
 
 	// ResourceQuota series Variables are for Setting Compute Resources required by this container
-	ResourceQuota ResourceQuota
+	ResourceQuota types.ResourceQuota
 
 	LegacySubResources    LegacySubResources
 	ControllerNSSpecified bool
 
 	K8sClient client.Client
-}
-
-type Git struct {
-	URL  string
-	Path string
-	// Ref  types.GitRef
 }
 
 // TFState is Terraform State

@@ -44,8 +44,8 @@ const (
 type Stage string
 
 const (
-	TerraformInit  Stage = "TerraformInit"
-	TerraformApply Stage = "TerraformApply"
+	InitStage  Stage = "InitStage"
+	ApplyStage Stage = "Apply"
 )
 
 const (

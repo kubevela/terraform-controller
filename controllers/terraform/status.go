@@ -45,9 +45,9 @@ func analyzeTerraformLog(logs string, stage types.Stage) (bool, types.Configurat
 				return false, types.InvalidRegion, errMsg
 			}
 			switch stage {
-			case types.TerraformInit:
+			case types.InitStage:
 				return false, types.TerraformInitError, errMsg
-			case types.TerraformApply:
+			case types.ApplyStage:
 				return false, types.ConfigurationApplyFailed, errMsg
 			}
 		}

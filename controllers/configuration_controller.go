@@ -99,7 +99,7 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		klog.InfoS("performing Configuration Destroy", "Namespace", req.Namespace, "Name", req.Name, "JobName", meta.DestroyJobName)
 		// if allow to delete halfway, we will not check the status of the apply job.
 
-		_, err := terraform.GetTerraformStatus(ctx, meta.ControllerNamespace, meta.DestroyJobName, process.TerraformContainerName, process.TerraformInitContainerName)
+		_, err := terraform.GetTerraformStatus(ctx, meta.ControllerNamespace, meta.DestroyJobName, types.TerraformContainerName, types.TerraformInitContainerName)
 		if err != nil {
 			klog.ErrorS(err, "Terraform destroy failed")
 			if updateErr := meta.UpdateDestroyStatus(ctx, r.Client, types.ConfigurationDestroyFailed, err.Error()); updateErr != nil {
@@ -151,7 +151,7 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		}
 		return ctrl.Result{RequeueAfter: 3 * time.Second}, errors.Wrap(err, "failed to create/update cloud resource")
 	}
-	state, err := terraform.GetTerraformStatus(ctx, meta.ControllerNamespace, meta.ApplyJobName, process.TerraformContainerName, process.TerraformInitContainerName)
+	state, err := terraform.GetTerraformStatus(ctx, meta.ControllerNamespace, meta.ApplyJobName, types.TerraformContainerName, types.TerraformInitContainerName)
 	if err != nil {
 		klog.ErrorS(err, "Terraform apply failed")
 		if updateErr := meta.UpdateApplyStatus(ctx, r.Client, state, err.Error()); updateErr != nil {
@@ -173,7 +173,7 @@ func (r *ConfigurationReconciler) terraformApply(ctx context.Context, configurat
 
 	if err := meta.GetApplyJob(ctx, k8sClient, &tfExecutionJob); err != nil {
 		if kerrors.IsNotFound(err) {
-			return meta.AssembleAndTriggerJob(ctx, k8sClient, process.TerraformApply)
+			return meta.AssembleAndTriggerJob(ctx, k8sClient, types.TerraformApply)
 		}
 	}
 	klog.InfoS("terraform apply job", "Namespace", tfExecutionJob.Namespace, "Name", tfExecutionJob.Name)
@@ -229,7 +229,7 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, configur
 		if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.DestroyJobName, Namespace: meta.ControllerNamespace}, &destroyJob); err != nil {
 			if kerrors.IsNotFound(err) {
 				if err := r.Client.Get(ctx, client.ObjectKey{Name: configuration.Name, Namespace: configuration.Namespace}, &v1beta2.Configuration{}); err == nil {
-					if err = meta.AssembleAndTriggerJob(ctx, k8sClient, process.TerraformDestroy); err != nil {
+					if err = meta.AssembleAndTriggerJob(ctx, k8sClient, types.TerraformDestroy); err != nil {
 						return err
 					}
 				}
@@ -480,7 +480,7 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 		return err
 	}
 
-	return util.CreateTerraformExecutorClusterRole(ctx, k8sClient, fmt.Sprintf("%s-%s", meta.ControllerNamespace, process.ClusterRoleName))
+	return util.CreateTerraformExecutorClusterRole(ctx, k8sClient, fmt.Sprintf("%s-%s", meta.ControllerNamespace, types.ClusterRoleName))
 }
 
 // SetupWithManager setups with a manager
