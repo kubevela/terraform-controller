@@ -5,14 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"reflect"
+
+	"github.com/oam-dev/terraform-controller/controllers/process/container"
 
 	"github.com/pkg/errors"
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
@@ -40,10 +40,10 @@ func ControllerNamespaceOption(controllerNamespace string) Option {
 		// @step: since we are using a single namespace to run these, we must ensure the names
 		// are unique across the namespace
 		meta.KeepLegacySubResourceMetas()
-		meta.ApplyJobName = uid + "-" + string(TerraformApply)
-		meta.DestroyJobName = uid + "-" + string(TerraformDestroy)
-		meta.ConfigurationCMName = fmt.Sprintf(TFInputConfigMapName, uid)
-		meta.VariableSecretName = fmt.Sprintf(TFVariableSecret, uid)
+		meta.ApplyJobName = uid + "-" + string(types.TerraformApply)
+		meta.DestroyJobName = uid + "-" + string(types.TerraformDestroy)
+		meta.ConfigurationCMName = fmt.Sprintf(types.TFInputConfigMapName, uid)
+		meta.VariableSecretName = fmt.Sprintf(types.TFVariableSecret, uid)
 		meta.ControllerNamespace = controllerNamespace
 		meta.ControllerNSSpecified = true
 	}
@@ -55,10 +55,10 @@ func New(req ctrl.Request, configuration v1beta2.Configuration, k8sClient client
 		ControllerNamespace: req.Namespace,
 		Namespace:           req.Namespace,
 		Name:                req.Name,
-		ConfigurationCMName: fmt.Sprintf(TFInputConfigMapName, req.Name),
-		VariableSecretName:  fmt.Sprintf(TFVariableSecret, req.Name),
-		ApplyJobName:        req.Name + "-" + string(TerraformApply),
-		DestroyJobName:      req.Name + "-" + string(TerraformDestroy),
+		ConfigurationCMName: fmt.Sprintf(types.TFInputConfigMapName, req.Name),
+		VariableSecretName:  fmt.Sprintf(types.TFVariableSecret, req.Name),
+		ApplyJobName:        req.Name + "-" + string(types.TerraformApply),
+		DestroyJobName:      req.Name + "-" + string(types.TerraformDestroy),
 		K8sClient:           k8sClient,
 	}
 
@@ -127,21 +127,21 @@ func (meta *TFConfigurationMeta) ValidateSecretAndConfigMap(ctx context.Context,
 			ref:           meta.GitCredentialsSecretReference,
 			notFoundState: types.InvalidGitCredentialsSecretReference,
 			isSecret:      true,
-			neededKeys:    []string{GitCredsKnownHosts, v1.SSHAuthPrivateKey},
+			neededKeys:    []string{types.GitCredsKnownHosts, v1.SSHAuthPrivateKey},
 			errKey:        "git credentials",
 		},
 		{
 			ref:           meta.TerraformCredentialsSecretReference,
 			notFoundState: types.InvalidTerraformCredentialsSecretReference,
 			isSecret:      true,
-			neededKeys:    []string{TerraformCredentials},
+			neededKeys:    []string{types.TerraformCredentials},
 			errKey:        "terraform credentials",
 		},
 		{
 			ref:           meta.TerraformRCConfigMapReference,
 			notFoundState: types.InvalidTerraformRCConfigMapReference,
 			isSecret:      false,
-			neededKeys:    []string{TerraformRegistryConfig},
+			neededKeys:    []string{types.TerraformRegistryConfig},
 			errKey:        "terraformrc configuration",
 		},
 		{
@@ -226,12 +226,12 @@ func (meta *TFConfigurationMeta) UpdateDestroyStatus(ctx context.Context, k8sCli
 	return nil
 }
 
-func (meta *TFConfigurationMeta) AssembleAndTriggerJob(ctx context.Context, k8sClient client.Client, executionType TerraformExecutionType) error {
+func (meta *TFConfigurationMeta) AssembleAndTriggerJob(ctx context.Context, k8sClient client.Client, executionType types.TerraformExecutionType) error {
 	// apply rbac
-	if err := createTerraformExecutorServiceAccount(ctx, k8sClient, meta.ControllerNamespace, ServiceAccountName); err != nil {
+	if err := createTerraformExecutorServiceAccount(ctx, k8sClient, meta.ControllerNamespace, types.ServiceAccountName); err != nil {
 		return err
 	}
-	if err := util.CreateTerraformExecutorClusterRoleBinding(ctx, k8sClient, meta.ControllerNamespace, fmt.Sprintf("%s-%s", meta.ControllerNamespace, ClusterRoleName), ServiceAccountName); err != nil {
+	if err := util.CreateTerraformExecutorClusterRoleBinding(ctx, k8sClient, meta.ControllerNamespace, fmt.Sprintf("%s-%s", meta.ControllerNamespace, types.ClusterRoleName), types.ServiceAccountName); err != nil {
 		return err
 	}
 
@@ -262,166 +262,36 @@ func (meta *TFConfigurationMeta) UpdateTerraformJobIfNeeded(ctx context.Context,
 	return nil
 }
 
-func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExecutionType) *batchv1.Job {
+func (meta *TFConfigurationMeta) assembleTerraformJob(executionType types.TerraformExecutionType) *batchv1.Job {
 	var (
-		initContainer           v1.Container
-		tfPreApplyInitContainer v1.Container
-		initContainers          []v1.Container
-		parallelism             int32 = 1
-		completions             int32 = 1
+		initContainers []v1.Container
+		parallelism    int32 = 1
+		completions    int32 = 1
 	)
 
 	executorVolumes := meta.assembleExecutorVolumes()
-	initContainerVolumeMounts := []v1.VolumeMount{
-		{
-			Name:      meta.Name,
-			MountPath: WorkingVolumeMountPath,
-		},
-		{
-			Name:      InputTFConfigurationVolumeName,
-			MountPath: InputTFConfigurationVolumeMountPath,
-		},
-		{
-			Name:      BackendVolumeName,
-			MountPath: BackendVolumeMountPath,
-		},
-	}
 
-	if meta.TerraformCredentialsSecretReference != nil {
-		initContainerVolumeMounts = append(initContainerVolumeMounts,
-			v1.VolumeMount{
-				Name:      TerraformCredentialsConfigVolumeName,
-				MountPath: TerraformCredentialsConfigVolumeMountPath,
-			})
-	}
+	assembler := container.NewAssembler(meta.Name).
+		TerraformCredReference(meta.TerraformCredentialsSecretReference).
+		TerraformRCReference(meta.TerraformRCConfigMapReference).
+		TerraformCredentialsHelperReference(meta.TerraformCredentialsHelperConfigMapReference).
+		GitCredReference(meta.GitCredentialsSecretReference).
+		SetGit(meta.Git).
+		SetBusyboxImage(meta.BusyboxImage).
+		SetTerraformImage(meta.TerraformImage).
+		SetGitImage(meta.GitImage).
+		SetEnvs(meta.Envs)
 
-	if meta.TerraformRCConfigMapReference != nil {
-		initContainerVolumeMounts = append(initContainerVolumeMounts,
-			v1.VolumeMount{
-				Name:      TerraformRCConfigVolumeName,
-				MountPath: TerraformRCConfigVolumeMountPath,
-			})
-	}
-
-	if meta.TerraformCredentialsHelperConfigMapReference != nil {
-		initContainerVolumeMounts = append(initContainerVolumeMounts,
-			v1.VolumeMount{
-				Name:      TerraformCredentialsHelperConfigVolumeName,
-				MountPath: TerraformCredentialsHelperConfigVolumeMountPath,
-			})
-	}
-
-	// prepare local Terraform .tf files
-	initContainer = v1.Container{
-		Name:            "prepare-input-terraform-configurations",
-		Image:           meta.BusyboxImage,
-		ImagePullPolicy: v1.PullIfNotPresent,
-		Command: []string{
-			"sh",
-			"-c",
-			fmt.Sprintf("cp %s/* %s", InputTFConfigurationVolumeMountPath, WorkingVolumeMountPath),
-		},
-		VolumeMounts: initContainerVolumeMounts,
-	}
-
-	initContainers = append(initContainers, initContainer)
-
-	hclPath := filepath.Join(BackendVolumeMountPath, meta.Git.Path)
-
+	initContainers = append(initContainers, assembler.InputContainer())
 	if meta.Git.URL != "" {
-		cloneCommand := fmt.Sprintf("git clone %s %s && cp -r %s/* %s", meta.Git.URL, BackendVolumeMountPath, hclPath, WorkingVolumeMountPath)
-
-		// Check for git credentials, mount the SSH known hosts and private key, add private key into the SSH authentication agent
-		if meta.GitCredentialsSecretReference != nil {
-			initContainerVolumeMounts = append(initContainerVolumeMounts,
-				v1.VolumeMount{
-					Name:      GitAuthConfigVolumeName,
-					MountPath: GitAuthConfigVolumeMountPath,
-				})
-
-			sshCommand := fmt.Sprintf("eval `ssh-agent` && ssh-add %s/%s", GitAuthConfigVolumeMountPath, v1.SSHAuthPrivateKey)
-			cloneCommand = fmt.Sprintf("%s && %s", sshCommand, cloneCommand)
-		}
-
-		command := []string{
-			"sh",
-			"-c",
-			cloneCommand,
-		}
-
-		initContainers = append(initContainers,
-			v1.Container{
-				Name:            "git-configuration",
-				Image:           meta.GitImage,
-				ImagePullPolicy: v1.PullIfNotPresent,
-				Command:         command,
-				VolumeMounts:    initContainerVolumeMounts,
-			})
+		initContainers = append(initContainers, assembler.GitContainer())
 	}
+	initContainers = append(initContainers, assembler.InitContainer())
 
-	// run `terraform init`
-	tfPreApplyInitContainer = v1.Container{
-		Name:            TerraformInitContainerName,
-		Image:           meta.TerraformImage,
-		ImagePullPolicy: v1.PullIfNotPresent,
-		Command: []string{
-			"sh",
-			"-c",
-			"terraform init",
-		},
-		VolumeMounts: initContainerVolumeMounts,
-		Env:          meta.Envs,
-	}
-	initContainers = append(initContainers, tfPreApplyInitContainer)
-
-	container := v1.Container{
-		Name:            TerraformContainerName,
-		Image:           meta.TerraformImage,
-		ImagePullPolicy: v1.PullIfNotPresent,
-		Command: []string{
-			"bash",
-			"-c",
-			fmt.Sprintf("terraform %s -lock=false -auto-approve", executionType),
-		},
-		VolumeMounts: []v1.VolumeMount{
-			{
-				Name:      meta.Name,
-				MountPath: WorkingVolumeMountPath,
-			},
-			{
-				Name:      InputTFConfigurationVolumeName,
-				MountPath: InputTFConfigurationVolumeMountPath,
-			},
-		},
-		Env: meta.Envs,
-	}
-
-	if meta.ResourceQuota.ResourcesLimitsCPU != "" || meta.ResourceQuota.ResourcesLimitsMemory != "" ||
-		meta.ResourceQuota.ResourcesRequestsCPU != "" || meta.ResourceQuota.ResourcesRequestsMemory != "" {
-		resourceRequirements := v1.ResourceRequirements{}
-		if meta.ResourceQuota.ResourcesLimitsCPU != "" || meta.ResourceQuota.ResourcesLimitsMemory != "" {
-			resourceRequirements.Limits = map[v1.ResourceName]resource.Quantity{}
-			if meta.ResourceQuota.ResourcesLimitsCPU != "" {
-				resourceRequirements.Limits["cpu"] = meta.ResourceQuota.ResourcesLimitsCPUQuantity
-			}
-			if meta.ResourceQuota.ResourcesLimitsMemory != "" {
-				resourceRequirements.Limits["memory"] = meta.ResourceQuota.ResourcesLimitsMemoryQuantity
-			}
-		}
-		if meta.ResourceQuota.ResourcesRequestsCPU != "" || meta.ResourceQuota.ResourcesLimitsMemory != "" {
-			resourceRequirements.Requests = map[v1.ResourceName]resource.Quantity{}
-			if meta.ResourceQuota.ResourcesRequestsCPU != "" {
-				resourceRequirements.Requests["cpu"] = meta.ResourceQuota.ResourcesRequestsCPUQuantity
-			}
-			if meta.ResourceQuota.ResourcesRequestsMemory != "" {
-				resourceRequirements.Requests["memory"] = meta.ResourceQuota.ResourcesRequestsMemoryQuantity
-			}
-		}
-		container.Resources = resourceRequirements
-	}
+	applyContainer := assembler.ApplyContainer(executionType, meta.ResourceQuota)
 
 	name := meta.ApplyJobName
-	if executionType == TerraformDestroy {
+	if executionType == types.TerraformDestroy {
 		name = meta.DestroyJobName
 	}
 
@@ -453,8 +323,8 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType TerraformExe
 					InitContainers: initContainers,
 					// Container terraform-executor will first copy predefined terraform.d to working directory, and
 					// then run terraform init/apply.
-					Containers:         []v1.Container{container},
-					ServiceAccountName: ServiceAccountName,
+					Containers:         []v1.Container{applyContainer},
+					ServiceAccountName: types.ServiceAccountName,
 					Volumes:            executorVolumes,
 					RestartPolicy:      v1.RestartPolicyOnFailure,
 					NodeSelector:       meta.JobNodeSelector,
@@ -477,22 +347,22 @@ func (meta *TFConfigurationMeta) assembleExecutorVolumes() []v1.Volume {
 	}{
 		{
 			ref:        meta.GitCredentialsSecretReference,
-			volumeName: GitAuthConfigVolumeName,
+			volumeName: types.GitAuthConfigVolumeName,
 			isSecret:   true,
 		},
 		{
 			ref:        meta.TerraformCredentialsSecretReference,
-			volumeName: TerraformCredentialsConfigVolumeName,
+			volumeName: types.TerraformCredentialsConfigVolumeName,
 			isSecret:   true,
 		},
 		{
 			ref:        meta.TerraformRCConfigMapReference,
-			volumeName: TerraformRCConfigVolumeName,
+			volumeName: types.TerraformRCConfigVolumeName,
 			isSecret:   false,
 		},
 		{
 			ref:        meta.TerraformCredentialsHelperConfigMapReference,
-			volumeName: TerraformCredentialsHelperConfigVolumeName,
+			volumeName: types.TerraformCredentialsHelperConfigVolumeName,
 			isSecret:   false,
 		},
 	}
@@ -507,14 +377,14 @@ func (meta *TFConfigurationMeta) assembleExecutorVolumes() []v1.Volume {
 func (meta *TFConfigurationMeta) createConfigurationVolume() v1.Volume {
 	inputCMVolumeSource := v1.ConfigMapVolumeSource{}
 	inputCMVolumeSource.Name = meta.ConfigurationCMName
-	inputTFConfigurationVolume := v1.Volume{Name: InputTFConfigurationVolumeName}
+	inputTFConfigurationVolume := v1.Volume{Name: types.InputTFConfigurationVolumeName}
 	inputTFConfigurationVolume.ConfigMap = &inputCMVolumeSource
 	return inputTFConfigurationVolume
 
 }
 
 func (meta *TFConfigurationMeta) createTFBackendVolume() v1.Volume {
-	gitVolume := v1.Volume{Name: BackendVolumeName}
+	gitVolume := v1.Volume{Name: types.BackendVolumeName}
 	gitVolume.EmptyDir = &v1.EmptyDirVolumeSource{}
 	return gitVolume
 }
@@ -614,7 +484,7 @@ func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient cli
 	name := writeConnectionSecretToReference.Name
 	ns := writeConnectionSecretToReference.Namespace
 	if ns == "" {
-		ns = defaultNamespace
+		ns = types.DefaultNamespace
 	}
 	data := make(map[string][]byte)
 	for k, v := range outputs {

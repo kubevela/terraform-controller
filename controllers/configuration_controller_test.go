@@ -130,7 +130,7 @@ func TestConfigurationReconcile(t *testing.T) {
 
 	applyingJob2 := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      req.Name + "-" + string(process.TerraformApply),
+			Name:      req.Name + "-" + string(types.TerraformApply),
 			Namespace: req.Namespace,
 		},
 		Status: batchv1.JobStatus{
@@ -153,7 +153,7 @@ func TestConfigurationReconcile(t *testing.T) {
 
 	variableSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf(process.TFVariableSecret, req.Name),
+			Name:      fmt.Sprintf(types.TFVariableSecret, req.Name),
 			Namespace: req.Namespace,
 		},
 		Data: map[string][]byte{
@@ -306,7 +306,7 @@ terraform {
 	varMap := map[string]string{"name": "abc"}
 	appliedEnvVariable := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf(process.TFVariableSecret, req.Name),
+			Name:      fmt.Sprintf(types.TFVariableSecret, req.Name),
 			Namespace: req.Namespace,
 		},
 		Data: map[string][]byte{
@@ -318,7 +318,7 @@ terraform {
 		},
 		Type: corev1.SecretTypeOpaque,
 	}
-	appliedJobName := req.Name + "-" + string(process.TerraformApply)
+	appliedJobName := req.Name + "-" + string(types.TerraformApply)
 	appliedJob := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      appliedJobName,
@@ -1165,7 +1165,7 @@ func TestTerraformDestroy(t *testing.T) {
 	}
 	baseVariableSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf(process.TFVariableSecret, secretSuffix),
+			Name:      fmt.Sprintf(types.TFVariableSecret, secretSuffix),
 			Namespace: controllerNamespace,
 		},
 		Type: corev1.SecretTypeOpaque,
@@ -1197,7 +1197,7 @@ func TestTerraformDestroy(t *testing.T) {
 			Name:      baseProvider.Name,
 			Namespace: baseProvider.Namespace,
 		},
-		VariableSecretName:  fmt.Sprintf(process.TFVariableSecret, secretSuffix),
+		VariableSecretName:  fmt.Sprintf(types.TFVariableSecret, secretSuffix),
 		ConfigurationCMName: configurationCMName,
 		// True is default value if user ignores configuration.Spec.DeleteResource
 		DeleteResource: true,
@@ -1208,7 +1208,7 @@ func TestTerraformDestroy(t *testing.T) {
 		ApplyJobName:        applyJobName,
 		DestroyJobName:      destroyJobName,
 		ConfigurationCMName: configurationCMName,
-		VariableSecretName:  fmt.Sprintf(process.TFVariableSecret, secretSuffix),
+		VariableSecretName:  fmt.Sprintf(types.TFVariableSecret, secretSuffix),
 	}
 
 	metaWithDeleteResourceIsFalse := baseMeta

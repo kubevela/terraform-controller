@@ -143,7 +143,7 @@ func TestAnalyzeTerraformLog(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			success, state, errMsg := analyzeTerraformLog(tc.args.logs, types.TerraformApply)
+			success, state, errMsg := analyzeTerraformLog(tc.args.logs, types.ApplyStage)
 			if tc.want.errMsg != "" {
 				assert.Contains(t, errMsg, tc.want.errMsg)
 			} else {

@@ -33,6 +33,9 @@ type ConfigurationSpec struct {
 	// Remote is a git repo which contains hcl files. Currently, only public git repos are supported.
 	Remote string `json:"remote,omitempty"`
 
+	// GitRef is the git branch or tag or commit hash to checkout. Only used when Remote is specified.
+	GitRef apitypes.GitRef `json:"gitRef,omitempty"`
+
 	// +kubebuilder:pruning:PreserveUnknownFields
 	Variable *runtime.RawExtension `json:"variable,omitempty"`
 

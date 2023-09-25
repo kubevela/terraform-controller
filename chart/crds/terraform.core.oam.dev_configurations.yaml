@@ -331,6 +331,17 @@ spec:
                       name must be unique.
                     type: string
                 type: object
+              gitRef:
+                description: GitRef is the git branch or tag or commit hash to checkout.
+                  Only used when Remote is specified.
+                properties:
+                  branch:
+                    type: string
+                  commit:
+                    type: string
+                  tag:
+                    type: string
+                type: object
               hcl:
                 description: HCL is the Terraform HCL type configuration
                 type: string
