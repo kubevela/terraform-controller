@@ -2,14 +2,13 @@ package configuration
 
 import (
 	"context"
-	"strings"
-	"testing"
-
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"strings"
+	"testing"
 
 	"github.com/oam-dev/terraform-controller/api/types"
 	crossplane "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
@@ -334,6 +333,17 @@ func TestSetRegion(t *testing.T) {
 	}
 	assert.Nil(t, k8sClient.Create(ctx, &configuration2))
 
+	deletionTime := metav1.Now()
+	configuration3 := v1beta2.Configuration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "del",
+			Namespace:         "default",
+			DeletionTimestamp: &deletionTime,
+		},
+		Spec: v1beta2.ConfigurationSpec{},
+	}
+	assert.Nil(t, k8sClient.Create(ctx, &configuration3))
+
 	provider := &v1beta1.Provider{
 		Spec: v1beta1.ProviderSpec{
 			Region: "yyy",
@@ -379,6 +389,15 @@ func TestSetRegion(t *testing.T) {
 			},
 			want: want{
 				errMsg: "failed to get configuration",
+			},
+		},
+		"configuration has been deleted": {
+			args: args{
+				namespace: "default",
+				name:      "del",
+			},
+			want: want{
+				region: "yyy",
 			},
 		},
 	}
