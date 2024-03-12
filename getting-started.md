@@ -495,7 +495,7 @@ es-connection   Opaque   1      7m37s
 
 ## KubeVela Terraform Addon
 
-Terraform Controller is well integrated in [KubeVela](https://github.com/oam-dev/kubevela) as a Terraform addon. Enabling
+Terraform Controller is well integrated in [KubeVela](https://github.com/kubevela/kubevela) as a Terraform addon. Enabling
 Terraform addon and Terraform provider addon is the simplest way.
 
 - Install Terraform Controller
