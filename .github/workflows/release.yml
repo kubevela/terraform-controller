@@ -29,11 +29,12 @@ jobs:
         id: get_release
         uses: bruceadams/get-release@v1.2.2
       - name: Get matrix
-        id: get_matrix
+        id: get_matri
+        shell: bash
         run: |
           TARGETS=${{matrix.TARGETS}}
-          echo ::set-output name=OS::${TARGETS%/*}
-          echo ::set-output name=ARCH::${TARGETS#*/}
+          echo "OS=${TARGETS%/*}" >> $GITHUB_OUTPUT
+          echo "ARCH=${TARGETS#*/}" >> $GITHUB_OUTPUT
       - name: Get ldflags
         id: get_ldflags
         run: |
