@@ -20,6 +20,10 @@ spec:
         - name: terraform-controller
           image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- if .Values.authSecretName }}
+          imagePullSecrets:
+          - name: {{ .Values.authSecretName }}
+          {{- end }}
           args:
             {{- if .Values.controllerNamespace }}
             - --controller-namespace={{ .Values.controllerNamespace }}
@@ -38,6 +42,10 @@ spec:
               value: {{ .Values.busyboxImage}}
             - name: GIT_IMAGE
               value: {{ .Values.gitImage}}
+            {{- if .Values.jobAuthSecret }}
+            - name: JOB_AUTH_SECRET
+              value: {{ .Values.jobAuthSecret }}
+            {{- end }}
             - name: GITHUB_BLOCKED
               value: {{ .Values.githubBlocked }}
             {{ if .Values.jobBackoffLimit }}

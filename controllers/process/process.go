@@ -328,6 +328,7 @@ func (meta *TFConfigurationMeta) assembleTerraformJob(executionType types.Terraf
 					Volumes:            executorVolumes,
 					RestartPolicy:      v1.RestartPolicyOnFailure,
 					NodeSelector:       meta.JobNodeSelector,
+					ImagePullSecrets:   []v1.LocalObjectReference{{Name: meta.JobAuthSecret}},
 				},
 			},
 		},

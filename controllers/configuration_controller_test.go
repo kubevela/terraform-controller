@@ -803,6 +803,31 @@ func TestPreCheck(t *testing.T) {
 			},
 			want: want{},
 		},
+		{
+			name: "wrong value in environment variable JOB_AUTH_SECRET",
+			prepare: func(t *testing.T) {
+				t.Setenv("JOB_AUTH_SECRET", "test-secret")
+			},
+			args: args{
+				r: r,
+				configuration: &v1beta2.Configuration{
+					ObjectMeta: v1.ObjectMeta{
+						Name: "abc",
+					},
+					Spec: v1beta2.ConfigurationSpec{
+						HCL: "bbb",
+					},
+				},
+				meta: &process.TFConfigurationMeta{
+					ConfigurationCMName: "abc",
+					ProviderReference: &crossplane.Reference{
+						Namespace: "default",
+						Name:      "default",
+					},
+				},
+			},
+			want: want{},
+		},
 	}
 
 	for _, tc := range testcases {

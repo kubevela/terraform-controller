@@ -373,6 +373,8 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 		}
 	}
 
+	meta.JobAuthSecret = os.Getenv("JOB_AUTH_SECRET")
+
 	if err := r.preCheckResourcesSetting(meta); err != nil {
 		return err
 	}
