@@ -57,6 +57,9 @@ type TFConfigurationMeta struct {
 	BusyboxImage   string
 	GitImage       string
 
+	// JobAuthSecret is the secret name for pulling image in the Terraform job
+	JobAuthSecret string
+
 	// BackoffLimit specifies the number of retries to mark the Job as failed
 	BackoffLimit int32
 
