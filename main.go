@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"k8s.io/klog/v2/textlogger"
 	"os"
 	"time"
 
@@ -25,8 +26,10 @@ import (
 	"k8s.io/apiserver/pkg/util/feature"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
-	"k8s.io/klog/v2/klogr"
 	ctrl "sigs.k8s.io/controller-runtime"
+	ctrlcache "sigs.k8s.io/controller-runtime/pkg/cache"
+	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	ctrlwebhook "sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	terraformv1beta1 "github.com/oam-dev/terraform-controller/api/v1beta1"
 	"github.com/oam-dev/terraform-controller/api/v1beta2"
@@ -64,16 +67,30 @@ func main() {
 	klog.InitFlags(nil)
 	pflag.Parse()
 
-	ctrl.SetLogger(klogr.New())
+	cfg := textlogger.NewConfig()
+	logger := textlogger.NewLogger(cfg)
+	ctrl.SetLogger(logger)
+
+	cacheOpts := ctrlcache.Options{
+		SyncPeriod: &syncPeriod,
+	}
+	if namespace != "" {
+		cacheOpts.DefaultNamespaces = map[string]ctrlcache.Config{
+			namespace: {},
+		}
+	}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		LeaderElection:     enableLeaderElection,
-		LeaderElectionID:   "ce329a9c.core.oam.dev",
-		MetricsBindAddress: metricsAddr,
-		Namespace:          namespace,
-		Port:               9443,
-		Scheme:             scheme,
-		SyncPeriod:         &syncPeriod,
+		LeaderElection:   enableLeaderElection,
+		LeaderElectionID: "ce329a9c.core.oam.dev",
+		Metrics: ctrlmetrics.Options{
+			BindAddress: metricsAddr,
+		},
+		Scheme: scheme,
+		Cache:  cacheOpts,
+		WebhookServer: ctrlwebhook.NewServer(ctrlwebhook.Options{
+			Port: 9443,
+		}),
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
