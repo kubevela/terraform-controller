@@ -166,7 +166,7 @@ func TestGetProviderCredentials(t *testing.T) {
 
 	var baiduProvider v1beta1.Provider
 	copier.Copy(&baiduProvider, &defaultProvider)
-
+	
 	baiduProvider.Spec.Provider = string(baidu)
 
 	// ec

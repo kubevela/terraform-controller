@@ -137,11 +137,7 @@ func TestConfigurationReconcile(t *testing.T) {
 	defer patches.Reset()
 
 	applyingJob2 := &batchv1.Job{
-<<<<<<< master
 		ObjectMeta: v1.ObjectMeta{
-=======
-		ObjectMeta: metav1.ObjectMeta{
->>>>>>> master
 			Name:      req.Name + "-" + string(types.TerraformApply),
 			Namespace: req.Namespace,
 		},
@@ -164,11 +160,8 @@ func TestConfigurationReconcile(t *testing.T) {
 	}
 
 	variableSecret := &corev1.Secret{
-<<<<<<< master
 		ObjectMeta: v1.ObjectMeta{
-=======
-		ObjectMeta: metav1.ObjectMeta{
->>>>>>> master
+
 			Name:      fmt.Sprintf(types.TFVariableSecret, req.Name),
 			Namespace: req.Namespace,
 		},
@@ -321,11 +314,7 @@ terraform {
 	}
 	varMap := map[string]string{"name": "abc"}
 	appliedEnvVariable := &corev1.Secret{
-<<<<<<< master
 		ObjectMeta: v1.ObjectMeta{
-=======
-		ObjectMeta: metav1.ObjectMeta{
->>>>>>> master
 			Name:      fmt.Sprintf(types.TFVariableSecret, req.Name),
 			Namespace: req.Namespace,
 		},
@@ -1225,11 +1214,7 @@ func TestTerraformDestroy(t *testing.T) {
 		},
 	}
 	baseVariableSecret := &corev1.Secret{
-<<<<<<< master
 		ObjectMeta: v1.ObjectMeta{
-=======
-		ObjectMeta: metav1.ObjectMeta{
->>>>>>> master
 			Name:      fmt.Sprintf(types.TFVariableSecret, secretSuffix),
 			Namespace: controllerNamespace,
 		},
