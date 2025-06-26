@@ -9,7 +9,8 @@ import (
 
 	crossplane "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
 	ginkgo "github.com/onsi/ginkgo/v2"
-	gomega "github.com/onsi/gomega"
+	//revive:disable-next-line:dot-imports
+	. "github.com/onsi/gomega"
 	"github.com/pkg/errors"
 	appv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"

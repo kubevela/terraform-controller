@@ -4,7 +4,8 @@ import (
 	"context"
 
 	ginkgo "github.com/onsi/ginkgo/v2"
-	gomega "github.com/onsi/gomega"
+	//revive:disable-next-line:dot-imports
+	. "github.com/onsi/gomega"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
