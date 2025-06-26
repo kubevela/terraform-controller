@@ -25,7 +25,7 @@ func TestGetTerraformStatus(t *testing.T) {
 		errMsg string
 	}
 
-	gomonkey.ApplyFunc(config.GetConfigWithContext, func(context string) (*rest.Config, error) {
+	gomonkey.ApplyFunc(config.GetConfigWithContext, func(_ string) (*rest.Config, error) {
 		return &rest.Config{}, nil
 	})
 
@@ -72,7 +72,7 @@ func TestGetTerraformStatus2(t *testing.T) {
 		errMsg string
 	}
 
-	gomonkey.ApplyFunc(config.GetConfigWithContext, func(context string) (*rest.Config, error) {
+	gomonkey.ApplyFunc(config.GetConfigWithContext, func(_ string) (*rest.Config, error) {
 		return nil, errors.New("failed to init clientSet")
 	})
 

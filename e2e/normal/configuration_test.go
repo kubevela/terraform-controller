@@ -67,7 +67,7 @@ func invoke(do DoFunc, ctx *TestContext) {
 func testBase(t *testing.T, configuration ConfigurationAttr, injector Injector, useCustomBackend bool) {
 	klog.Infof("%s test begins……", configuration.Name)
 
-	waitConfigurationAvailable := func(ctx *TestContext) {
+	waitConfigurationAvailable := func(_ *TestContext) {
 		for i := 0; i < 60; i++ {
 			var fields []string
 			output, err := exec.Command("bash", "-c", "kubectl get configuration").CombinedOutput()
@@ -185,9 +185,8 @@ func testBase(t *testing.T, configuration ConfigurationAttr, injector Injector, 
 
 			time.Sleep(time.Second * 5)
 			continue
-		} else {
-			break
 		}
+		break
 	}
 
 	klog.Info("6. Checking Secrets and ConfigMap which should all be deleted")
@@ -233,13 +232,13 @@ func TestInlineCredentialsConfigurationUseCustomBackendKubernetes(t *testing.T) 
 		OutputsSecretName:      "random-conn-custom-backend-kubernetes",
 		VariableSecretName:     "variable-random-e2e-custom-backend-kubernetes",
 	}
-	beforeApply := func(ctx *TestContext) {
+	beforeApply := func(_ *TestContext) {
 		output, err := exec.Command("bash", "-c", "kubectl create ns a").CombinedOutput()
 		if err != nil && !strings.Contains(string(output), "already exists") {
 			assert.NilError(t, err, string(output))
 		}
 	}
-	cleanUp := func(ctx *TestContext) {
+	cleanUp := func(_ *TestContext) {
 		output, err := exec.Command("bash", "-c", "kubectl delete ns a").CombinedOutput()
 		assert.NilError(t, err, string(output))
 	}
@@ -294,9 +293,8 @@ func TestForceDeleteConfiguration(t *testing.T) {
 
 			time.Sleep(time.Second * 5)
 			continue
-		} else {
-			break
 		}
+		break
 	}
 }
 
@@ -316,9 +314,9 @@ func TestGitCredentialsSecretReference(t *testing.T) {
 	gitServer := filepath.Join(pwd, "../..", "examples/git-credentials")
 	gitServerApplyCmd := fmt.Sprintf("kubectl apply -f %s", gitServer)
 	gitServerDeleteCmd := fmt.Sprintf("kubectl delete -f %s", gitServer)
-	gitSshAuthSecretYaml := filepath.Join(gitServer, "git-ssh-auth-secret.yaml")
+	gitSSHAuthSecretYaml := filepath.Join(gitServer, "git-ssh-auth-secret.yaml")
 
-	beforeApply := func(ctx *TestContext) {
+	beforeApply := func(_ *TestContext) {
 		output, err := exec.Command("bash", "-c", gitServerApplyCmd).CombinedOutput()
 		assert.NilError(t, err, string(output))
 
@@ -356,22 +354,22 @@ func TestGitCredentialsSecretReference(t *testing.T) {
 		knownHosts, err := exec.Command("bash", "-c", getKnownHostsCmd).CombinedOutput()
 		assert.NilError(t, err)
 
-		gitSshAuthSecretTmpl := filepath.Join(gitServer, "templates/git-ssh-auth-secret.tmpl")
-		tmpl := template.Must(template.ParseFiles(gitSshAuthSecretTmpl))
-		gitSshAuthSecretYamlFile, err := os.Create(gitSshAuthSecretYaml)
+		gitSSHAuthSecretTmpl := filepath.Join(gitServer, "templates/git-ssh-auth-secret.tmpl")
+		tmpl := template.Must(template.ParseFiles(gitSSHAuthSecretTmpl))
+		gitSSHAuthSecretYamlFile, err := os.Create(gitSSHAuthSecretYaml)
 		assert.NilError(t, err)
-		err = tmpl.Execute(gitSshAuthSecretYamlFile, base64.StdEncoding.EncodeToString(knownHosts))
+		err = tmpl.Execute(gitSSHAuthSecretYamlFile, base64.StdEncoding.EncodeToString(knownHosts))
 		assert.NilError(t, err)
 
 		err = exec.Command("bash", "-c", gitServerApplyCmd).Run()
 		assert.NilError(t, err)
 	}
 
-	cleanUp := func(ctx *TestContext) {
+	cleanUp := func(_ *TestContext) {
 		err = exec.Command("bash", "-c", gitServerDeleteCmd).Run()
 		assert.NilError(t, err)
-		if err := os.Remove(gitSshAuthSecretYaml); err != nil {
-			t.Errorf("failed to remove gitSshAuthSecretYaml: %v", err)
+		if err := os.Remove(gitSSHAuthSecretYaml); err != nil {
+			t.Errorf("failed to remove gitSSHAuthSecretYaml: %v", err)
 		}
 	}
 

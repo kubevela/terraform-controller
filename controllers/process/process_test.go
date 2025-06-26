@@ -272,8 +272,7 @@ func TestCheckValidateSecretAndConfigMap(t *testing.T) {
 	}
 
 	type want struct {
-		configMap *corev1.ConfigMap
-		errMsg    string
+		errMsg string
 	}
 
 	testcases := []struct {

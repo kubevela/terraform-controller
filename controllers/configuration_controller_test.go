@@ -491,6 +491,7 @@ func TestInitTFConfigurationMetaWithJobEnv(t *testing.T) {
 		AccessKeySecret: "bbbbb",
 	}
 	credentials, err := json.Marshal(&ak)
+	assert.Nil(t, err)
 	secret := corev1.Secret{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "default",
