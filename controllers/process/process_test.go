@@ -1453,7 +1453,13 @@ func TestUpdateApplyStatus(t *testing.T) {
 
 func TestAssembleAndTriggerJob(t *testing.T) {
 	type args struct {
+<<<<<<< master
 		executionType types.TerraformExecutionType
+=======
+		k8sClient     client.Client
+		executionType types.TerraformExecutionType
+		prepare
+>>>>>>> master
 	}
 	type want struct {
 		errMsg string

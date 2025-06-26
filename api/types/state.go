@@ -44,9 +44,13 @@ const (
 type Stage string
 
 const (
+<<<<<<< master
 	// InitStage represents the initialization stage.
 	InitStage Stage = "InitStage"
 	// ApplyStage represents the apply stage.
+=======
+	InitStage  Stage = "InitStage"
+>>>>>>> master
 	ApplyStage Stage = "Apply"
 )
 

@@ -341,7 +341,10 @@ spec:
                       name must be unique.
                     type: string
                 type: object
+<<<<<<< master
                 x-kubernetes-map-type: atomic
+=======
+>>>>>>> master
               gitRef:
                 description: GitRef is the git branch or tag or commit hash to checkout.
                   Only used when Remote is specified.

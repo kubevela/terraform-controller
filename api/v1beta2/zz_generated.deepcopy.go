@@ -22,7 +22,7 @@ package v1beta2
 
 import (
 	crossplane_runtime "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
