@@ -15,6 +15,8 @@ import (
 
 // Available is the available status of Configuration
 const Available = "Available"
+
+// Provisioning represents the provisioning state.
 const Provisioning = "ProvisioningAndChecking"
 
 // Regression test for the e2e.

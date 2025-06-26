@@ -17,6 +17,7 @@ const (
 	ConfigurationRemote ConfigurationType = "Remote"
 )
 
+// Git represents Git configuration.
 type Git struct {
 	URL  string
 	Path string
@@ -30,6 +31,7 @@ type GitRef struct {
 	Commit string `json:"commit,omitempty"`
 }
 
+// ResourceQuota represents resource quotas for terraform jobs.
 type ResourceQuota struct {
 	ResourcesLimitsCPU              string
 	ResourcesLimitsCPUQuantity      resource.Quantity

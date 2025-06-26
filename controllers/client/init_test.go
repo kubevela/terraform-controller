@@ -25,8 +25,14 @@ func TestInit(t *testing.T) {
 	assert.NoError(t, err)
 	kubeConfig := filepath.Join(pwd, "config")
 	assert.NoError(t, os.WriteFile(kubeConfig, []byte(""), 0400))
-	defer os.Remove(kubeConfig)
-	os.Setenv("KUBECONFIG", kubeConfig)
+	defer func() {
+		if err := os.Remove(kubeConfig); err != nil {
+			t.Errorf("failed to remove kubeConfig: %v", err)
+		}
+	}()
+	if err := os.Setenv("KUBECONFIG", kubeConfig); err != nil {
+		t.Errorf("failed to set KUBECONFIG: %v", err)
+	}
 
 	testcases := []struct {
 		name string
@@ -60,7 +66,7 @@ func TestInitWithWrongConfig(t *testing.T) {
 		errMsg string
 	}
 
-	gomonkey.ApplyFunc(config.GetConfigWithContext, func(context string) (*rest.Config, error) {
+	gomonkey.ApplyFunc(config.GetConfigWithContext, func(_ string) (*rest.Config, error) {
 		return &rest.Config{}, nil
 	})
 

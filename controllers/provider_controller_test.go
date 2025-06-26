@@ -28,8 +28,12 @@ func TestReconcile(t *testing.T) {
 	r1 := &ProviderReconciler{}
 	ctx := context.Background()
 	s := runtime.NewScheme()
-	v1beta1.AddToScheme(s)
-	v1.AddToScheme(s)
+	if err := v1beta1.AddToScheme(s); err != nil {
+		t.Fatal(err)
+	}
+	if err := v1.AddToScheme(s); err != nil {
+		t.Fatal(err)
+	}
 	r1.Client = fake.NewClientBuilder().WithScheme(s).Build()
 
 	r2 := &ProviderReconciler{}
@@ -198,8 +202,12 @@ func TestReconcile(t *testing.T) {
 func TestReconcileProviderIsReadyButFailedToUpdateStatus(t *testing.T) {
 	ctx := context.Background()
 	s := runtime.NewScheme()
-	v1beta1.AddToScheme(s)
-	v1.AddToScheme(s)
+	if err := v1beta1.AddToScheme(s); err != nil {
+		t.Fatal(err)
+	}
+	if err := v1.AddToScheme(s); err != nil {
+		t.Fatal(err)
+	}
 
 	r2 := &ProviderReconciler{}
 	provider2 := &v1beta1.Provider{
@@ -295,8 +303,12 @@ func TestReconcileProviderIsReadyButFailedToUpdateStatus(t *testing.T) {
 func TestReconcile3(t *testing.T) {
 	ctx := context.Background()
 	s := runtime.NewScheme()
-	v1beta1.AddToScheme(s)
-	v1.AddToScheme(s)
+	if err := v1beta1.AddToScheme(s); err != nil {
+		t.Fatal(err)
+	}
+	if err := v1.AddToScheme(s); err != nil {
+		t.Fatal(err)
+	}
 
 	r3 := &ProviderReconciler{}
 	provider3 := &v1beta1.Provider{

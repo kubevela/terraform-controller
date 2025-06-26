@@ -1,3 +1,4 @@
+// Package normal contains end-to-end tests for normal configuration scenarios.
 package normal
 
 import (
@@ -377,7 +378,9 @@ func TestGitCredentialsSecretReference(t *testing.T) {
 	cleanUp := func(ctx *TestContext) {
 		err = exec.Command("bash", "-c", gitServerDeleteCmd).Run()
 		assert.NilError(t, err)
-		os.Remove(gitSshAuthSecretYaml)
+		if err := os.Remove(gitSshAuthSecretYaml); err != nil {
+			t.Errorf("failed to remove gitSshAuthSecretYaml: %v", err)
+		}
 	}
 
 	testBase(

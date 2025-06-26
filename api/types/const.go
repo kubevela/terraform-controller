@@ -1,8 +1,10 @@
 package types
 
 const (
+	// DefaultNamespace is the default namespace for terraform resources.
 	DefaultNamespace = "default"
 
+	// GitCredsKnownHosts is the key name for known hosts in git credentials.
 	GitCredsKnownHosts = "known_hosts"
 	// TerraformCredentials -
 	TerraformCredentials = "credentials.tfrc.json"
@@ -12,7 +14,8 @@ const (
 
 const (
 	// TerraformContainerName is the name of the container that executes terraform in the pod
-	TerraformContainerName     = "terraform-executor"
+	TerraformContainerName = "terraform-executor"
+	// TerraformInitContainerName is the name of the container that runs terraform init.
 	TerraformInitContainerName = "terraform-init"
 )
 

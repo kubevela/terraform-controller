@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package controllers contains the Terraform configuration and provider controllers.
 package controllers
 
 import (

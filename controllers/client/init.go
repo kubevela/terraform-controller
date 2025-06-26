@@ -1,3 +1,4 @@
+// Package client provides Kubernetes client initialization functionality.
 package client
 
 import (

@@ -1,3 +1,4 @@
+// Package util provides utility functions for the terraform controller.
 package util
 
 import (

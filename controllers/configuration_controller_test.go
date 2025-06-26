@@ -44,10 +44,18 @@ func TestConfigurationReconcile(t *testing.T) {
 	r1 := &ConfigurationReconciler{}
 	ctx := context.Background()
 	s := runtime.NewScheme()
-	v1beta1.AddToScheme(s)
-	v1beta2.AddToScheme(s)
-	corev1.AddToScheme(s)
-	batchv1.AddToScheme(s)
+	if err := v1beta1.AddToScheme(s); err != nil {
+		t.Fatal(err)
+	}
+	if err := v1beta2.AddToScheme(s); err != nil {
+		t.Fatal(err)
+	}
+	if err := corev1.AddToScheme(s); err != nil {
+		t.Fatal(err)
+	}
+	if err := batchv1.AddToScheme(s); err != nil {
+		t.Fatal(err)
+	}
 	r1.Client = fake.NewClientBuilder().WithScheme(s).Build()
 
 	ak := provider.AlibabaCloudCredentials{
@@ -461,9 +469,15 @@ func TestInitTFConfigurationMetaWithJobEnv(t *testing.T) {
 	req := ctrl.Request{}
 	r := &ConfigurationReconciler{}
 	s := runtime.NewScheme()
-	v1beta1.AddToScheme(s)
-	v1beta2.AddToScheme(s)
-	corev1.AddToScheme(s)
+	if err := v1beta1.AddToScheme(s); err != nil {
+		t.Fatal(err)
+	}
+	if err := v1beta2.AddToScheme(s); err != nil {
+		t.Fatal(err)
+	}
+	if err := corev1.AddToScheme(s); err != nil {
+		t.Fatal(err)
+	}
 	req.Namespace = "default"
 	req.Name = "abc"
 	prjID := "PrjID"
@@ -546,10 +560,18 @@ func TestPreCheck(t *testing.T) {
 	r := &ConfigurationReconciler{}
 	ctx := context.Background()
 	s := runtime.NewScheme()
-	v1beta1.AddToScheme(s)
-	v1beta2.AddToScheme(s)
-	corev1.AddToScheme(s)
-	corev1.AddToScheme(s)
+	if err := v1beta1.AddToScheme(s); err != nil {
+		t.Fatal(err)
+	}
+	if err := v1beta2.AddToScheme(s); err != nil {
+		t.Fatal(err)
+	}
+	if err := corev1.AddToScheme(s); err != nil {
+		t.Fatal(err)
+	}
+	if err := corev1.AddToScheme(s); err != nil {
+		t.Fatal(err)
+	}
 	provider := &v1beta1.Provider{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "default",
@@ -824,10 +846,18 @@ func TestPreCheckWhenConfigurationIsChanged(t *testing.T) {
 	r := &ConfigurationReconciler{}
 	ctx := context.Background()
 	s := runtime.NewScheme()
-	v1beta1.AddToScheme(s)
-	v1beta2.AddToScheme(s)
-	corev1.AddToScheme(s)
-	corev1.AddToScheme(s)
+	if err := v1beta1.AddToScheme(s); err != nil {
+		t.Fatal(err)
+	}
+	if err := v1beta2.AddToScheme(s); err != nil {
+		t.Fatal(err)
+	}
+	if err := corev1.AddToScheme(s); err != nil {
+		t.Fatal(err)
+	}
+	if err := corev1.AddToScheme(s); err != nil {
+		t.Fatal(err)
+	}
 	provider := &v1beta1.Provider{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "default",
@@ -916,10 +946,18 @@ func TestPreCheckWhenConfigurationIsChanged(t *testing.T) {
 func TestPreCheckResourcesSetting(t *testing.T) {
 	r := &ConfigurationReconciler{}
 	s := runtime.NewScheme()
-	v1beta1.AddToScheme(s)
-	v1beta2.AddToScheme(s)
-	corev1.AddToScheme(s)
-	corev1.AddToScheme(s)
+	if err := v1beta1.AddToScheme(s); err != nil {
+		t.Fatal(err)
+	}
+	if err := v1beta2.AddToScheme(s); err != nil {
+		t.Fatal(err)
+	}
+	if err := corev1.AddToScheme(s); err != nil {
+		t.Fatal(err)
+	}
+	if err := corev1.AddToScheme(s); err != nil {
+		t.Fatal(err)
+	}
 	provider := &v1beta1.Provider{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "default",
@@ -1116,11 +1154,21 @@ func TestTerraformDestroy(t *testing.T) {
 	)
 	ctx := context.Background()
 	s := runtime.NewScheme()
-	v1beta1.AddToScheme(s)
-	v1beta2.AddToScheme(s)
-	corev1.AddToScheme(s)
-	batchv1.AddToScheme(s)
-	rbacv1.AddToScheme(s)
+	if err := v1beta1.AddToScheme(s); err != nil {
+		t.Fatal(err)
+	}
+	if err := v1beta2.AddToScheme(s); err != nil {
+		t.Fatal(err)
+	}
+	if err := corev1.AddToScheme(s); err != nil {
+		t.Fatal(err)
+	}
+	if err := batchv1.AddToScheme(s); err != nil {
+		t.Fatal(err)
+	}
+	if err := rbacv1.AddToScheme(s); err != nil {
+		t.Fatal(err)
+	}
 	// this is default provider if not specified in configuration.spec.providerRef
 	baseProvider := &v1beta1.Provider{
 		ObjectMeta: v1.ObjectMeta{

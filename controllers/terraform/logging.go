@@ -1,3 +1,4 @@
+// Package terraform provides Terraform execution status monitoring and logging utilities.
 package terraform
 
 import (

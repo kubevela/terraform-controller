@@ -1,3 +1,4 @@
+// Package process provides Terraform configuration processing and job execution.
 package process
 
 import (
