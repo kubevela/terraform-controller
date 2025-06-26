@@ -66,7 +66,7 @@ func New(req ctrl.Request, configuration v1beta2.Configuration, k8sClient client
 	if jobNodeSelectorStr != "" {
 		err := json.Unmarshal([]byte(jobNodeSelectorStr), &meta.JobNodeSelector)
 		if err != nil {
-			klog.Warningf("the value of JobNodeSelector is not a json string ", err)
+			klog.Warning("the value of JobNodeSelector is not a json string ", err)
 		}
 	}
 
