@@ -19,10 +19,10 @@ package controllers
 import (
 	"path/filepath"
 	"testing"
-
-	ginkgo "github.com/onsi/ginkgo/v2"
 	//revive:disable-next-line:dot-imports
 	. "github.com/onsi/gomega"
+	//revive:disable-next-line:dot-imports
+	. "github.com/onsi/ginkgo/v2"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -34,43 +34,43 @@ import (
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
-// http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
+// http://onsi.github.io/ginkgo/ to learn more about
 
 var cfg *rest.Config
 var k8sClient client.Client
 var testEnv *envtest.Environment
 
 func TestAPIs(t *testing.T) {
-	gomega.RegisterFailHandler(ginkgo.Fail)
-	ginkgo.RunSpecs(t, "Controller Suite")
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Controller Suite")
 }
 
-var _ = ginkgo.BeforeSuite(func() {
-	ginkgo.By("bootstrapping test environment")
+var _ = BeforeSuite(func() {
+	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths: []string{filepath.Join("..", "config", "crd", "bases")},
 	}
 
 	var err error
 	cfg, err = testEnv.Start()
-	gomega.Expect(err).ToNot(gomega.HaveOccurred())
-	gomega.Expect(cfg).ToNot(gomega.BeNil())
+	Expect(err).ToNot(HaveOccurred())
+	Expect(cfg).ToNot(BeNil())
 
 	err = terraformv1beta1.AddToScheme(scheme.Scheme)
-	gomega.Expect(err).NotTo(gomega.HaveOccurred())
+	Expect(err).NotTo(HaveOccurred())
 
 	err = terraformv1beta1.AddToScheme(scheme.Scheme)
-	gomega.Expect(err).NotTo(gomega.HaveOccurred())
+	Expect(err).NotTo(HaveOccurred())
 
 	// +kubebuilder:scaffold:scheme
 
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
-	gomega.Expect(err).ToNot(gomega.HaveOccurred())
-	gomega.Expect(k8sClient).ToNot(gomega.BeNil())
+	Expect(err).ToNot(HaveOccurred())
+	Expect(k8sClient).ToNot(BeNil())
 }, 60)
 
-var _ = ginkgo.AfterSuite(func() {
-	ginkgo.By("tearing down the test environment")
+var _ = AfterSuite(func() {
+	By("tearing down the test environment")
 	err := testEnv.Stop()
-	gomega.Expect(err).ToNot(gomega.HaveOccurred())
+	Expect(err).ToNot(HaveOccurred())
 })
