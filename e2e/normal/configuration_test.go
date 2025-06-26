@@ -317,6 +317,7 @@ func TestGitCredentialsSecretReference(t *testing.T) {
 	gitSSHAuthSecretYaml := filepath.Join(gitServer, "git-ssh-auth-secret.yaml")
 
 	beforeApply := func(_ *TestContext) {
+		ctx := context.Background()
 		output, err := exec.Command("bash", "-c", gitServerApplyCmd).CombinedOutput()
 		assert.NilError(t, err, string(output))
 
