@@ -8,7 +8,7 @@ import (
 	types2 "github.com/oam-dev/terraform-controller/api/types"
 
 	crossplane "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/pkg/errors"
 	appv1 "k8s.io/api/apps/v1"
