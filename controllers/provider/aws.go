@@ -1,3 +1,4 @@
+// Package provider contains provider specific utilities for Terraform.
 package provider
 
 import (

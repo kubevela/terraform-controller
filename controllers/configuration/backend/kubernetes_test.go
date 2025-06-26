@@ -125,7 +125,7 @@ func TestK8SBackend_GetTFStateJSON(t *testing.T) {
 				SecretNS:     "default",
 			},
 			args: args{ctx: context.Background()},
-			want: tfStateJson,
+			want: tfStateJSON,
 		},
 		{
 			name: "secret doesn't exist",
@@ -148,7 +148,7 @@ func TestK8SBackend_GetTFStateJSON(t *testing.T) {
 				SecretNS:           "default",
 				SecretSuffix:       UID,
 			},
-			want: tfStateJson,
+			want: tfStateJSON,
 		},
 	}
 	for _, tt := range tests {
@@ -254,7 +254,7 @@ func TestMigrateLegacySecret(t *testing.T) {
 	assert.NilError(t, err)
 }
 
-var tfStateJson = []byte(`{
+var tfStateJSON = []byte(`{
   "version": 4,
   "terraform_version": "1.0.2",
   "serial": 2,

@@ -64,6 +64,7 @@ func TestConfigurationReconcile(t *testing.T) {
 	}
 	credentials, err := json.Marshal(&ak)
 	assert.Nil(t, err)
+	assert.Nil(t, err)
 	secret := &corev1.Secret{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "default",
@@ -128,7 +129,7 @@ func TestConfigurationReconcile(t *testing.T) {
 		Namespace: "default",
 	}
 
-	patches := gomonkey.ApplyMethod(reflect.TypeOf(&sts.Client{}), "GetCallerIdentity", func(_ *sts.Client, request *sts.GetCallerIdentityRequest) (response *sts.GetCallerIdentityResponse, err error) {
+	patches := gomonkey.ApplyMethod(reflect.TypeOf(&sts.Client{}), "GetCallerIdentity", func(_ *sts.Client, _ *sts.GetCallerIdentityRequest) (response *sts.GetCallerIdentityResponse, err error) {
 		response = nil
 		err = nil
 		return
@@ -895,7 +896,7 @@ func TestPreCheckWhenConfigurationIsChanged(t *testing.T) {
 		Namespace:             "default",
 	}
 
-	patches := gomonkey.ApplyFunc(reflect.DeepEqual, func(x, y interface{}) bool {
+	patches := gomonkey.ApplyFunc(reflect.DeepEqual, func(_, _ interface{}) bool {
 		return true
 	})
 	defer patches.Reset()
@@ -1281,7 +1282,6 @@ func TestTerraformDestroy(t *testing.T) {
 	forceDeleteConfiguration.Spec.ForceDelete = ptr.To(true)
 
 	type args struct {
-		namespace     string
 		configuration *v1beta2.Configuration
 		meta          *process.TFConfigurationMeta
 	}

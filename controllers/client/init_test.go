@@ -13,9 +13,7 @@ import (
 )
 
 func TestInit(t *testing.T) {
-	type args struct {
-		configFile string
-	}
+	type args struct{}
 
 	type want struct {
 		errMsg string
@@ -58,9 +56,7 @@ func TestInit(t *testing.T) {
 }
 
 func TestInitWithWrongConfig(t *testing.T) {
-	type args struct {
-		configFile string
-	}
+	type args struct{}
 
 	type want struct {
 		errMsg string

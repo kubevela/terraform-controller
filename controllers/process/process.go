@@ -28,6 +28,7 @@ import (
 	"github.com/oam-dev/terraform-controller/controllers/util"
 )
 
+// Option defines a function that modifies TFConfigurationMeta based on the Configuration.
 type Option func(spec v1beta2.Configuration, meta *TFConfigurationMeta)
 
 // ControllerNamespaceOption will set the controller namespace for TFConfigurationMeta
@@ -114,6 +115,7 @@ func New(req ctrl.Request, configuration v1beta2.Configuration, k8sClient client
 	return meta
 }
 
+// ValidateSecretAndConfigMap checks that referenced secrets and configmaps exist and contain required keys.
 func (meta *TFConfigurationMeta) ValidateSecretAndConfigMap(ctx context.Context, k8sClient client.Client) error {
 
 	secretConfigMapToCheck := []struct {
@@ -187,6 +189,7 @@ func (meta *TFConfigurationMeta) ValidateSecretAndConfigMap(ctx context.Context,
 	return nil
 }
 
+// UpdateApplyStatus updates the apply status of the configuration resource.
 func (meta *TFConfigurationMeta) UpdateApplyStatus(ctx context.Context, k8sClient client.Client, state types.ConfigurationState, message string) error {
 	var configuration v1beta2.Configuration
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.Name, Namespace: meta.Namespace}, &configuration); err == nil {
@@ -214,6 +217,7 @@ func (meta *TFConfigurationMeta) UpdateApplyStatus(ctx context.Context, k8sClien
 	return nil
 }
 
+// UpdateDestroyStatus updates the destroy status of the configuration resource.
 func (meta *TFConfigurationMeta) UpdateDestroyStatus(ctx context.Context, k8sClient client.Client, state types.ConfigurationState, message string) error {
 	var configuration v1beta2.Configuration
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.Name, Namespace: meta.Namespace}, &configuration); err == nil {
@@ -226,6 +230,7 @@ func (meta *TFConfigurationMeta) UpdateDestroyStatus(ctx context.Context, k8sCli
 	return nil
 }
 
+// AssembleAndTriggerJob creates and starts the Terraform execution job for the given execution type.
 func (meta *TFConfigurationMeta) AssembleAndTriggerJob(ctx context.Context, k8sClient client.Client, executionType types.TerraformExecutionType) error {
 	// apply rbac
 	if err := createTerraformExecutorServiceAccount(ctx, k8sClient, meta.ControllerNamespace, types.ServiceAccountName); err != nil {
@@ -406,6 +411,7 @@ func (meta *TFConfigurationMeta) createSecretOrConfigMapVolume(isSecret bool, se
 	return volume
 }
 
+// KeepLegacySubResourceMetas copies legacy resource names into the meta struct for backward compatibility.
 func (meta *TFConfigurationMeta) KeepLegacySubResourceMetas() {
 	meta.LegacySubResources.Namespace = meta.Namespace
 	meta.LegacySubResources.ApplyJobName = meta.ApplyJobName
@@ -414,6 +420,7 @@ func (meta *TFConfigurationMeta) KeepLegacySubResourceMetas() {
 	meta.LegacySubResources.VariableSecretName = meta.VariableSecretName
 }
 
+// GetApplyJob fetches the existing apply job from the cluster if it exists.
 func (meta *TFConfigurationMeta) GetApplyJob(ctx context.Context, k8sClient client.Client, job *batchv1.Job) error {
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.LegacySubResources.ApplyJobName, Namespace: meta.LegacySubResources.Namespace}, job); err == nil {
 		klog.InfoS("Found legacy apply job", "Configuration", fmt.Sprintf("%s/%s", meta.Name, meta.Namespace),
@@ -443,6 +450,7 @@ func (meta *TFConfigurationMeta) RenderConfiguration(configuration *v1beta2.Conf
 	}
 }
 
+// IsTFStateGenerated returns true if a Terraform state file was produced for the configuration.
 func (meta *TFConfigurationMeta) IsTFStateGenerated(ctx context.Context) bool {
 	// 1. exist backend
 	if meta.Backend == nil {
@@ -491,7 +499,7 @@ func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient cli
 		data[k] = []byte(v.Value)
 	}
 	var gotSecret v1.Secret
-	configurationName := configuration.ObjectMeta.Name
+	configurationName := configuration.Name
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: name, Namespace: ns}, &gotSecret); err != nil {
 		if kerrors.IsNotFound(err) {
 			var secret = v1.Secret{
@@ -516,7 +524,7 @@ func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient cli
 		}
 	} else {
 		// check the owner of this secret
-		labels := gotSecret.ObjectMeta.Labels
+		labels := gotSecret.Labels
 		ownerName := labels["terraform.core.oam.dev/owned-by"]
 		ownerNamespace := labels["terraform.core.oam.dev/owned-namespace"]
 		if (ownerName != "" && ownerName != configurationName) ||
@@ -538,6 +546,7 @@ func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient cli
 	return outputs, nil
 }
 
+// PrepareTFVariables generates environment variables and secret data for Terraform variables.
 func (meta *TFConfigurationMeta) PrepareTFVariables(configuration *v1beta2.Configuration) error {
 	var (
 		envs []v1.EnvVar
@@ -680,6 +689,7 @@ func (meta *TFConfigurationMeta) CheckWhetherConfigurationChanges(ctx context.Co
 	}
 }
 
+// GetSecretOrConfigMap retrieves a Secret or ConfigMap and verifies it contains the required keys.
 func GetSecretOrConfigMap(ctx context.Context, k8sClient client.Client, isSecret bool, ref *v1.SecretReference, neededKeys []string, errKey string) (metav1.Object, error) {
 	secret := &v1.Secret{}
 	configMap := &v1.ConfigMap{}

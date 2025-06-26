@@ -26,16 +26,9 @@ import (
 var (
 	testConfigurationsInlineCredentials                        = "examples/random/configuration_random.yaml"
 	testConfigurationsInlineCredentialsCustomBackendKubernetes = "examples/random/configuration_random_custom_backend_kubernetes.yaml"
-	testConfigurationsRegression                               = []string{
-		"examples/alibaba/eip/configuration_eip.yaml",
-		"examples/alibaba/eip/configuration_eip_remote_in_another_namespace.yaml",
-		"examples/alibaba/eip/configuration_eip_remote_subdirectory.yaml",
-		"examples/alibaba/oss/configuration_hcl_bucket.yaml",
-	}
-	testConfigurationsForceDelete                = "examples/random/configuration_force_delete.yaml"
-	testConfigurationsGitCredsSecretReference    = "examples/random/configuration_git_ssh.yaml"
-	testConfigurationDeleteProvisioningResources = "examples/random/configuration_delete_provisioning_resources.yaml"
-	chartNamespace                               = "terraform"
+	testConfigurationsForceDelete                              = "examples/random/configuration_force_delete.yaml"
+	testConfigurationsGitCredsSecretReference                  = "examples/random/configuration_git_ssh.yaml"
+	testConfigurationDeleteProvisioningResources               = "examples/random/configuration_delete_provisioning_resources.yaml"
 )
 
 type ConfigurationAttr struct {
@@ -91,8 +84,7 @@ func testBase(t *testing.T, configuration ConfigurationAttr, injector Injector, 
 					return
 				}
 			}
-			output, err = exec.Command("bash", "-c", "kubectl get pod").CombinedOutput()
-			lines = strings.Split(string(output), "\n")
+			output, _ = exec.Command("bash", "-c", "kubectl get pod").CombinedOutput()
 			t.Log("get pod\n", string(output))
 			if i == 59 {
 				t.Error("Configuration is not ready, getting controller's log")

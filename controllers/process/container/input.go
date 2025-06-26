@@ -1,3 +1,4 @@
+// Package container contains helper functions for container assembly.
 package container
 
 import (
@@ -7,6 +8,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 )
 
+// InputContainerName is the name of the init container that prepares Terraform configuration.
 const InputContainerName = "prepare-input-terraform-configurations"
 
 // InputContainer prepare input .tf files, copy them to the working directory

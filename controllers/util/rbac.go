@@ -11,6 +11,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// CreateTerraformExecutorClusterRole creates a ClusterRole used by Terraform jobs.
 func CreateTerraformExecutorClusterRole(ctx context.Context, k8sClient client.Client, clusterRoleName string) error {
 	var clusterRole = rbacv1.ClusterRole{
 		TypeMeta: metav1.TypeMeta{
@@ -43,6 +44,7 @@ func CreateTerraformExecutorClusterRole(ctx context.Context, k8sClient client.Cl
 	return nil
 }
 
+// CreateTerraformExecutorClusterRoleBinding binds the executor ClusterRole to the given ServiceAccount.
 func CreateTerraformExecutorClusterRoleBinding(ctx context.Context, k8sClient client.Client, namespace, clusterRoleName, serviceAccountName string) error {
 	var crbName = fmt.Sprintf("%s-tf-executor-clusterrole-binding", namespace)
 	var clusterRoleBinding = rbacv1.ClusterRoleBinding{

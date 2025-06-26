@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	. "github.com/agiledragon/gomonkey/v2"
+	gomonkey "github.com/agiledragon/gomonkey/v2"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 	v1 "k8s.io/api/core/v1"
@@ -248,7 +248,7 @@ func TestReconcileProviderIsReadyButFailedToUpdateStatus(t *testing.T) {
 
 	r2.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(secret2, provider2).Build()
 
-	patches := ApplyFunc(apiutil.GVKForObject, func(obj runtime.Object, scheme *runtime.Scheme) (schema.GroupVersionKind, error) {
+	patches := gomonkey.ApplyFunc(apiutil.GVKForObject, func(obj runtime.Object, scheme *runtime.Scheme) (schema.GroupVersionKind, error) {
 		if p, ok := obj.(*v1beta1.Provider); ok {
 			if p.Status.State != "" {
 				return obj.GetObjectKind().GroupVersionKind(), errors.New("xxx")
@@ -333,7 +333,7 @@ func TestReconcile3(t *testing.T) {
 
 	r3.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(provider3).Build()
 
-	patches := ApplyFunc(apiutil.GVKForObject, func(obj runtime.Object, scheme *runtime.Scheme) (schema.GroupVersionKind, error) {
+	patches := gomonkey.ApplyFunc(apiutil.GVKForObject, func(obj runtime.Object, scheme *runtime.Scheme) (schema.GroupVersionKind, error) {
 		if p, ok := obj.(*v1beta1.Provider); ok {
 			if p.Status.State != "" {
 				return obj.GetObjectKind().GroupVersionKind(), errors.New("xxx")

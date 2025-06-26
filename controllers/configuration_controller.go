@@ -80,7 +80,7 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	meta := process.New(req, configuration, r.Client, process.ControllerNamespaceOption(r.ControllerNamespace))
 
 	// add finalizer
-	var isDeleting = !configuration.ObjectMeta.DeletionTimestamp.IsZero()
+	var isDeleting = !configuration.DeletionTimestamp.IsZero()
 	if !isDeleting {
 		if !controllerutil.ContainsFinalizer(&configuration, configurationFinalizer) {
 			controllerutil.AddFinalizer(&configuration, configurationFinalizer)
@@ -229,7 +229,7 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, configur
 		}
 		if err := k8sClient.Get(ctx, client.ObjectKey{Name: meta.DestroyJobName, Namespace: meta.ControllerNamespace}, &destroyJob); err != nil {
 			if kerrors.IsNotFound(err) {
-				if err := r.Client.Get(ctx, client.ObjectKey{Name: configuration.Name, Namespace: configuration.Namespace}, &v1beta2.Configuration{}); err == nil {
+				if err := r.Get(ctx, client.ObjectKey{Name: configuration.Name, Namespace: configuration.Namespace}, &v1beta2.Configuration{}); err == nil {
 					if err = meta.AssembleAndTriggerJob(ctx, k8sClient, types.TerraformDestroy); err != nil {
 						return err
 					}
@@ -434,7 +434,7 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 		return err
 	}
 
-	if configuration.ObjectMeta.DeletionTimestamp.IsZero() {
+	if configuration.DeletionTimestamp.IsZero() {
 		if err := meta.StoreTFConfiguration(ctx, k8sClient); err != nil {
 			return err
 		}

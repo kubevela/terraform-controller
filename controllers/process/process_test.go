@@ -866,10 +866,9 @@ func TestTfStatePropertyToToProperty(t *testing.T) {
 
 func TestIsTFStateGenerated(t *testing.T) {
 	type args struct {
-		ctx           context.Context
-		k8sClient     client.Client
-		configuration v1beta2.Configuration
-		meta          *TFConfigurationMeta
+		ctx       context.Context
+		k8sClient client.Client
+		meta      *TFConfigurationMeta
 	}
 	type want struct {
 		generated bool
@@ -1386,10 +1385,9 @@ func TestGetTFOutputs(t *testing.T) {
 
 func TestUpdateApplyStatus(t *testing.T) {
 	type args struct {
-		k8sClient client.Client
-		state     types.ConfigurationState
-		message   string
-		meta      *TFConfigurationMeta
+		state   types.ConfigurationState
+		message string
+		meta    *TFConfigurationMeta
 	}
 	type want struct {
 		errMsg string
@@ -1455,11 +1453,8 @@ func TestUpdateApplyStatus(t *testing.T) {
 }
 
 func TestAssembleAndTriggerJob(t *testing.T) {
-	type prepare func(t *testing.T)
 	type args struct {
-		k8sClient     client.Client
 		executionType types.TerraformExecutionType
-		prepare
 	}
 	type want struct {
 		errMsg string
@@ -1470,7 +1465,7 @@ func TestAssembleAndTriggerJob(t *testing.T) {
 		Namespace: "b",
 	}
 
-	patches := gomonkey.ApplyFunc(apiutil.GVKForObject, func(_ runtime.Object, scheme *runtime.Scheme) (schema.GroupVersionKind, error) {
+	patches := gomonkey.ApplyFunc(apiutil.GVKForObject, func(_ runtime.Object, _ *runtime.Scheme) (schema.GroupVersionKind, error) {
 		return schema.GroupVersionKind{}, apierrors.NewNotFound(schema.GroupResource{}, "")
 	})
 	defer patches.Reset()
@@ -1502,7 +1497,6 @@ func TestAssembleAndTriggerJob(t *testing.T) {
 
 func TestCheckWhetherConfigurationChanges(t *testing.T) {
 	type args struct {
-		k8sClient         client.Client
 		configurationType types.ConfigurationType
 		meta              *TFConfigurationMeta
 	}
@@ -1700,7 +1694,6 @@ func TestRenderConfiguration(t *testing.T) {
 	type args struct {
 		configuration         *v1beta2.Configuration
 		configurationType     types.ConfigurationType
-		credentials           map[string]string
 		controllerNSSpecified bool
 	}
 	type want struct {

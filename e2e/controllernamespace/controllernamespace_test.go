@@ -8,8 +8,8 @@ import (
 	types2 "github.com/oam-dev/terraform-controller/api/types"
 
 	crossplane "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	ginkgo "github.com/onsi/ginkgo/v2"
+	gomega "github.com/onsi/gomega"
 	"github.com/pkg/errors"
 	appv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -20,7 +20,7 @@ import (
 	"github.com/oam-dev/terraform-controller/api/v1beta2"
 )
 
-var _ = Describe("Restart with controller-namespace", func() {
+var _ = ginkgo.Describe("Restart with controller-namespace", func() {
 	const (
 		defaultNamespace    = "default"
 		controllerNamespace = "terraform"
@@ -33,11 +33,11 @@ var _ = Describe("Restart with controller-namespace", func() {
 
 	// create k8s rest config
 	restConf, err := config.GetConfig()
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	k8sClient, err := pkgClient.New(restConf, pkgClient.Options{})
 	s := k8sClient.Scheme()
 	_ = v1beta2.AddToScheme(s)
-	Expect(err).NotTo(HaveOccurred())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 	configuration := &v1beta2.Configuration{
 		ObjectMeta: v1.ObjectMeta{
@@ -60,15 +60,15 @@ output "random_id" {
 			},
 		},
 	}
-	AfterEach(func() {
+	ginkgo.AfterEach(func() {
 		_ = k8sClient.Delete(ctx, configuration)
 	})
-	It("Restart with controller namespace", func() {
-		By("apply configuration without --controller-namespace", func() {
+	ginkgo.It("Restart with controller namespace", func() {
+		ginkgo.By("apply configuration without --controller-namespace", func() {
 			err = k8sClient.Create(ctx, configuration)
-			Expect(err).NotTo(HaveOccurred())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			var cfg = &v1beta2.Configuration{}
-			Eventually(func() error {
+			gomega.Eventually(func() error {
 				err = k8sClient.Get(ctx, types.NamespacedName{Name: configuration.Name, Namespace: configuration.Namespace}, cfg)
 				if err != nil {
 					return err
@@ -77,17 +77,17 @@ output "random_id" {
 					return errors.Errorf("configuration is not available, status now: %s", cfg.Status.Apply.State)
 				}
 				return nil
-			}, time.Second*60, time.Second*5).Should(Succeed())
+			}, time.Second*60, time.Second*5).Should(gomega.Succeed())
 		})
-		By("restart controller with --controller-namespace", func() {
+		ginkgo.By("restart controller with --controller-namespace", func() {
 			ctrlDeploy := appv1.Deployment{}
 			err = k8sClient.Get(ctx, controllerDeployMeta, &ctrlDeploy)
-			Expect(err).NotTo(HaveOccurred())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			ctrlDeploy.Spec.Template.Spec.Containers[0].Args = append(ctrlDeploy.Spec.Template.Spec.Containers[0].Args, "--controller-namespace="+controllerNamespace)
 			err := k8sClient.Update(ctx, &ctrlDeploy)
-			Expect(err).NotTo(HaveOccurred())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
-			Eventually(func() error {
+			gomega.Eventually(func() error {
 				err := k8sClient.Get(ctx, controllerDeployMeta, &ctrlDeploy)
 				if err != nil {
 					return err
@@ -96,23 +96,23 @@ output "random_id" {
 					return errors.New("controller is not updated")
 				}
 				return nil
-			}, time.Second*60, time.Second*5).Should(Succeed())
+			}, time.Second*60, time.Second*5).Should(gomega.Succeed())
 
 		})
-		By("configuration should be still available", func() {
+		ginkgo.By("configuration should be still available", func() {
 			// wait about half minute to check configuration's state isn't changed
 			for i := 0; i < 30; i++ {
 				err := k8sClient.Get(ctx, types.NamespacedName{
 					Name: configuration.Name, Namespace: configuration.Namespace,
 				}, configuration)
-				Expect(err).NotTo(HaveOccurred())
+				gomega.Expect(err).NotTo(gomega.HaveOccurred())
 				time.Sleep(time.Second)
 			}
 		})
-		By("restore controller", func() {
+		ginkgo.By("restore controller", func() {
 			ctrlDeploy := appv1.Deployment{}
 			err = k8sClient.Get(ctx, controllerDeployMeta, &ctrlDeploy)
-			Expect(err).NotTo(HaveOccurred())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			cmds := make([]string, 0)
 			for _, cmd := range ctrlDeploy.Spec.Template.Spec.Containers[0].Args {
 				if !strings.HasPrefix(cmd, "--controller-namespace") {
@@ -121,7 +121,7 @@ output "random_id" {
 			}
 			ctrlDeploy.Spec.Template.Spec.Containers[0].Args = cmds
 			err := k8sClient.Update(ctx, &ctrlDeploy)
-			Expect(err).NotTo(HaveOccurred())
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		})
 	})
 })

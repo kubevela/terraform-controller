@@ -44,8 +44,9 @@ const (
 	envAlicloudRegion    = "ALICLOUD_REGION"
 	envAliCloudStsToken  = "ALICLOUD_SECURITY_TOKEN"
 
-	errConvertCredentials     = "failed to convert the credentials of Secret from Provider"
-	errCredentialValid        = "Credentials are not valid"
+	errConvertCredentials = "failed to convert the credentials of Secret from Provider"
+	errCredentialValid    = "Credentials are not valid"
+	// ErrCredentialNotRetrieved indicates credentials could not be fetched from the referenced Provider.
 	ErrCredentialNotRetrieved = "Credentials are not retrieved from referenced Provider"
 )
 

@@ -1,3 +1,4 @@
+// Package container assembles and applies Terraform containers.
 package container
 
 import (
@@ -8,6 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 )
 
+// ApplyContainer returns the main container used to apply or destroy Terraform configuration.
 func (a *Assembler) ApplyContainer(executionType types.TerraformExecutionType, resourceQuota types.ResourceQuota) v1.Container {
 
 	c := v1.Container{

@@ -1,3 +1,4 @@
+// Package container contains helpers for Terraform job containers.
 package container
 
 import (
@@ -9,6 +10,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 )
 
+// GitContainerName is the name of the sidecar container that clones git repositories.
 const GitContainerName = "git-configuration"
 
 // GitContainer will clone the git repository, and copy the files to the working directory

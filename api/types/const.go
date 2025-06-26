@@ -1,3 +1,4 @@
+// Package types contains shared constants for Terraform controller.
 package types
 
 const (
