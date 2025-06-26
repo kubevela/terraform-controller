@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	. "github.com/agiledragon/gomonkey/v2"
+	gomonkey "github.com/agiledragon/gomonkey/v2"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/sts"
 	"github.com/google/go-cmp/cmp"
 	"github.com/jinzhu/copier"
@@ -21,6 +21,9 @@ import (
 	types "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
 )
+
+// wrongDataSecretName is the name used for invalid secret references in tests.
+const wrongDataSecretName = "wrong-data"
 
 func TestCheckAlibabaCloudCredentials(t *testing.T) {
 	type credentials struct {
@@ -109,7 +112,7 @@ func TestGetProviderCredentials(t *testing.T) {
 	}
 	assert.Nil(t, k8sClient1.Create(ctx, secret))
 
-	patches := ApplyMethod(reflect.TypeOf(&sts.Client{}), "GetCallerIdentity", func(_ *sts.Client, request *sts.GetCallerIdentityRequest) (response *sts.GetCallerIdentityResponse, err error) {
+	patches := gomonkey.ApplyMethod(reflect.TypeOf(&sts.Client{}), "GetCallerIdentity", func(_ *sts.Client, request *sts.GetCallerIdentityRequest) (response *sts.GetCallerIdentityResponse, err error) {
 		response = nil
 		err = nil
 		return
@@ -196,7 +199,7 @@ func TestGetProviderCredentials(t *testing.T) {
 	// alibaba provider with wrong data
 	secret3 := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "wrong-data",
+			Name:      wrongDataSecretName,
 			Namespace: "default",
 		},
 		Data: map[string][]byte{
@@ -209,13 +212,13 @@ func TestGetProviderCredentials(t *testing.T) {
 
 	var alibabaProvider v1beta1.Provider
 	copier.CopyWithOption(&alibabaProvider, &defaultProvider, copier.Option{DeepCopy: true})
-	alibabaProvider.Spec.Credentials.SecretRef.Name = "wrong-data"
+	alibabaProvider.Spec.Credentials.SecretRef.Name = wrongDataSecretName
 
 	// baidu cloud provider with wrong data
 	var baiduProvider2 v1beta1.Provider
 	copier.CopyWithOption(&baiduProvider2, &defaultProvider, copier.Option{DeepCopy: true})
 	baiduProvider2.Spec.Provider = string(baidu)
-	baiduProvider2.Spec.Credentials.SecretRef.Name = "wrong-data"
+	baiduProvider2.Spec.Credentials.SecretRef.Name = wrongDataSecretName
 
 	type args struct {
 		provider  v1beta1.Provider
@@ -426,7 +429,7 @@ func TestGetProviderCredentials4EC(t *testing.T) {
 
 	secret2 := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "wrong-data",
+			Name:      wrongDataSecretName,
 			Namespace: "default",
 		},
 		Data: map[string][]byte{
@@ -439,7 +442,7 @@ func TestGetProviderCredentials4EC(t *testing.T) {
 
 	var badProvider v1beta1.Provider
 	copier.CopyWithOption(&badProvider, &provider, copier.Option{DeepCopy: true})
-	badProvider.Spec.Credentials.SecretRef.Name = "wrong-data"
+	badProvider.Spec.Credentials.SecretRef.Name = wrongDataSecretName
 
 	type args struct {
 		provider  v1beta1.Provider
@@ -526,7 +529,7 @@ func TestGetProviderCredentials4VSphere(t *testing.T) {
 
 	secret2 := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "wrong-data",
+			Name:      wrongDataSecretName,
 			Namespace: "default",
 		},
 		Data: map[string][]byte{
@@ -539,7 +542,7 @@ func TestGetProviderCredentials4VSphere(t *testing.T) {
 
 	var badProvider v1beta1.Provider
 	copier.CopyWithOption(&badProvider, &provider, copier.Option{DeepCopy: true})
-	badProvider.Spec.Credentials.SecretRef.Name = "wrong-data"
+	badProvider.Spec.Credentials.SecretRef.Name = wrongDataSecretName
 
 	type args struct {
 		provider  v1beta1.Provider
@@ -627,7 +630,7 @@ func TestGetProviderCredentials4TencentCloud(t *testing.T) {
 
 	secret2 := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "wrong-data",
+			Name:      wrongDataSecretName,
 			Namespace: "default",
 		},
 		Data: map[string][]byte{
@@ -640,7 +643,7 @@ func TestGetProviderCredentials4TencentCloud(t *testing.T) {
 
 	var badProvider v1beta1.Provider
 	copier.CopyWithOption(&badProvider, &provider, copier.Option{DeepCopy: true})
-	badProvider.Spec.Credentials.SecretRef.Name = "wrong-data"
+	badProvider.Spec.Credentials.SecretRef.Name = wrongDataSecretName
 
 	type args struct {
 		provider  v1beta1.Provider
@@ -810,7 +813,7 @@ func TestGetProviderCredentials4UCloud(t *testing.T) {
 
 	secret2 := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "wrong-data",
+			Name:      wrongDataSecretName,
 			Namespace: "default",
 		},
 		Data: map[string][]byte{
@@ -823,7 +826,7 @@ func TestGetProviderCredentials4UCloud(t *testing.T) {
 
 	var badProvider v1beta1.Provider
 	copier.CopyWithOption(&badProvider, &provider, copier.Option{DeepCopy: true})
-	badProvider.Spec.Credentials.SecretRef.Name = "wrong-data"
+	badProvider.Spec.Credentials.SecretRef.Name = wrongDataSecretName
 
 	type args struct {
 		provider  v1beta1.Provider
@@ -912,7 +915,7 @@ func TestGetProviderCredentials4GCP(t *testing.T) {
 
 	secret2 := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "wrong-data",
+			Name:      wrongDataSecretName,
 			Namespace: "default",
 		},
 		Data: map[string][]byte{
@@ -925,7 +928,7 @@ func TestGetProviderCredentials4GCP(t *testing.T) {
 
 	var badProvider v1beta1.Provider
 	copier.CopyWithOption(&badProvider, &provider, copier.Option{DeepCopy: true})
-	badProvider.Spec.Credentials.SecretRef.Name = "wrong-data"
+	badProvider.Spec.Credentials.SecretRef.Name = wrongDataSecretName
 
 	type args struct {
 		provider  v1beta1.Provider
@@ -1014,7 +1017,7 @@ func TestGetProviderCredentials4AWS(t *testing.T) {
 
 	secret2 := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "wrong-data",
+			Name:      wrongDataSecretName,
 			Namespace: "default",
 		},
 		Data: map[string][]byte{
@@ -1027,7 +1030,7 @@ func TestGetProviderCredentials4AWS(t *testing.T) {
 
 	var badProvider v1beta1.Provider
 	copier.CopyWithOption(&badProvider, &provider, copier.Option{DeepCopy: true})
-	badProvider.Spec.Credentials.SecretRef.Name = "wrong-data"
+	badProvider.Spec.Credentials.SecretRef.Name = wrongDataSecretName
 
 	type args struct {
 		provider  v1beta1.Provider
@@ -1118,7 +1121,7 @@ func TestGetProviderCredentials4Azure(t *testing.T) {
 
 	secret2 := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "wrong-data",
+			Name:      wrongDataSecretName,
 			Namespace: "default",
 		},
 		Data: map[string][]byte{
@@ -1131,7 +1134,7 @@ func TestGetProviderCredentials4Azure(t *testing.T) {
 
 	var badProvider v1beta1.Provider
 	copier.CopyWithOption(&badProvider, &provider, copier.Option{DeepCopy: true})
-	badProvider.Spec.Credentials.SecretRef.Name = "wrong-data"
+	badProvider.Spec.Credentials.SecretRef.Name = wrongDataSecretName
 
 	type args struct {
 		provider  v1beta1.Provider
@@ -1204,7 +1207,7 @@ func TestGetProviderCredentials4Custom(t *testing.T) {
 
 	secret2 := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "wrong-data",
+			Name:      wrongDataSecretName,
 			Namespace: "default",
 		},
 		Data: map[string][]byte{
@@ -1217,7 +1220,7 @@ func TestGetProviderCredentials4Custom(t *testing.T) {
 
 	var badProvider v1beta1.Provider
 	copier.CopyWithOption(&badProvider, &provider, copier.Option{DeepCopy: true})
-	badProvider.Spec.Credentials.SecretRef.Name = "wrong-data"
+	badProvider.Spec.Credentials.SecretRef.Name = wrongDataSecretName
 
 	type args struct {
 		provider  v1beta1.Provider
@@ -1292,7 +1295,7 @@ func TestGetProviderCredentials4HuaweiCloud(t *testing.T) {
 
 	secret2 := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "wrong-data",
+			Name:      wrongDataSecretName,
 			Namespace: "default",
 		},
 		Data: map[string][]byte{
@@ -1305,7 +1308,7 @@ func TestGetProviderCredentials4HuaweiCloud(t *testing.T) {
 
 	var badProvider v1beta1.Provider
 	copier.CopyWithOption(&badProvider, &provider, copier.Option{DeepCopy: true})
-	badProvider.Spec.Credentials.SecretRef.Name = "wrong-data"
+	badProvider.Spec.Credentials.SecretRef.Name = wrongDataSecretName
 
 	type args struct {
 		provider  v1beta1.Provider

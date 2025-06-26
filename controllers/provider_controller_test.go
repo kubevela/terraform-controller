@@ -241,9 +241,7 @@ func TestReconcileProviderIsReadyButFailedToUpdateStatus(t *testing.T) {
 	r2.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(secret2, provider2).Build()
 
 	patches := ApplyFunc(apiutil.GVKForObject, func(obj runtime.Object, scheme *runtime.Scheme) (schema.GroupVersionKind, error) {
-		switch obj.(type) {
-		case *v1beta1.Provider:
-			p := obj.(*v1beta1.Provider)
+		if p, ok := obj.(*v1beta1.Provider); ok {
 			if p.Status.State != "" {
 				return obj.GetObjectKind().GroupVersionKind(), errors.New("xxx")
 			}
@@ -324,9 +322,7 @@ func TestReconcile3(t *testing.T) {
 	r3.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(provider3).Build()
 
 	patches := ApplyFunc(apiutil.GVKForObject, func(obj runtime.Object, scheme *runtime.Scheme) (schema.GroupVersionKind, error) {
-		switch obj.(type) {
-		case *v1beta1.Provider:
-			p := obj.(*v1beta1.Provider)
+		if p, ok := obj.(*v1beta1.Provider); ok {
 			if p.Status.State != "" {
 				return obj.GetObjectKind().GroupVersionKind(), errors.New("xxx")
 			}
@@ -378,9 +374,7 @@ func TestReconcile3(t *testing.T) {
 }
 
 func apiutilGVKForObject(obj runtime.Object, scheme *runtime.Scheme) (schema.GroupVersionKind, error) {
-	switch obj.(type) {
-	case *v1beta1.Provider:
-		p := obj.(*v1beta1.Provider)
+	if p, ok := obj.(*v1beta1.Provider); ok {
 		if p.Status.State != "" {
 			return obj.GetObjectKind().GroupVersionKind(), errors.New("xxx")
 		}

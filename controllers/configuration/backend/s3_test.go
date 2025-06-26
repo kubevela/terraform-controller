@@ -19,7 +19,7 @@ package backend
 import (
 	"bytes"
 	"context"
-	"io/ioutil"
+	"io"
 	"reflect"
 	"testing"
 
@@ -127,18 +127,16 @@ func (s *mockS3Client) GetObject(input *s3.GetObjectInput) (*s3.GetObjectOutput,
 	}
 
 	if resp != "" {
-		body := ioutil.NopCloser(bytes.NewBuffer([]byte(resp)))
+		body := io.NopCloser(bytes.NewBuffer([]byte(resp)))
 		return &s3.GetObjectOutput{Body: body}, nil
 	}
 	return nil, nil
 }
 
 func (s *mockS3Client) DeleteObject(input *s3.DeleteObjectInput) (*s3.DeleteObjectOutput, error) {
-	switch {
-	case *(input.Bucket) == "a" && *(input.Key) == "a":
+	if *(input.Bucket) == "a" && *(input.Key) == "a" {
 		return &s3.DeleteObjectOutput{}, nil
 	}
-
 	return nil, nil
 }
 
