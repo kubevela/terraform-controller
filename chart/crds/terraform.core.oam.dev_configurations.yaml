@@ -1,11 +1,9 @@
-
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.6.2
-  creationTimestamp: null
+    controller-gen.kubebuilder.io/version: v0.16.5
   name: configurations.terraform.core.oam.dev
 spec:
   group: terraform.core.oam.dev
@@ -32,14 +30,19 @@ spec:
         description: Configuration is the Schema for the configurations API
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
             type: string
           metadata:
             type: object
@@ -47,15 +50,14 @@ spec:
             description: ConfigurationSpec defines the desired state of Configuration
             properties:
               JSON:
-                description: 'JSON is the Terraform JSON syntax configuration. Deprecated:
-                  after v0.3.1, use HCL instead.'
+                description: |-
+                  JSON is the Terraform JSON syntax configuration.
+                  Deprecated: after v0.3.1, use HCL instead.
                 type: string
               backend:
-                description: Backend stores the state in a Kubernetes secret with
-                  locking done using a Lease resource. TODO(zzxwill) If a backend
-                  exists in HCL/JSON, this can be optional. Currently, if Backend
-                  is not set by users, it still will set by the controller, ignoring
-                  the settings in HCL/JSON backend
+                description: |-
+                  Backend stores the state in a Kubernetes secret with locking done using a Lease resource.
+                  still will set by the controller, ignoring the settings in HCL/JSON backend
                 properties:
                   inClusterConfig:
                     description: InClusterConfig Used to authenticate to the cluster
@@ -76,14 +78,15 @@ spec:
                   to the secret containing the git credentials
                 properties:
                   name:
-                    description: Name is unique within a namespace to reference a
+                    description: name is unique within a namespace to reference a
                       secret resource.
                     type: string
                   namespace:
-                    description: Namespace defines the space within which the secret
+                    description: namespace defines the space within which the secret
                       name must be unique.
                     type: string
                 type: object
+                x-kubernetes-map-type: atomic
               hcl:
                 description: HCL is the Terraform HCL type configuration
                 type: string
@@ -117,49 +120,52 @@ spec:
                   helper
                 properties:
                   name:
-                    description: Name is unique within a namespace to reference a
+                    description: name is unique within a namespace to reference a
                       secret resource.
                     type: string
                   namespace:
-                    description: Namespace defines the space within which the secret
+                    description: namespace defines the space within which the secret
                       name must be unique.
                     type: string
                 type: object
+                x-kubernetes-map-type: atomic
               terraformCredentialsSecretReference:
                 description: TerraformCredentialsSecretReference specifies the reference
                   to the secret containing the terraform credentials
                 properties:
                   name:
-                    description: Name is unique within a namespace to reference a
+                    description: name is unique within a namespace to reference a
                       secret resource.
                     type: string
                   namespace:
-                    description: Namespace defines the space within which the secret
+                    description: namespace defines the space within which the secret
                       name must be unique.
                     type: string
                 type: object
+                x-kubernetes-map-type: atomic
               terraformRCConfigMapReference:
                 description: TerraformRCConfigMapReference specifies the reference
                   to a config map containing the terraform registry configuration
                 properties:
                   name:
-                    description: Name is unique within a namespace to reference a
+                    description: name is unique within a namespace to reference a
                       secret resource.
                     type: string
                   namespace:
-                    description: Namespace defines the space within which the secret
+                    description: namespace defines the space within which the secret
                       name must be unique.
                     type: string
                 type: object
+                x-kubernetes-map-type: atomic
               variable:
                 type: object
                 x-kubernetes-preserve-unknown-fields: true
               writeConnectionSecretToRef:
-                description: WriteConnectionSecretToReference specifies the namespace
-                  and name of a Secret to which any connection details for this managed
-                  resource should be written. Connection details frequently include
-                  the endpoint, username, and password required to connect to the
-                  managed resource.
+                description: |-
+                  WriteConnectionSecretToReference specifies the namespace and name of a
+                  Secret to which any connection details for this managed resource should
+                  be written. Connection details frequently include the endpoint, username,
+                  and password required to connect to the managed resource.
                 properties:
                   name:
                     description: Name of the secret.
@@ -205,9 +211,9 @@ spec:
                     type: string
                 type: object
               observedGeneration:
-                description: observedGeneration is the most recent generation observed
-                  for this Configuration. It corresponds to the Configuration's generation,
-                  which is updated on mutation by the API Server.
+                description: |-
+                  observedGeneration is the most recent generation observed for this Configuration. It corresponds to the
+                  Configuration's generation, which is updated on mutation by the API Server.
                 format: int64
                 type: integer
             type: object
@@ -232,14 +238,19 @@ spec:
         description: Configuration is the Schema for the configurations API
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
             type: string
           metadata:
             type: object
@@ -250,13 +261,12 @@ spec:
                 type: object
                 x-kubernetes-preserve-unknown-fields: true
               backend:
-                description: 'Backend describes the Terraform backend configuration.
-                  This field is needed if the users use a git repo to provide the
-                  hcl files or want to use their custom Terraform backend (instead
-                  of the default kubernetes backend type). Notice: This field may
-                  cause two backend blocks in the final Terraform module and make
-                  the executor job failed. So, please make sure that there are no
-                  backend configurations in your inline hcl code or the git repo.'
+                description: |-
+                  Backend describes the Terraform backend configuration.
+                  This field is needed if the users use a git repo to provide the hcl files or
+                  want to use their custom Terraform backend (instead of the default kubernetes backend type).
+                  Notice: This field may cause two backend blocks in the final Terraform module and make the executor job failed.
+                  So, please make sure that there are no backend configurations in your inline hcl code or the git repo.
                 properties:
                   backendType:
                     description: BackendType indicates which backend type to use.
@@ -314,23 +324,24 @@ spec:
                   resources will be deleted when CR is deleted
                 type: boolean
               forceDelete:
-                description: ForceDelete will force delete Configuration no matter
-                  which state it is or whether it has provisioned some resources It
-                  will help delete Configuration in unexpected cases.
+                description: |-
+                  ForceDelete will force delete Configuration no matter which state it is or whether it has provisioned some resources
+                  It will help delete Configuration in unexpected cases.
                 type: boolean
               gitCredentialsSecretReference:
                 description: GitCredentialsSecretReference specifies the reference
                   to the secret containing the git credentials
                 properties:
                   name:
-                    description: Name is unique within a namespace to reference a
+                    description: name is unique within a namespace to reference a
                       secret resource.
                     type: string
                   namespace:
-                    description: Namespace defines the space within which the secret
+                    description: namespace defines the space within which the secret
                       name must be unique.
                     type: string
                 type: object
+                x-kubernetes-map-type: atomic
               gitRef:
                 description: GitRef is the git branch or tag or commit hash to checkout.
                   Only used when Remote is specified.
@@ -347,10 +358,10 @@ spec:
                 type: string
               inlineCredentials:
                 description: "InlineCredentials specifies the credentials in spec.HCl
-                  field as below. \tprovider \"aws\" { \t\tregion     = \"us-west-2\"
-                  \t\taccess_key = \"my-access-key\" \t\tsecret_key = \"my-secret-key\"
-                  \t} Or indicates a Terraform module or configuration don't need
-                  credentials at all, like provider `random`"
+                  field as below.\n\tprovider \"aws\" {\n\t\tregion     = \"us-west-2\"\n\t\taccess_key
+                  = \"my-access-key\"\n\t\tsecret_key = \"my-secret-key\"\n\t}\nOr
+                  indicates a Terraform module or configuration don't need credentials
+                  at all, like provider `random`"
                 type: boolean
               path:
                 description: Path is the sub-directory of remote git repository.
@@ -378,50 +389,53 @@ spec:
                   helper
                 properties:
                   name:
-                    description: Name is unique within a namespace to reference a
+                    description: name is unique within a namespace to reference a
                       secret resource.
                     type: string
                   namespace:
-                    description: Namespace defines the space within which the secret
+                    description: namespace defines the space within which the secret
                       name must be unique.
                     type: string
                 type: object
+                x-kubernetes-map-type: atomic
               terraformCredentialsSecretReference:
                 description: TerraformCredentialsSecretReference specifies the reference
                   to the secret containing the terraform credentials and terraform
                   registry details
                 properties:
                   name:
-                    description: Name is unique within a namespace to reference a
+                    description: name is unique within a namespace to reference a
                       secret resource.
                     type: string
                   namespace:
-                    description: Namespace defines the space within which the secret
+                    description: namespace defines the space within which the secret
                       name must be unique.
                     type: string
                 type: object
+                x-kubernetes-map-type: atomic
               terraformRCConfigMapReference:
                 description: TerraformRCConfigMapReference specifies the reference
                   to a config map containing the terraform registry configuration
                 properties:
                   name:
-                    description: Name is unique within a namespace to reference a
+                    description: name is unique within a namespace to reference a
                       secret resource.
                     type: string
                   namespace:
-                    description: Namespace defines the space within which the secret
+                    description: namespace defines the space within which the secret
                       name must be unique.
                     type: string
                 type: object
+                x-kubernetes-map-type: atomic
               variable:
                 type: object
                 x-kubernetes-preserve-unknown-fields: true
               writeConnectionSecretToRef:
-                description: WriteConnectionSecretToReference specifies the namespace
-                  and name of a Secret to which any connection details for this managed
-                  resource should be written. Connection details frequently include
-                  the endpoint, username, and password required to connect to the
-                  managed resource.
+                description: |-
+                  WriteConnectionSecretToReference specifies the namespace and name of a
+                  Secret to which any connection details for this managed resource should
+                  be written. Connection details frequently include the endpoint, username,
+                  and password required to connect to the managed resource.
                 properties:
                   name:
                     description: Name of the secret.
@@ -451,8 +465,8 @@ spec:
                       type: object
                     type: object
                   region:
-                    description: Region is the region for the cloud resources created
-                      by this Configuration. If spec.region is not empty, it's the
+                    description: |-
+                      Region is the region for the cloud resources created by this Configuration. If spec.region is not empty, it's the
                       value of it. Otherwise, it's the value of spec.providerReference.region.
                     type: string
                   state:
@@ -470,11 +484,10 @@ spec:
                     type: string
                 type: object
               observedGeneration:
-                description: observedGeneration is the most recent generation observed
-                  for this Configuration. It corresponds to the Configuration's generation,
-                  which is updated on mutation by the API Server. If ObservedGeneration
-                  equals Generation, and State is Available, the value of Outputs
-                  is latest
+                description: |-
+                  observedGeneration is the most recent generation observed for this Configuration. It corresponds to the
+                  Configuration's generation, which is updated on mutation by the API Server.
+                  If ObservedGeneration equals Generation, and State is Available, the value of Outputs is latest
                 format: int64
                 type: integer
             type: object
@@ -483,9 +496,3 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []
