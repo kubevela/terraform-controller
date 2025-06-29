@@ -121,7 +121,7 @@ func ReplaceTerraformSource(remote string, githubBlockedStr string) string {
 	klog.InfoS("Whether GitHub is blocked", "githubBlocked", githubBlockedStr)
 	githubBlocked, err := strconv.ParseBool(githubBlockedStr)
 	if err != nil {
-		klog.Warningf(errGitHubBlockedNotBoolean, err)
+		klog.Warningf("%s: %v", errGitHubBlockedNotBoolean, err)
 		return remote
 	}
 	klog.InfoS("Parsed GITHUB_BLOCKED env", "githubBlocked", githubBlocked)
