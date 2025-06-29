@@ -3,7 +3,7 @@
 IMG ?= oamdev/terraform-controller:0.2.8
 
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
-CRD_OPTIONS ?= "crd:trivialVersions=true"
+CRD_OPTIONS ?= "crd"
 
 TIME_SHORT	= `date +%H:%M:%S`
 TIME		= $(TIME_SHORT)
@@ -82,7 +82,7 @@ ifeq (, $(shell which controller-gen))
 	CONTROLLER_GEN_TMP_DIR=$$(mktemp -d) ;\
 	cd $$CONTROLLER_GEN_TMP_DIR ;\
 	go mod init tmp ;\
-	go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.6.2 ;\
+	go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.16.5 ;\
 	rm -rf $$CONTROLLER_GEN_TMP_DIR ;\
 	}
 CONTROLLER_GEN=$(GOBIN)/controller-gen
@@ -90,7 +90,7 @@ else
 CONTROLLER_GEN=$(shell which controller-gen)
 endif
 
-GOLANGCILINT_VERSION ?= v1.50.1
+GOLANGCILINT_VERSION ?= v1.60.1
 HOSTOS := $(shell uname -s | tr '[:upper:]' '[:lower:]')
 HOSTARCH := $(shell uname -m)
 ifeq ($(HOSTARCH),x86_64)
