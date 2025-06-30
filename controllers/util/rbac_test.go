@@ -31,7 +31,7 @@ var _ = AfterSuite(func() {
 
 var _ = Describe("Utils", func() {
 	roleName := "default-tf-executor-clusterrole"
-	It("CreateTerraformExecutorClusterRole", func() {
+	It("CreateTerraformExecutorClusterRole for testing", func() {
 		err := CreateTerraformExecutorClusterRole(context.TODO(), k8sClient, roleName)
 		Expect(err).To(BeNil())
 
