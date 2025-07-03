@@ -30,7 +30,7 @@ func TestReconcile(t *testing.T) {
 	s := runtime.NewScheme()
 	v1beta1.AddToScheme(s)
 	v1.AddToScheme(s)
-	r1.Client = fake.NewClientBuilder().WithScheme(s).Build()
+	r1.Client = fake.NewClientBuilder().WithScheme(s).WithStatusSubresource(&v1beta1.Provider{}).Build()
 
 	r2 := &ProviderReconciler{}
 	provider2 := &v1beta1.Provider{
@@ -69,7 +69,7 @@ func TestReconcile(t *testing.T) {
 		Type: v1.SecretTypeOpaque,
 	}
 
-	r2.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(secret2, provider2).Build()
+	r2.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(secret2, provider2).WithStatusSubresource(&v1beta1.Provider{}).Build()
 
 	r3 := &ProviderReconciler{}
 	provider3 := &v1beta1.Provider{
@@ -92,7 +92,7 @@ func TestReconcile(t *testing.T) {
 		},
 	}
 
-	r3.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(provider3).Build()
+	r3.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(provider3).WithStatusSubresource(&v1beta1.Provider{}).Build()
 
 	r4 := &ProviderReconciler{}
 	provider4 := &v1beta1.Provider{
@@ -105,7 +105,7 @@ func TestReconcile(t *testing.T) {
 			Provider:    "aws",
 		},
 	}
-	r4.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(provider4).Build()
+	r4.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(provider4).WithStatusSubresource(&v1beta1.Provider{}).Build()
 
 	r5 := &ProviderReconciler{}
 	provider5 := &v1beta1.Provider{
@@ -118,7 +118,7 @@ func TestReconcile(t *testing.T) {
 			Provider:    "aws",
 		},
 	}
-	r5.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(provider5).Build()
+	r5.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(provider5).WithStatusSubresource(&v1beta1.Provider{}).Build()
 
 	type args struct {
 		req reconcile.Request
@@ -238,7 +238,7 @@ func TestReconcileProviderIsReadyButFailedToUpdateStatus(t *testing.T) {
 		Type: v1.SecretTypeOpaque,
 	}
 
-	r2.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(secret2, provider2).Build()
+	r2.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(secret2, provider2).WithStatusSubresource(&v1beta1.Provider{}).Build()
 
 	patches := ApplyFunc(apiutil.GVKForObject, func(obj runtime.Object, scheme *runtime.Scheme) (schema.GroupVersionKind, error) {
 		switch obj.(type) {
@@ -321,7 +321,7 @@ func TestReconcile3(t *testing.T) {
 		},
 	}
 
-	r3.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(provider3).Build()
+	r3.Client = fake.NewClientBuilder().WithScheme(s).WithObjects(provider3).WithStatusSubresource(&v1beta1.Provider{}).Build()
 
 	patches := ApplyFunc(apiutil.GVKForObject, func(obj runtime.Object, scheme *runtime.Scheme) (schema.GroupVersionKind, error) {
 		switch obj.(type) {

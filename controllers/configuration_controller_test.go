@@ -18,7 +18,7 @@ import (
 	"github.com/oam-dev/terraform-controller/api/v1beta2"
 	"github.com/oam-dev/terraform-controller/controllers/configuration/backend"
 	"github.com/oam-dev/terraform-controller/controllers/process"
-	"github.com/oam-dev/terraform-controller/controllers/provider"
+	providerpkg "github.com/oam-dev/terraform-controller/controllers/provider"
 	"github.com/stretchr/testify/assert"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -51,7 +51,7 @@ func TestConfigurationReconcile(t *testing.T) {
 	batchv1.AddToScheme(s)
 	r1.Client = fake.NewClientBuilder().WithScheme(s).Build()
 
-	ak := provider.AlibabaCloudCredentials{
+	ak := providerpkg.AlibabaCloudCredentials{
 		AccessKeyID:     "aaaa",
 		AccessKeySecret: "bbbbb",
 	}
@@ -121,10 +121,18 @@ func TestConfigurationReconcile(t *testing.T) {
 		Namespace: "default",
 	}
 
-	patches := gomonkey.ApplyMethod(reflect.TypeOf(&sts.Client{}), "GetCallerIdentity", func(_ *sts.Client, request *sts.GetCallerIdentityRequest) (response *sts.GetCallerIdentityResponse, err error) {
-		response = nil
-		err = nil
-		return
+	patches := gomonkey.NewPatches()
+	patches.ApplyMethod(reflect.TypeOf(&sts.Client{}), "GetCallerIdentity", func(_ *sts.Client, request *sts.GetCallerIdentityRequest) (*sts.GetCallerIdentityResponse, error) {
+		return nil, nil
+	})
+	patches.ApplyFunc(sts.NewClientWithAccessKey, func(regionId, accessKeyId, accessKeySecret string) (*sts.Client, error) {
+		return &sts.Client{}, nil
+	})
+	patches.ApplyFunc(sts.NewClientWithStsToken, func(regionId, accessKeyId, accessKeySecret, stsToken string) (*sts.Client, error) {
+		return &sts.Client{}, nil
+	})
+	patches.ApplyFunc(providerpkg.GetProviderCredentials, func(ctx context.Context, k8sClient client.Client, providerObj *v1beta1.Provider, region string) (map[string]string, error) {
+		return map[string]string{}, nil
 	})
 	defer patches.Reset()
 
@@ -473,7 +481,7 @@ func TestInitTFConfigurationMetaWithJobEnv(t *testing.T) {
 	data, _ := json.Marshal(map[string]interface{}{
 		prjID: prjIDValue,
 	})
-	ak := provider.AlibabaCloudCredentials{
+	ak := providerpkg.AlibabaCloudCredentials{
 		AccessKeyID:     "aaaa",
 		AccessKeySecret: "bbbbb",
 	}
