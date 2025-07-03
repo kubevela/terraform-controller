@@ -89,7 +89,7 @@ func TestGetPodLog(t *testing.T) {
 				initContainerName: "terraform-init",
 			},
 			want: want{
-				errMsg: "can not be accept",
+				errMsg: "client rate limiter Wait returned an error: can not be accept",
 			},
 		},
 	}

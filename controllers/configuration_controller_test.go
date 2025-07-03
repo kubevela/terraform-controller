@@ -172,6 +172,7 @@ func TestConfigurationReconcile(t *testing.T) {
 			Name:              "a",
 			Namespace:         "b",
 			DeletionTimestamp: &time,
+			Finalizers:        []string{configurationFinalizer},
 		},
 		Spec: v1beta2.ConfigurationSpec{
 			HCL: "c",
