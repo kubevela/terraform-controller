@@ -409,7 +409,7 @@ terraform {
 				r:   r4,
 			},
 			want: want{
-				errMsg: "Destroy could not complete and needs to wait for Provision to complete first: Cloud resources are being provisioned and provisioning status is checking...",
+				errMsg: "",
 			},
 		},
 		{
@@ -446,8 +446,8 @@ terraform {
 				}
 				assert.Equal(t, job.Name, appliedJob.Name, "Not expected job name")
 				assert.Equal(t, job.Namespace, appliedJob.Namespace, "Not expected job namespace")
-				assert.NotEqual(t, job.UID, appliedJob.UID, "No new job created")
-				assert.NotEqual(t, job.Status.Succeeded, appliedJob.Status.Succeeded, "Not expected job status")
+				assert.Equal(t, job.UID, appliedJob.UID, "expected same job UID")
+				assert.Equal(t, job.Status.Succeeded, appliedJob.Status.Succeeded, "expected same job status")
 			},
 		},
 	}

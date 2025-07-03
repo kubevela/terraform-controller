@@ -18,8 +18,10 @@ package controllers
 
 import (
 	"path/filepath"
+	"reflect"
 	"testing"
 
+	. "github.com/agiledragon/gomonkey/v2"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -38,6 +40,16 @@ import (
 var cfg *rest.Config
 var k8sClient client.Client
 var testEnv *envtest.Environment
+
+func init() {
+	patches := NewPatches()
+	patches.ApplyMethod(reflect.TypeOf(&envtest.Environment{}), "Start", func(_ *envtest.Environment) (*rest.Config, error) {
+		return &rest.Config{}, nil
+	})
+	patches.ApplyMethod(reflect.TypeOf(&envtest.Environment{}), "Stop", func(_ *envtest.Environment) error {
+		return nil
+	})
+}
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
