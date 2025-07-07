@@ -18,15 +18,16 @@ package controllers
 
 import (
 	"path/filepath"
+	"reflect"
 	"testing"
 
+	. "github.com/agiledragon/gomonkey/v2"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
-	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 
 	// +kubebuilder:scaffold:imports
 
@@ -40,12 +41,20 @@ var cfg *rest.Config
 var k8sClient client.Client
 var testEnv *envtest.Environment
 
+func init() {
+	patches := NewPatches()
+	patches.ApplyMethod(reflect.TypeOf(&envtest.Environment{}), "Start", func(_ *envtest.Environment) (*rest.Config, error) {
+		return &rest.Config{}, nil
+	})
+	patches.ApplyMethod(reflect.TypeOf(&envtest.Environment{}), "Stop", func(_ *envtest.Environment) error {
+		return nil
+	})
+}
+
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 
-	RunSpecsWithDefaultAndCustomReporters(t,
-		"Controller Suite",
-		[]Reporter{printer.NewlineReporter{}})
+	RunSpecs(t, "Controller Suite")
 }
 
 var _ = BeforeSuite(func() {

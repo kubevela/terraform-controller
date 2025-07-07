@@ -96,7 +96,7 @@ func TestRawExtension2Map2(t *testing.T) {
 				},
 			},
 			want: want{
-				errMessage: "invalid character 'x' looking for beginning of value",
+				errMessage: "cannot convert RawExtension with unrecognized content type to unstructured",
 			},
 		}}
 	for name, tc := range cases {

@@ -25,8 +25,11 @@ import (
 	"k8s.io/apiserver/pkg/util/feature"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
-	"k8s.io/klog/v2/klogr"
+	"k8s.io/klog/v2/textlogger"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	terraformv1beta1 "github.com/oam-dev/terraform-controller/api/v1beta1"
 	"github.com/oam-dev/terraform-controller/api/v1beta2"
@@ -64,17 +67,31 @@ func main() {
 	klog.InitFlags(nil)
 	pflag.Parse()
 
-	ctrl.SetLogger(klogr.New())
+	ctrl.SetLogger(textlogger.NewLogger(textlogger.NewConfig()))
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		LeaderElection:     enableLeaderElection,
-		LeaderElectionID:   "ce329a9c.core.oam.dev",
-		MetricsBindAddress: metricsAddr,
-		Namespace:          namespace,
-		Port:               9443,
-		Scheme:             scheme,
-		SyncPeriod:         &syncPeriod,
-	})
+	// Prepare manager options
+	mgmOptions := ctrl.Options{
+		LeaderElection:   enableLeaderElection,
+		LeaderElectionID: "ce329a9c.core.oam.dev",
+		Metrics: server.Options{
+			BindAddress: metricsAddr,
+		},
+		WebhookServer: webhook.NewServer(webhook.Options{
+			Port: 9443,
+		}),
+		Scheme: scheme,
+	}
+
+	// Only set specific namespace if provided, otherwise watch all namespaces
+	if namespace != "" {
+		mgmOptions.Cache = cache.Options{
+			DefaultNamespaces: map[string]cache.Config{
+				namespace: {},
+			},
+		}
+	}
+
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), mgmOptions)
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
