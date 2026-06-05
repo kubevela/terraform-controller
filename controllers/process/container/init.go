@@ -37,6 +37,14 @@ func (a *Assembler) InitContainer() v1.Container {
 			})
 	}
 
+	if a.GitCredential {
+		mounts = append(mounts,
+			v1.VolumeMount{
+				Name:      types.GitAuthConfigVolumeName,
+				MountPath: types.GitAuthConfigVolumeMountPath,
+			})
+	}
+
 	c := v1.Container{
 		Name:            types.TerraformInitContainerName,
 		Image:           a.TerraformImage,
