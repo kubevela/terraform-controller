@@ -27,6 +27,5 @@ COPY --from=builder /workspace/manager .
 # COPY terraform binary
 COPY bin/terraform /usr/bin/terraform
 #RUN chmod +x /usr/bin/terraform
-RUN apk add git openssh
-
+RUN apk add git
 ENTRYPOINT ["/manager"]
