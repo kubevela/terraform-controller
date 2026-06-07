@@ -28,4 +28,5 @@ COPY --from=builder /workspace/manager .
 COPY bin/terraform /usr/bin/terraform
 #RUN chmod +x /usr/bin/terraform
 RUN apk add git
+
 ENTRYPOINT ["/manager"]
