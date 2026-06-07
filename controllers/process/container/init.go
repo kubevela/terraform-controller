@@ -49,13 +49,27 @@ func (a *Assembler) InitContainer() v1.Container {
 		Name:            types.TerraformInitContainerName,
 		Image:           a.TerraformImage,
 		ImagePullPolicy: v1.PullIfNotPresent,
-		Command: []string{
-			"sh",
-			"-c",
-			"terraform init",
-		},
+		Command: a.getInitCommand(),
 		VolumeMounts: mounts,
 		Env:          a.Envs,
 	}
 	return c
+}
+
+// getInitCommand dynamically builds the terraform init command, injecting the SSH agent if needed.
+func (a *Assembler) getInitCommand() []string {
+	cmd := "terraform init"
+
+	// If Git credentials exist, start the ssh-agent and add the key BEFORE running terraform init
+	if a.GitCredential {
+		sshCommand := fmt.Sprintf("eval `ssh-agent` && ssh-add %s/%s", types.GitAuthConfigVolumeMountPath, v1.SSHAuthPrivateKey)
+		cmd = fmt.Sprintf("%s && %s", sshCommand, cmd)
+	}
+
+	command := []string{
+		"sh",
+		"-c",
+		cmd,
+	}
+	return command
 }
