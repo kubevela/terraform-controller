@@ -124,6 +124,11 @@ type ConfigurationDestroyStatus struct {
 // Property is the property for an output
 type Property struct {
 	Value string `json:"value,omitempty"`
+	// Sensitive indicates that this output was declared with `sensitive = true` in Terraform.
+	// When true, Value contains the placeholder string "[sensitive]" rather than the real value.
+	// The actual value is always written to the Secret referenced by WriteConnectionSecretToReference.
+	// +optional
+	Sensitive bool `json:"sensitive,omitempty"`
 }
 
 // Backend describes the Terraform backend configuration
