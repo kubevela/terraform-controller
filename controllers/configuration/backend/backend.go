@@ -159,13 +159,13 @@ func handleExplicitBackend(backend *v1beta2.Backend) (string, interface{}, error
 
 	// fetch backendConfValue using reflection
 	backendStructValue := reflect.ValueOf(backend)
-	if backendStructValue.Kind() == reflect.Pointer {
+	if backendStructValue.Kind() == reflect.Ptr {
 		backendStructValue = backendStructValue.Elem()
 	}
 	backendField := backendStructValue.FieldByNameFunc(func(name string) bool {
 		return strings.EqualFold(name, backendType)
 	})
-	if backendField.Kind() != reflect.Pointer || backendField.IsNil() {
+	if backendField.Kind() != reflect.Ptr || backendField.IsNil() {
 		return "", nil, fmt.Errorf("there is no configuration for backendType %s", backend.BackendType)
 	}
 	return backendType, backendField.Interface(), nil

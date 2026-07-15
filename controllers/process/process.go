@@ -491,7 +491,7 @@ func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient cli
 		data[k] = []byte(v.Value)
 	}
 	var gotSecret v1.Secret
-	configurationName := configuration.Name
+	configurationName := configuration.ObjectMeta.Name
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: name, Namespace: ns}, &gotSecret); err != nil {
 		if kerrors.IsNotFound(err) {
 			var secret = v1.Secret{
@@ -516,7 +516,7 @@ func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient cli
 		}
 	} else {
 		// check the owner of this secret
-		labels := gotSecret.Labels
+		labels := gotSecret.ObjectMeta.Labels
 		ownerName := labels["terraform.core.oam.dev/owned-by"]
 		ownerNamespace := labels["terraform.core.oam.dev/owned-namespace"]
 		if (ownerName != "" && ownerName != configurationName) ||

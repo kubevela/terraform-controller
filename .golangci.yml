@@ -95,6 +95,15 @@ linters:
           - staticcheck
         text: 'SA3000:'
       - linters:
+          - staticcheck
+        text: 'QF1008:'
+      - linters:
+          - govet
+        text: 'reflect.Ptr should be inlined'
+      - linters:
+          - noctx
+        path: e2e/normal/regression\.go
+      - linters:
           - gosec
         text: 'G101:'
       - linters:
