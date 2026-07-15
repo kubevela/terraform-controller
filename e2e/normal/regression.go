@@ -1,6 +1,7 @@
 package normal
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -24,14 +25,14 @@ func Regression(t *testing.T, testcases []string, retryTimes int) {
 	for _, p := range testcases {
 		configuration := filepath.Join(pwd, "..", p)
 		cmd := fmt.Sprintf("kubectl apply -f %s", configuration)
-		err := exec.Command("bash", "-c", cmd).Start() // #nosec
+		err := exec.CommandContext(context.Background(), "bash", "-c", cmd).Start() // #nosec
 		assert.NilError(t, err)
 	}
 
 	klog.Info("2. Checking Configurations status")
 	for i := 0; i < retryTimes; i++ {
 		var fields []string
-		output, err := exec.Command("bash", "-c", "kubectl get configuration -A").Output()
+		output, err := exec.CommandContext(context.Background(), "bash", "-c", "kubectl get configuration -A").Output()
 		assert.NilError(t, err)
 
 		lines := strings.Split(string(output), "\n")
@@ -71,7 +72,7 @@ deletion:
 	for _, p := range testcases {
 		configuration := filepath.Join(pwd, "..", p)
 		cmd := fmt.Sprintf("kubectl delete -f %s", configuration)
-		err := exec.Command("bash", "-c", cmd).Start() // #nosec
+		err := exec.CommandContext(context.Background(), "bash", "-c", cmd).Start() // #nosec
 		assert.NilError(t, err)
 	}
 
@@ -81,7 +82,7 @@ deletion:
 			fields  []string
 			existed bool
 		)
-		output, err := exec.Command("bash", "-c", "kubectl get configuration -A").Output()
+		output, err := exec.CommandContext(context.Background(), "bash", "-c", "kubectl get configuration -A").Output()
 		assert.NilError(t, err)
 
 		lines := strings.Split(string(output), "\n")
