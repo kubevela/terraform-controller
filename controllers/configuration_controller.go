@@ -161,7 +161,10 @@ func (r *ConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 	}
 
-	return ctrl.Result{}, nil
+	// Terraform apply is still running (no error yet, but the job hasn't reported Succeeded either).
+	// Requeue so we keep checking until the job's Succeeded count is observed on a later reconcile,
+	// since this controller does not watch the apply Job/Pod directly.
+	return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 }
 
 func (r *ConfigurationReconciler) terraformApply(ctx context.Context, configuration v1beta2.Configuration, meta *process.TFConfigurationMeta) error {
