@@ -7,11 +7,9 @@ import (
 	"github.com/oam-dev/terraform-controller/api/types"
 )
 
-// Test_getCloneCommand_GitCredential guards against regressing to the bare
-// `eval `ssh-agent`` form: on OpenSSH 9.x+ (e.g. alpine/git:latest) ssh-agent
-// defaults its socket to $HOME/.ssh/agent, but that path is a Secret volume
-// mount and always read-only, so ssh-agent fails to start. Binding to an
-// explicit socket path under /tmp avoids that.
+// Test_getCloneCommand_GitCredential guards against regressing to bare
+// ssh-agent, whose default socket path ($HOME/.ssh/agent) is a read-only
+// Secret mount.
 func Test_getCloneCommand_GitCredential(t *testing.T) {
 	a := &Assembler{
 		GitCredential: true,
