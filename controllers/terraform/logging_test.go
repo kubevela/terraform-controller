@@ -3,7 +3,6 @@ package terraform
 import (
 	"context"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -123,7 +122,7 @@ func TestFlushStream(t *testing.T) {
 		{
 			name: "Flush stream",
 			args: args{
-				rc:   ioutil.NopCloser(strings.NewReader("xxx")),
+				rc:   io.NopCloser(strings.NewReader("xxx")),
 				name: "p1",
 			},
 			want: want{},

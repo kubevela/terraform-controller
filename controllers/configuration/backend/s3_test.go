@@ -19,7 +19,7 @@ package backend
 import (
 	"bytes"
 	"context"
-	"io/ioutil"
+	"io"
 	"reflect"
 	"testing"
 
@@ -127,7 +127,7 @@ func (s *mockS3Client) GetObject(input *s3.GetObjectInput) (*s3.GetObjectOutput,
 	}
 
 	if resp != "" {
-		body := ioutil.NopCloser(bytes.NewBuffer([]byte(resp)))
+		body := io.NopCloser(bytes.NewBuffer([]byte(resp)))
 		return &s3.GetObjectOutput{Body: body}, nil
 	}
 	return nil, nil
