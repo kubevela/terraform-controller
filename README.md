@@ -2,7 +2,7 @@
 ![Docker Pulls](https://img.shields.io/docker/pulls/oamdev/terraform-controller)
 [![codecov](https://codecov.io/gh/oam-dev/terraform-controller/branch/master/graph/badge.svg)](https://codecov.io/gh/oam-dev/terraform-controller)
 
-# Terraform Controller
+# Terraform Controller 
 
 Terraform Controller is a Kubernetes Controller for Terraform.
 
