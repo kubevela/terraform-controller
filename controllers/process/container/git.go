@@ -56,7 +56,7 @@ func (a *Assembler) getCloneCommand() []string {
 
 	// Check for git credentials, mount the SSH known hosts and private key, add private key into the SSH authentication agent
 	if a.GitCredential {
-		sshCommand := fmt.Sprintf("eval `ssh-agent` && ssh-add %s/%s", types.GitAuthConfigVolumeMountPath, v1.SSHAuthPrivateKey)
+		sshCommand := fmt.Sprintf("eval `ssh-agent -a /tmp/ssh-agent.sock` && ssh-add %s/%s", types.GitAuthConfigVolumeMountPath, v1.SSHAuthPrivateKey)
 		cloneCommand = fmt.Sprintf("%s && %s", sshCommand, cloneCommand)
 	}
 
