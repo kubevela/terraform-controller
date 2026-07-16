@@ -51,7 +51,7 @@ spec:
               set -x &&
               eval $(ssh-agent) &&
               ssh-add /usr/.ssh/id_rsa &&
-              mkdir /root/.ssh &&
+              mkdir -p /root/.ssh &&
               ssh-keyscan git-server >> /root/.ssh/known_hosts &&
               mkdir /usr/simple-terraform-module &&
               cd /usr/simple-terraform-module &&
