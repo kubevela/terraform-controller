@@ -19,6 +19,7 @@ import (
 	"github.com/oam-dev/terraform-controller/controllers/configuration/backend"
 	"github.com/oam-dev/terraform-controller/controllers/process"
 	providerpkg "github.com/oam-dev/terraform-controller/controllers/provider"
+	"github.com/oam-dev/terraform-controller/controllers/terraform"
 	"github.com/stretchr/testify/assert"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -465,6 +466,104 @@ terraform {
 			}
 		})
 	}
+}
+
+func TestConfigurationReconcileApplyStillRunning(t *testing.T) {
+	req := ctrl.Request{}
+	req.NamespacedName = k8stypes.NamespacedName{
+		Name:      "a",
+		Namespace: "b",
+	}
+
+	ctx := context.Background()
+	s := runtime.NewScheme()
+	v1beta1.AddToScheme(s)
+	v1beta2.AddToScheme(s)
+	corev1.AddToScheme(s)
+	batchv1.AddToScheme(s)
+
+	ak := providerpkg.AlibabaCloudCredentials{
+		AccessKeyID:     "aaaa",
+		AccessKeySecret: "bbbbb",
+	}
+	credentials, err := json.Marshal(&ak)
+	assert.Nil(t, err)
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "default",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"credentials": credentials,
+		},
+		Type: corev1.SecretTypeOpaque,
+	}
+
+	provider := &v1beta1.Provider{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "terraform.core.oam.dev/v1beta2",
+			Kind:       "Provider",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "default",
+			Namespace: "default",
+		},
+		Spec: v1beta1.ProviderSpec{
+			Provider: "alibaba",
+			Credentials: v1beta1.ProviderCredentials{
+				Source: "Secret",
+				SecretRef: &crossplane.SecretKeySelector{
+					SecretReference: crossplane.SecretReference{
+						Name:      "default",
+						Namespace: "default",
+					},
+					Key: "credentials",
+				},
+			},
+			Region: "xxx",
+		},
+	}
+
+	configuration := &v1beta2.Configuration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "a",
+			Namespace:  "b",
+			Finalizers: []string{configurationFinalizer},
+			UID:        "67890",
+		},
+		Spec: v1beta2.ConfigurationSpec{
+			HCL: "c",
+		},
+	}
+
+	namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "builds"}}
+	r := &ConfigurationReconciler{ControllerNamespace: "builds"}
+	r.Client = fake.NewClientBuilder().
+		WithScheme(s).
+		WithObjects(namespace, secret, provider, configuration).
+		Build()
+
+	patches := gomonkey.NewPatches()
+	patches.ApplyMethod(reflect.TypeOf(&sts.Client{}), "GetCallerIdentity", func(_ *sts.Client, request *sts.GetCallerIdentityRequest) (*sts.GetCallerIdentityResponse, error) {
+		return nil, nil
+	})
+	patches.ApplyFunc(sts.NewClientWithAccessKey, func(regionId, accessKeyId, accessKeySecret string) (*sts.Client, error) {
+		return &sts.Client{}, nil
+	})
+	patches.ApplyFunc(sts.NewClientWithStsToken, func(regionId, accessKeyId, accessKeySecret, stsToken string) (*sts.Client, error) {
+		return &sts.Client{}, nil
+	})
+	patches.ApplyFunc(providerpkg.GetProviderCredentials, func(ctx context.Context, k8sClient client.Client, providerObj *v1beta1.Provider, region string) (map[string]string, error) {
+		return map[string]string{}, nil
+	})
+	patches.ApplyFunc(terraform.GetTerraformStatus, func(ctx context.Context, jobNamespace, jobName, containerName, initContainerName string) (types.ConfigurationState, error) {
+		return types.ConfigurationProvisioningAndChecking, nil
+	})
+	defer patches.Reset()
+
+	result, err := r.Reconcile(ctx, req)
+	assert.Nil(t, err)
+	assert.Equal(t, ctrl.Result{RequeueAfter: 5 * time.Second}, result)
 }
 
 func TestInitTFConfigurationMetaWithJobEnv(t *testing.T) {
