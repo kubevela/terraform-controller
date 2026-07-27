@@ -1,6 +1,6 @@
 module github.com/oam-dev/terraform-controller
 
-go 1.25.0
+go 1.25.12
 
 require (
 	github.com/agiledragon/gomonkey/v2 v2.9.0
