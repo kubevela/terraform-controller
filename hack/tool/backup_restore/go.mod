@@ -1,6 +1,6 @@
 module backup_restore
 
-go 1.25.12
+go 1.25.13
 
 require (
 	github.com/oam-dev/kubevela v1.1.8
