@@ -1,6 +1,6 @@
 module tf_validation_backend
 
-go 1.23.8
+go 1.25.13
 
 require github.com/hashicorp/hcl/v2 v2.11.1
 
@@ -10,5 +10,5 @@ require (
 	github.com/google/go-cmp v0.5.7 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/zclconf/go-cty v1.10.0 // indirect
-	golang.org/x/text v0.3.7 // indirect
+	golang.org/x/text v0.40.0 // indirect
 )
