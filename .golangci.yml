@@ -10,6 +10,7 @@ linters:
     - bidichk
     - bodyclose
     - contextcheck
+    - copyloopvar
     - durationcheck
     - errchkjson
     - errorlint
@@ -79,7 +80,6 @@ linters:
       - linters:
           - dupl
           - errcheck
-          - exportloopref
           - gocyclo
           - gosec
           - unparam
