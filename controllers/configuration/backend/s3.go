@@ -149,7 +149,7 @@ func (s *S3Backend) CleanUp(_ context.Context) error {
 }
 
 // HCL returns the backend hcl code string
-func (s S3Backend) HCL() string {
+func (s *S3Backend) HCL() string {
 	fmtStr := `
 terraform {
   backend s3 {

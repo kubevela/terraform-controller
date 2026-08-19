@@ -706,6 +706,10 @@ func TestGetProviderFromConfiguration(t *testing.T) {
 	}
 	k8sClient2 := fake.NewClientBuilder().WithScheme(s).WithObjects(provider).Build()
 
+	// client.Client.Get never populates TypeMeta on the returned object, matching real API server behavior.
+	wantProvider := provider.DeepCopy()
+	wantProvider.TypeMeta = metav1.TypeMeta{}
+
 	type args struct {
 		k8sClient client.Client
 		namespace string
@@ -748,7 +752,7 @@ func TestGetProviderFromConfiguration(t *testing.T) {
 				name:      "a",
 			},
 			want: want{
-				provider: provider,
+				provider: wantProvider,
 			},
 		},
 	}

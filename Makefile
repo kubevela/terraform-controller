@@ -90,7 +90,7 @@ else
 CONTROLLER_GEN=$(shell which controller-gen)
 endif
 
-GOLANGCILINT_VERSION ?= v1.60.1
+GOLANGCILINT_VERSION ?= v2.12.2
 HOSTOS := $(shell uname -s | tr '[:upper:]' '[:lower:]')
 HOSTARCH := $(shell uname -m)
 ifeq ($(HOSTARCH),x86_64)
@@ -105,7 +105,7 @@ else ifeq (, $(shell which $(GOBIN)/golangci-lint))
 	@{ \
 	set -e ;\
 	echo 'installing golangci-lint-$(GOLANGCILINT_VERSION)' ;\
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOBIN) $(GOLANGCILINT_VERSION) ;\
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/$(GOLANGCILINT_VERSION)/install.sh | sh -s -- -b $(GOBIN) $(GOLANGCILINT_VERSION) ;\
 	echo 'Successfully installed' ;\
 	}
 GOLANGCILINT=$(GOBIN)/golangci-lint

@@ -15,7 +15,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	fakeclient "k8s.io/client-go/kubernetes/fake"
-	"k8s.io/client-go/kubernetes/typed/core/v1/fake"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/flowcontrol"
 
@@ -55,8 +54,8 @@ func TestGetPodLog(t *testing.T) {
 
 	k8sClientSet := fakeclient.NewSimpleClientset(pod)
 
-	patches := gomonkey.ApplyMethod(reflect.TypeOf(&fake.FakePods{}), "GetLogs",
-		func(_ *fake.FakePods, _ string, _ *v1.PodLogOptions) *rest.Request {
+	patches := gomonkey.ApplyMethodFunc(reflect.TypeOf(k8sClientSet.CoreV1().Pods("default")), "GetLogs",
+		func(_ string, _ *v1.PodLogOptions) *rest.Request {
 			rate := flowcontrol.NewFakeNeverRateLimiter()
 			restClient, _ := rest.NewRESTClient(
 				&url.URL{

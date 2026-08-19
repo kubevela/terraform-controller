@@ -1,0 +1,13 @@
+# Snyk (https://snyk.io) policy file
+version: v1.25.0
+
+ignore:
+  SNYK-GOLANG-GITHUBCOMGOLANGJWTJWT-8341243:
+    - '*':
+        reason: >-
+          False positive for this module graph. go.mod resolves
+          github.com/golang-jwt/jwt/v5@v5.2.2 via k8s.io/apiserver;
+          CVE-2024-51744 only affects github.com/golang-jwt/jwt/v4 < 4.5.1.
+          v5 is not affected.
+        expires: 2027-08-18T00:00:00.000Z
+        created: 2026-08-18T13:45:00.000Z

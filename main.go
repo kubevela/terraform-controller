@@ -82,12 +82,14 @@ func main() {
 		Scheme: scheme,
 	}
 
+	mgmOptions.Cache = cache.Options{
+		SyncPeriod: &syncPeriod,
+	}
+
 	// Only set specific namespace if provided, otherwise watch all namespaces
 	if namespace != "" {
-		mgmOptions.Cache = cache.Options{
-			DefaultNamespaces: map[string]cache.Config{
-				namespace: {},
-			},
+		mgmOptions.Cache.DefaultNamespaces = map[string]cache.Config{
+			namespace: {},
 		}
 	}
 
