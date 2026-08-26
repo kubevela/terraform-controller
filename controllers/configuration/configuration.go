@@ -61,6 +61,10 @@ func SetRegion(ctx context.Context, k8sClient client.Client, namespace, name str
 		return configuration.Spec.Region, nil
 	}
 
+	if !configuration.DeletionTimestamp.IsZero() {
+		return providerObj.Spec.Region, nil
+	}
+
 	configuration.Spec.Region = providerObj.Spec.Region
 	return providerObj.Spec.Region, Update(ctx, k8sClient, &configuration)
 }
