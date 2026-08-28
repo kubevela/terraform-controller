@@ -78,6 +78,10 @@ type TFState struct {
 type TfStateProperty struct {
 	Value interface{} `json:"value,omitempty"`
 	Type  interface{} `json:"type,omitempty"`
+	// Sensitive indicates that this output was declared with `sensitive = true` in Terraform.
+	// When true, the real value is stored only in the WriteConnectionSecret; the Configuration
+	// status will show a placeholder instead.
+	Sensitive bool `json:"sensitive,omitempty"`
 }
 
 // ToProperty converts TfStateProperty type to Property
@@ -91,7 +95,8 @@ func (tp *TfStateProperty) ToProperty() (v1beta2.Property, error) {
 		return property, errors.Wrapf(err, "failed to convert value %s of terraform state outputs to string", tp.Value)
 	}
 	property = v1beta2.Property{
-		Value: sv,
+		Value:     sv,
+		Sensitive: tp.Sensitive,
 	}
 	return property, err
 }
