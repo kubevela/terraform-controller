@@ -20,8 +20,9 @@ limitations under the License.
 package v1beta2
 
 import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"sigs.k8s.io/controller-runtime/pkg/scheme"
 )
 
 var (
@@ -29,8 +30,18 @@ var (
 	GroupVersion = schema.GroupVersion{Group: "terraform.core.oam.dev", Version: "v1beta2"}
 
 	// SchemeBuilder is used to add go types to the GroupVersionKind scheme
-	SchemeBuilder = &scheme.Builder{GroupVersion: GroupVersion}
+	SchemeBuilder = runtime.NewSchemeBuilder(addKnownTypes)
 
 	// AddToScheme adds the types in this group-version to the given scheme.
 	AddToScheme = SchemeBuilder.AddToScheme
 )
+
+// addKnownTypes registers the types in this group-version with the given scheme.
+func addKnownTypes(scheme *runtime.Scheme) error {
+	scheme.AddKnownTypes(GroupVersion,
+		&Configuration{},
+		&ConfigurationList{},
+	)
+	metav1.AddToGroupVersion(scheme, GroupVersion)
+	return nil
+}

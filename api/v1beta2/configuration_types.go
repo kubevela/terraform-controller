@@ -187,7 +187,3 @@ type ConfigurationList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []Configuration `json:"items"`
 }
-
-func init() {
-	SchemeBuilder.Register(&Configuration{}, &ConfigurationList{})
-}

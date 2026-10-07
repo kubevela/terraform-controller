@@ -1,6 +1,6 @@
 module tf_validation_backend
 
-go 1.25.13
+go 1.27.1
 
 require github.com/hashicorp/hcl/v2 v2.11.1
 

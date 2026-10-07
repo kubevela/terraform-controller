@@ -28,7 +28,7 @@ import (
 // ConfigurationSpec defines the desired state of Configuration
 type ConfigurationSpec struct {
 	// JSON is the Terraform JSON syntax configuration.
-
+	//
 	// Deprecated: after v0.3.1, use HCL instead.
 	JSON string `json:"JSON,omitempty"`
 	// HCL is the Terraform HCL type configuration
@@ -143,8 +143,4 @@ type ConfigurationList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []Configuration `json:"items"`
-}
-
-func init() {
-	SchemeBuilder.Register(&Configuration{}, &ConfigurationList{})
 }
