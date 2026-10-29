@@ -3,15 +3,19 @@ package backend
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"reflect"
 	"testing"
 
 	"gotest.tools/assert"
 
+	coordinationv1 "k8s.io/api/coordination/v1"
 	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
 func TestK8SBackend_HCL(t *testing.T) {
@@ -217,6 +221,108 @@ func TestK8SBackend_CleanUp(t *testing.T) {
 			}
 			if err := k.CleanUp(tt.args.ctx); (err != nil) != tt.wantErr {
 				t.Errorf("CleanUp() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestK8SBackend_CleanUpStateLock(t *testing.T) {
+	const ns = "default"
+	secret := func(name string) client.Object {
+		return &v1.Secret{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns}, Type: v1.SecretTypeOpaque}
+	}
+	lease := func(name string) client.Object {
+		return &coordinationv1.Lease{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns}}
+	}
+	failLeaseDelete := interceptor.Funcs{
+		Delete: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+			if _, ok := obj.(*coordinationv1.Lease); ok {
+				return apierrors.NewForbidden(coordinationv1.Resource("leases"), obj.GetName(), errors.New("forbidden"))
+			}
+			return c.Delete(ctx, obj, opts...)
+		},
+	}
+
+	tests := []struct {
+		name               string
+		objects            []client.Object
+		interceptors       *interceptor.Funcs
+		secretSuffix       string
+		legacySecretSuffix string
+		wantDeleted        []client.Object
+		wantKept           []client.Object
+	}{
+		{
+			name:         "deletes the state secret and its lock lease",
+			objects:      []client.Object{secret("tfstate-default-a"), lease("lock-tfstate-default-a")},
+			secretSuffix: "a",
+			wantDeleted:  []client.Object{secret("tfstate-default-a"), lease("lock-tfstate-default-a")},
+		},
+		{
+			name:         "no lock lease",
+			objects:      []client.Object{secret("tfstate-default-a")},
+			secretSuffix: "a",
+			wantDeleted:  []client.Object{secret("tfstate-default-a")},
+		},
+		{
+			name:         "no state secret",
+			objects:      []client.Object{lease("lock-tfstate-default-a")},
+			secretSuffix: "a",
+			wantDeleted:  []client.Object{lease("lock-tfstate-default-a")},
+		},
+		{
+			name: "deletes the legacy and current secrets and lock leases",
+			objects: []client.Object{
+				secret("tfstate-default-a"), lease("lock-tfstate-default-a"),
+				secret("tfstate-default-xxxx-xxxx"), lease("lock-tfstate-default-xxxx-xxxx"),
+			},
+			secretSuffix:       "xxxx-xxxx",
+			legacySecretSuffix: "a",
+			wantDeleted: []client.Object{
+				secret("tfstate-default-a"), lease("lock-tfstate-default-a"),
+				secret("tfstate-default-xxxx-xxxx"), lease("lock-tfstate-default-xxxx-xxxx"),
+			},
+		},
+		{
+			name: "keeps leases of other states and unrelated leases",
+			objects: []client.Object{
+				secret("tfstate-default-a"), lease("lock-tfstate-default-a"),
+				secret("tfstate-default-b"), lease("lock-tfstate-default-b"),
+				lease("kubevela"),
+			},
+			secretSuffix: "a",
+			wantDeleted:  []client.Object{secret("tfstate-default-a"), lease("lock-tfstate-default-a")},
+			wantKept:     []client.Object{secret("tfstate-default-b"), lease("lock-tfstate-default-b"), lease("kubevela")},
+		},
+		{
+			name:         "failing to delete the lock lease doesn't fail clean up",
+			objects:      []client.Object{secret("tfstate-default-a"), lease("lock-tfstate-default-a")},
+			interceptors: &failLeaseDelete,
+			secretSuffix: "a",
+			wantDeleted:  []client.Object{secret("tfstate-default-a")},
+			wantKept:     []client.Object{lease("lock-tfstate-default-a")},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			builder := fake.NewClientBuilder().WithObjects(tt.objects...)
+			if tt.interceptors != nil {
+				builder = builder.WithInterceptorFuncs(*tt.interceptors)
+			}
+			k := &K8SBackend{
+				Client:             builder.Build(),
+				SecretSuffix:       tt.secretSuffix,
+				SecretNS:           ns,
+				LegacySecretSuffix: tt.legacySecretSuffix,
+			}
+			assert.NilError(t, k.CleanUp(context.Background()))
+
+			for _, obj := range tt.wantDeleted {
+				err := k.Client.Get(context.Background(), client.ObjectKeyFromObject(obj), obj)
+				assert.Assert(t, apierrors.IsNotFound(err), "%T %s should be deleted, got err: %v", obj, obj.GetName(), err)
+			}
+			for _, obj := range tt.wantKept {
+				assert.NilError(t, k.Client.Get(context.Background(), client.ObjectKeyFromObject(obj), obj), "%T %s should be kept", obj, obj.GetName())
 			}
 		})
 	}

@@ -22,7 +22,9 @@ import (
 	"os"
 
 	"github.com/pkg/errors"
+	coordinationv1 "k8s.io/api/coordination/v1"
 	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -37,6 +39,8 @@ const (
 	TerraformStateNameInSecret = "tfstate"
 	// TFBackendSecret is the Secret name for Kubernetes backend
 	TFBackendSecret = "tfstate-%s-%s"
+	// stateLockLeasePrefix is prepended to the state secret name by the Terraform kubernetes backend to name its lock Lease
+	stateLockLeasePrefix = "lock-"
 )
 
 // K8SBackend is used to interact with the Terraform kubernetes backend
@@ -139,7 +143,7 @@ func (k *K8SBackend) GetTFStateJSON(ctx context.Context) ([]byte, error) {
 	return tfStateJSON, nil
 }
 
-// CleanUp will delete the Terraform kubernetes backend secret when deleting the configuration object
+// CleanUp will delete the Terraform kubernetes backend secret and its state lock lease when deleting the configuration object
 func (k *K8SBackend) CleanUp(ctx context.Context) error {
 	klog.InfoS("Deleting the legacy secret which stores Kubernetes backend", "Name", k.legacySecretName())
 	var kubernetesBackendSecret v1.Secret
@@ -148,6 +152,9 @@ func (k *K8SBackend) CleanUp(ctx context.Context) error {
 			return err
 		}
 	}
+	if k.LegacySecretSuffix != "" {
+		k.deleteStateLock(ctx, k.legacySecretName())
+	}
 
 	klog.InfoS("Deleting the secret which stores Kubernetes backend", "Name", k.secretName())
 	if err := k.Client.Get(ctx, client.ObjectKey{Name: k.secretName(), Namespace: k.SecretNS}, &kubernetesBackendSecret); err == nil {
@@ -155,7 +162,25 @@ func (k *K8SBackend) CleanUp(ctx context.Context) error {
 			return err
 		}
 	}
+	k.deleteStateLock(ctx, k.secretName())
 	return nil
+}
+
+// deleteStateLock deletes the Lease the Terraform kubernetes backend uses to lock the given state secret.
+// Terraform clears the Lease on unlock but never deletes it.
+// The Lease is deleted by name without a Get: a cached Get would start a cluster-wide Lease informer, which needs
+// list/watch permissions the controller doesn't have. Errors are only logged so a leftover Lease can't block deletion.
+func (k *K8SBackend) deleteStateLock(ctx context.Context, secretName string) {
+	lease := &coordinationv1.Lease{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      stateLockLeasePrefix + secretName,
+			Namespace: k.SecretNS,
+		},
+	}
+	klog.InfoS("Deleting the lease which locks the Terraform state", "Name", lease.Name, "Namespace", lease.Namespace)
+	if err := k.Client.Delete(ctx, lease); err != nil && !apierrors.IsNotFound(err) {
+		klog.ErrorS(err, "Failed to delete the lease which locks the Terraform state", "Name", lease.Name, "Namespace", lease.Namespace)
+	}
 }
 
 // HCL returns the backend hcl code string
