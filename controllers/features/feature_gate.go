@@ -24,10 +24,18 @@ import (
 
 const (
 	AllowDeleteProvisioningResource featuregate.Feature = "AllowDeleteProvisioningResource"
+
+	// MaskSensitiveOutputs controls whether Terraform outputs marked `sensitive = true`
+	// are redacted in the Configuration custom resource status.
+	// When enabled (default), status.apply.outputs[key].value shows "[sensitive]" and
+	// the real value is written exclusively to the WriteConnectionSecret.
+	// Disable with --feature-gates=MaskSensitiveOutputs=false to restore legacy behavior.
+	MaskSensitiveOutputs featuregate.Feature = "MaskSensitiveOutputs"
 )
 
 var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	AllowDeleteProvisioningResource: {Default: false, PreRelease: featuregate.Alpha},
+	MaskSensitiveOutputs:            {Default: true, PreRelease: featuregate.Beta},
 }
 
 func init() {

@@ -1,6 +1,8 @@
 package process
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -16,6 +18,7 @@ import (
 	"github.com/oam-dev/terraform-controller/api/v1beta1"
 	"github.com/oam-dev/terraform-controller/api/v1beta2"
 	"github.com/oam-dev/terraform-controller/controllers/configuration/backend"
+	"github.com/oam-dev/terraform-controller/controllers/features"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	batchv1 "k8s.io/api/batch/v1"
@@ -26,6 +29,8 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apiserver/pkg/util/feature"
+	featuretest "k8s.io/component-base/featuregate/testing"
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -859,6 +864,44 @@ func TestTfStatePropertyToToProperty(t *testing.T) {
 	}
 }
 
+// TestTfStatePropertyToPropertySensitive verifies that the Sensitive flag is
+// correctly captured from TfStateProperty and forwarded to the resulting Property.
+func TestTfStatePropertyToPropertySensitive(t *testing.T) {
+	testcases := []struct {
+		name          string
+		input         TfStateProperty
+		wantValue     string
+		wantSensitive bool
+	}{
+		{
+			name:          "non-sensitive string output",
+			input:         TfStateProperty{Value: "hello", Type: "string", Sensitive: false},
+			wantValue:     "hello",
+			wantSensitive: false,
+		},
+		{
+			name:          "sensitive string output",
+			input:         TfStateProperty{Value: "super-secret", Type: "string", Sensitive: true},
+			wantValue:     "super-secret",
+			wantSensitive: true,
+		},
+		{
+			name:          "sensitive integer output",
+			input:         TfStateProperty{Value: 42, Type: "number", Sensitive: true},
+			wantValue:     "42",
+			wantSensitive: true,
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			prop, err := tc.input.ToProperty()
+			assert.NoError(t, err)
+			assert.Equal(t, tc.wantValue, prop.Value)
+			assert.Equal(t, tc.wantSensitive, prop.Sensitive)
+		})
+	}
+}
+
 func TestIsTFStateGenerated(t *testing.T) {
 	type args struct {
 		ctx           context.Context
@@ -1377,6 +1420,111 @@ func TestGetTFOutputs(t *testing.T) {
 		})
 	}
 
+}
+
+// TestGetTFOutputsSensitiveMasking verifies that:
+//  1. When MaskSensitiveOutputs is enabled (default), sensitive outputs are
+//     redacted in the returned status map but written with real values to the Secret.
+//  2. When MaskSensitiveOutputs is disabled, all values pass through unchanged
+//     (legacy behavior).
+func TestGetTFOutputsSensitiveMasking(t *testing.T) {
+	ctx := context.Background()
+
+	// tfStateData encodes a state file containing one sensitive and one non-sensitive output.
+	// Equivalent JSON (before gzip+base64):
+	// {
+	//   "outputs": {
+	//     "public_ip":   {"value": "1.2.3.4",       "type": "string", "sensitive": false},
+	//     "db_password": {"value": "s3cr3t",        "type": "string", "sensitive": true}
+	//   }
+	// }
+	rawState := `{
+		"version": 4,
+		"terraform_version": "1.0.0",
+		"outputs": {
+			"public_ip":   {"value": "1.2.3.4", "type": "string", "sensitive": false},
+			"db_password": {"value": "s3cr3t",  "type": "string", "sensitive": true}
+		}
+	}`
+
+	var gzBuf bytes.Buffer
+	gzWriter := gzip.NewWriter(&gzBuf)
+	_, _ = gzWriter.Write([]byte(rawState))
+	_ = gzWriter.Close()
+	compressedState := base64.StdEncoding.EncodeToString(gzBuf.Bytes())
+	compressedStateBytes, _ := base64.StdEncoding.DecodeString(compressedState)
+
+	tfStateSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "tfstate-default-sensitive-test",
+			Namespace: "default",
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: map[string][]byte{
+			"tfstate": compressedStateBytes,
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	_ = corev1.AddToScheme(scheme)
+	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(tfStateSecret).Build()
+
+	meta := &TFConfigurationMeta{
+		Backend: &backend.K8SBackend{
+			Client:       k8sClient,
+			SecretSuffix: "sensitive-test",
+			SecretNS:     "default",
+		},
+	}
+
+	configuration := v1beta2.Configuration{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "my-config",
+			Namespace: "default",
+		},
+		Spec: v1beta2.ConfigurationSpec{
+			WriteConnectionSecretToReference: &crossplane.SecretReference{
+				Name:      "my-connection-secret",
+				Namespace: "default",
+			},
+		},
+	}
+
+	t.Run("feature gate ON: sensitive output is redacted in status but real value is in Secret", func(t *testing.T) {
+		featuretest.SetFeatureGateDuringTest(t, feature.DefaultFeatureGate, features.MaskSensitiveOutputs, true)
+
+		statusOutputs, err := meta.getTFOutputs(ctx, k8sClient, configuration)
+		assert.NoError(t, err)
+
+		// Non-sensitive output must be unchanged in status
+		assert.Equal(t, "1.2.3.4", statusOutputs["public_ip"].Value)
+		assert.False(t, statusOutputs["public_ip"].Sensitive)
+
+		// Sensitive output must be redacted in status
+		assert.Equal(t, SensitiveOutputPlaceholder, statusOutputs["db_password"].Value)
+		assert.True(t, statusOutputs["db_password"].Sensitive)
+
+		// The connection Secret must contain the REAL value
+		var connSecret corev1.Secret
+		err = k8sClient.Get(ctx, client.ObjectKey{Name: "my-connection-secret", Namespace: "default"}, &connSecret)
+		assert.NoError(t, err)
+		assert.Equal(t, []byte("s3cr3t"), connSecret.Data["db_password"])
+		assert.Equal(t, []byte("1.2.3.4"), connSecret.Data["public_ip"])
+	})
+
+	t.Run("feature gate OFF: all values pass through to status (legacy behavior)", func(t *testing.T) {
+		featuretest.SetFeatureGateDuringTest(t, feature.DefaultFeatureGate, features.MaskSensitiveOutputs, false)
+
+		statusOutputs, err := meta.getTFOutputs(ctx, k8sClient, configuration)
+		assert.NoError(t, err)
+
+		// Non-sensitive output unchanged
+		assert.Equal(t, "1.2.3.4", statusOutputs["public_ip"].Value)
+
+		// Sensitive output must NOT be redacted when gate is off
+		assert.Equal(t, "s3cr3t", statusOutputs["db_password"].Value)
+		assert.True(t, statusOutputs["db_password"].Sensitive)
+	})
 }
 
 func TestUpdateApplyStatus(t *testing.T) {

@@ -24,11 +24,18 @@ import (
 	"github.com/oam-dev/terraform-controller/api/v1beta2"
 	tfcfg "github.com/oam-dev/terraform-controller/controllers/configuration"
 	"github.com/oam-dev/terraform-controller/controllers/configuration/backend"
+	"github.com/oam-dev/terraform-controller/controllers/features"
 	"github.com/oam-dev/terraform-controller/controllers/provider"
 	"github.com/oam-dev/terraform-controller/controllers/util"
+	"k8s.io/apiserver/pkg/util/feature"
 )
 
 type Option func(spec v1beta2.Configuration, meta *TFConfigurationMeta)
+
+// SensitiveOutputPlaceholder is the string written to status.apply.outputs[key].value
+// when an output is marked `sensitive = true` in Terraform and the MaskSensitiveOutputs
+// feature gate is enabled. The real value is stored exclusively in the WriteConnectionSecret.
+const SensitiveOutputPlaceholder = "[sensitive]"
 
 // ControllerNamespaceOption will set the controller namespace for TFConfigurationMeta
 func ControllerNamespaceOption(controllerNamespace string) Option {
@@ -468,6 +475,9 @@ func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient cli
 	if err := json.Unmarshal(tfStateJSON, &tfState); err != nil {
 		return nil, err
 	}
+
+	// outputs holds the real (unredacted) values and is used to populate the
+	// WriteConnectionSecret so that sensitive values remain retrievable.
 	outputs := make(map[string]v1beta2.Property)
 	for k, v := range tfState.Outputs {
 		property, err := v.ToProperty()
@@ -476,9 +486,36 @@ func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient cli
 		}
 		outputs[k] = property
 	}
+
+	// statusOutputs is what gets written to status.apply.outputs.
+	// When MaskSensitiveOutputs is enabled (the default), any output with
+	// Sensitive=true is replaced with the placeholder string so that the real
+	// value is never exposed in the Configuration CR.
+	statusOutputs := make(map[string]v1beta2.Property)
+	if feature.DefaultFeatureGate.Enabled(features.MaskSensitiveOutputs) {
+		for k, v := range outputs {
+			if v.Sensitive {
+				klog.V(2).InfoS("Redacting sensitive output from Configuration status. "+
+					"The real value is available in the WriteConnectionSecret.",
+					"output", k, "configuration", configuration.Name, "namespace", configuration.Namespace)
+				statusOutputs[k] = v1beta2.Property{
+					Value:     SensitiveOutputPlaceholder,
+					Sensitive: true,
+				}
+			} else {
+				statusOutputs[k] = v
+			}
+		}
+	} else {
+		// Feature disabled: legacy behavior — expose all values in status.
+		for k, v := range outputs {
+			statusOutputs[k] = v
+		}
+	}
+
 	writeConnectionSecretToReference := configuration.Spec.WriteConnectionSecretToReference
 	if writeConnectionSecretToReference == nil || writeConnectionSecretToReference.Name == "" {
-		return outputs, nil
+		return statusOutputs, nil
 	}
 
 	name := writeConnectionSecretToReference.Name
@@ -486,6 +523,7 @@ func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient cli
 	if ns == "" {
 		ns = types.DefaultNamespace
 	}
+	// Always write the real (unredacted) values to the Secret, regardless of the feature gate.
 	data := make(map[string][]byte)
 	for k, v := range outputs {
 		data[k] = []byte(v.Value)
@@ -535,7 +573,7 @@ func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient cli
 			return nil, err
 		}
 	}
-	return outputs, nil
+	return statusOutputs, nil
 }
 
 func (meta *TFConfigurationMeta) PrepareTFVariables(configuration *v1beta2.Configuration) error {
