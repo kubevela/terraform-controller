@@ -515,19 +515,23 @@ func (meta *TFConfigurationMeta) getTFOutputs(ctx context.Context, k8sClient cli
 			}
 		}
 	} else {
-		// check the owner of this secret
-		labels := gotSecret.ObjectMeta.Labels
-		ownerName := labels["terraform.core.oam.dev/owned-by"]
-		ownerNamespace := labels["terraform.core.oam.dev/owned-namespace"]
-		if (ownerName != "" && ownerName != configurationName) ||
-			(ownerNamespace != "" && ownerNamespace != configuration.Namespace) {
+		if !OwnsConnectionSecret(&configuration, &gotSecret) {
+			labels := gotSecret.ObjectMeta.Labels
+			ownerName := labels["terraform.core.oam.dev/owned-by"]
+			ownerNamespace := labels["terraform.core.oam.dev/owned-namespace"]
+			owner := fmt.Sprintf("whose owner is configuration(namespace: %s ; name: %s)", ownerNamespace, ownerName)
+			if ownerName == "" {
+				owner = fmt.Sprintf("which no configuration owns; if this configuration wrote it before the ownership labels existed, "+
+					"label it to adopt it: kubectl label secret --overwrite -n %s %s terraform.core.oam.dev/created-by=terraform-controller "+
+					"terraform.core.oam.dev/owned-by=%s terraform.core.oam.dev/owned-namespace=%s",
+					gotSecret.Namespace, name, configurationName, configuration.Namespace)
+			}
 			errMsg := fmt.Sprintf(
-				"configuration(namespace: %s ; name: %s) cannot update secret(namespace: %s ; name: %s) whose owner is configuration(namespace: %s ; name: %s)",
+				"configuration(namespace: %s ; name: %s) cannot update secret(namespace: %s ; name: %s) %s",
 				configuration.Namespace, configurationName,
-				gotSecret.Namespace, name,
-				ownerNamespace, ownerName,
+				gotSecret.Namespace, name, owner,
 			)
-			klog.ErrorS(err, "fail to update backend secret")
+			klog.InfoS("Refused to update a connection secret", "reason", errMsg)
 			return nil, errors.New(errMsg)
 		}
 		gotSecret.Data = data
@@ -754,4 +758,14 @@ func getTerraformJSONVariable(tfVariables *runtime.RawExtension) (map[string]int
 		environments[fmt.Sprintf("TF_VAR_%s", k)] = v
 	}
 	return environments, nil
+}
+
+// OwnsConnectionSecret reports whether secret is the connection Secret configuration created: the
+// controller labels each one it creates with its Configuration's name and namespace, and a Secret
+// without those labels belongs to someone else.
+func OwnsConnectionSecret(configuration *v1beta2.Configuration, secret *v1.Secret) bool {
+	labels := secret.GetLabels()
+	return labels["terraform.core.oam.dev/created-by"] == "terraform-controller" &&
+		labels["terraform.core.oam.dev/owned-by"] == configuration.Name &&
+		labels["terraform.core.oam.dev/owned-namespace"] == configuration.Namespace
 }
