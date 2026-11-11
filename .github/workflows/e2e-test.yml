@@ -38,10 +38,10 @@ jobs:
           go get -v -t -d ./...
 
       - name: Setup Kind
-        uses: engineerd/setup-kind@v0.5.0
+        uses: helm/kind-action@ea822c7bf1874f08e5a491df991c228edffc3376 # v1.15.2
         with:
           version: ${{ env.KIND_VERSION }}
-          skipClusterCreation: true
+          install_only: true
 
       - name: Setup Kind Cluster
         run: |
