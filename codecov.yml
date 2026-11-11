@@ -7,3 +7,7 @@ coverage:
     patch:
       default:
         target: 80%
+
+ignore:
+  # e2e helpers run on the CI host; the controller under test runs in the cluster
+  - "e2e/**"
