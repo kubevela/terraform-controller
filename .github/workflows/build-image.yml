@@ -16,6 +16,13 @@ jobs:
       contents: read
       packages: write
     steps:
+      - name: Allow manual runs only on master and release branches
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          if [[ ${GITHUB_REF} != "refs/heads/master" && ${GITHUB_REF} != refs/heads/release-* ]]; then
+            echo "::error::Manual runs are only allowed on master or a release-* branch, not ${GITHUB_REF}"
+            exit 1
+          fi
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Docker meta
@@ -28,6 +35,7 @@ jobs:
           tags: |
             type=ref,event=tag
             type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value={{branch}}-{{sha}},enable=${{ github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/release-') }}
       - name: Login docker.io
         uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
