@@ -23,7 +23,8 @@ jobs:
   detect-noop:
     runs-on: ubuntu-24.04
     permissions:
-      actions: read
+      actions: write
+      contents: read
     outputs:
       noop: ${{ steps.noop.outputs.should_skip }}
     steps:
