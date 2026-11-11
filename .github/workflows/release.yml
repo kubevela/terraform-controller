@@ -6,10 +6,15 @@ on:
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+permissions:
+  contents: read
+
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     name: build
+    permissions:
+      contents: write
     strategy:
       matrix:
         TARGETS: [ linux/amd64, darwin/amd64, windows/amd64, linux/arm64, darwin/arm64 ]
@@ -20,20 +25,20 @@ jobs:
       DIST_DIRS: find * -type d -exec
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Set up Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: 1.17
       - name: Get release
         id: get_release
-        uses: bruceadams/get-release@v1.2.2
+        uses: bruceadams/get-release@74c3d60f5a28f358ccf241a00c9021ea16f0569f # v1.3.2
       - name: Get matrix
         id: get_matrix
         run: |
           TARGETS=${{matrix.TARGETS}}
-          echo ::set-output name=OS::${TARGETS%/*}
-          echo ::set-output name=ARCH::${TARGETS#*/}
+          echo "OS=${TARGETS%/*}" >> "$GITHUB_OUTPUT"
+          echo "ARCH=${TARGETS#*/}" >> "$GITHUB_OUTPUT"
       - name: Get ldflags
         id: get_ldflags
         run: |
@@ -56,14 +61,14 @@ jobs:
           cd .. && \
           sha256sum backup_restore/backup-restore-* >> sha256-${{ steps.get_matrix.outputs.OS }}-${{ steps.get_matrix.outputs.ARCH }}.txt \
       - name: Upload backup-restore tar.gz
-        uses: actions/upload-release-asset@v1.0.2
+        uses: actions/upload-release-asset@e8f9f06c4b078e705bd2ea027f0926603fc9b4d5 # v1.0.2
         with:
           upload_url: ${{ steps.get_release.outputs.upload_url }}
           asset_path: ./_bin/backup_restore/backup-restore-${{ steps.get_matrix.outputs.OS }}-${{ steps.get_matrix.outputs.ARCH }}.tar.gz
           asset_name: backup-restore-${{ env.BACKUP_RESTORE_TOOL_VERSION }}-${{ steps.get_matrix.outputs.OS }}-${{ steps.get_matrix.outputs.ARCH }}.tar.gz
           asset_content_type: binary/octet-stream
       - name: Upload backup-restore zip
-        uses: actions/upload-release-asset@v1.0.2
+        uses: actions/upload-release-asset@e8f9f06c4b078e705bd2ea027f0926603fc9b4d5 # v1.0.2
         with:
           upload_url: ${{ steps.get_release.outputs.upload_url }}
           asset_path: ./_bin/backup_restore/backup-restore-${{ steps.get_matrix.outputs.OS }}-${{ steps.get_matrix.outputs.ARCH }}.zip
