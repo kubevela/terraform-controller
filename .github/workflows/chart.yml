@@ -5,15 +5,24 @@ on:
       - "v*"
   workflow_dispatch: {}
 
+permissions:
+  contents: read
+
 jobs:
   publish-charts:
     env:
       HELM_CHART: chart/
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@master
+      - name: Publish only from a tag
+        run: |
+          if [[ ${GITHUB_REF} != refs/tags/v* ]]; then
+            echo "::error::The chart version comes from the tag name; run this on a v* tag, not ${GITHUB_REF}"
+            exit 1
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install Helm
-        uses: azure/setup-helm@v1
+        uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
         with:
           version: v3.4.0
       - name: Get the version
@@ -28,7 +37,7 @@ jobs:
           sed -i "s/tag: latest/tag: ${image_tag}/g" $HELM_CHART/values.yaml
           chart_semver=${chart_version#"v"}
           sed -i "s/0.1.0/$chart_semver/g" $HELM_CHART/Chart.yaml
-      - uses: jnwng/github-app-installation-token-action@v2
+      - uses: jnwng/github-app-installation-token-action@c54add4c02866dc41e106745ac6dcf5cdd6339e5 # v2
         id: get_app_token
         with:
           appId: 340472

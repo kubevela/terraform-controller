@@ -10,14 +10,17 @@ on:
       - master
       - release-*
 
+permissions:
+  contents: read
+
 jobs:
   license_check:
     runs-on: ubuntu-24.04
     name: Check for unapproved licenses
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
+        uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
         with:
           ruby-version: 2.7.1
       - name: Install dependencies
