@@ -36,6 +36,7 @@ jobs:
           paths_ignore: '["**.md", "**.png", "**.jpg"]'
           do_not_skip: '["workflow_dispatch", "schedule", "push"]'
           concurrent_skipping: never
+        continue-on-error: true
 
   make-reviewable:
     runs-on: ubuntu-24.04
