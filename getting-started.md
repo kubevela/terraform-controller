@@ -28,7 +28,7 @@ TEST SUITE: None
 
 The Configurations run in Jobs that use the `terraformImage` value, by default
 `oamdev/docker-terraform:1.1.6` (Terraform 1.1.9). For Terraform 1.5, set
-`--set terraformImage=oamdev/docker-terraform:1.2.1`. These images are built for `linux/amd64`
+`--set terraformImage=oamdev/docker-terraform:1.2.1@sha256:8054ece3519c4752767583b3d6c4395afeb19d35a96ecc849104cf4aaff67065`. These images are built for `linux/amd64`
 only, so the Jobs need amd64 nodes.
 
 ### Authenticate Cloud Provider and Create a Cloud Resource
