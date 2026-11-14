@@ -131,7 +131,7 @@ goimports:
 ifeq (, $(shell which goimports))
 	@{ \
 	set -e ;\
-	GO111MODULE=off go get -u golang.org/x/tools/cmd/goimports ;\
+	go install golang.org/x/tools/cmd/goimports@v0.1.11 ;\
 	}
 GOIMPORTS=$(GOBIN)/goimports
 else
