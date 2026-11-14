@@ -357,16 +357,16 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 
 	meta.TerraformImage = os.Getenv("TERRAFORM_IMAGE")
 	if meta.TerraformImage == "" {
-		meta.TerraformImage = "oamdev/docker-terraform:1.1.2"
+		meta.TerraformImage = "oamdev/docker-terraform:1.1.6@sha256:92a21948dfb27dd2e842077adcc769dd85bcf8b1e0785eb0abcf24895858b881"
 	}
 
 	meta.BusyboxImage = os.Getenv("BUSYBOX_IMAGE")
 	if meta.BusyboxImage == "" {
-		meta.BusyboxImage = "busybox:latest"
+		meta.BusyboxImage = "busybox:1.38.0@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4"
 	}
 	meta.GitImage = os.Getenv("GIT_IMAGE")
 	if meta.GitImage == "" {
-		meta.GitImage = "alpine/git:latest"
+		meta.GitImage = "alpine/git:2.54.0@sha256:6a1fdb962814ca11508ca8d1bab94375b5b7ac4e4a9a40981c29fc32c02f095d"
 	}
 
 	meta.BackoffLimit = math.MaxInt32
