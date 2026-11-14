@@ -357,7 +357,7 @@ func (r *ConfigurationReconciler) preCheck(ctx context.Context, configuration *v
 
 	meta.TerraformImage = os.Getenv("TERRAFORM_IMAGE")
 	if meta.TerraformImage == "" {
-		meta.TerraformImage = "oamdev/docker-terraform:1.1.2"
+		meta.TerraformImage = "oamdev/docker-terraform:1.1.6@sha256:92a21948dfb27dd2e842077adcc769dd85bcf8b1e0785eb0abcf24895858b881"
 	}
 
 	meta.BusyboxImage = os.Getenv("BUSYBOX_IMAGE")
