@@ -13,10 +13,10 @@ Refer to [Helm official Doc](https://helm.sh/docs/intro/install/) to install `he
 - Install Kubernetes Terraform Controller Chart
 
 ```shell
-$ helm repo add kubevela-addons https://charts.kubevela.net/addons
-"kubevela-addons" has been added to your repositories
+$ helm repo add kubevela https://kubevela.github.io/charts
+"kubevela" has been added to your repositories
 
-$ helm upgrade --install terraform-controller -n terraform --create-namespace kubevela-addons/terraform-controller
+$ helm upgrade --install terraform-controller -n terraform --create-namespace kubevela/terraform-controller
 Release "terraform-controller" does not exist. Installing it now.
 NAME: terraform-controller
 LAST DEPLOYED: Mon Aug 30 11:23:47 2021
@@ -25,6 +25,11 @@ STATUS: deployed
 REVISION: 1
 TEST SUITE: None
 ```
+
+The Configurations run in Jobs that use the `terraformImage` value, by default
+`oamdev/docker-terraform:1.1.6@sha256:92a21948dfb27dd2e842077adcc769dd85bcf8b1e0785eb0abcf24895858b881` (Terraform 1.1.9). For Terraform 1.5, set
+`--set terraformImage=oamdev/docker-terraform:1.2.1@sha256:8054ece3519c4752767583b3d6c4395afeb19d35a96ecc849104cf4aaff67065`. These images are built for `linux/amd64`
+only, so the Jobs need amd64 nodes.
 
 ### Authenticate Cloud Provider and Create a Cloud Resource
 
