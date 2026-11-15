@@ -10,8 +10,11 @@ busyboxImage: busybox:1.38.0@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60
 terraformImage: oamdev/docker-terraform:1.1.6@sha256:92a21948dfb27dd2e842077adcc769dd85bcf8b1e0785eb0abcf24895858b881
 controllerNamespace: ""
 
-# "{\"nat\": \"true\"}"
-jobNodeSelector: ""
+# Node selector for the Terraform Jobs: a map, or the same as a JSON string, e.g.
+# jobNodeSelector:
+#   kubernetes.io/arch: amd64
+# jobNodeSelector: "{\"kubernetes.io/arch\": \"amd64\"}"
+jobNodeSelector: null
 jobBackoffLimit: ""
 
 resources:
