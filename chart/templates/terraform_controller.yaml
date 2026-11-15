@@ -46,7 +46,15 @@ spec:
             {{ end }}
             {{ if .Values.jobNodeSelector }}
             - name: JOB_NODE_SELECTOR
-              value: {{ .Values.jobNodeSelector }}
+              {{- if kindIs "string" .Values.jobNodeSelector }}
+              value: {{ .Values.jobNodeSelector | trimPrefix "'" | trimSuffix "'" | quote }}
+              {{- else }}
+              {{- $jobNodeSelector := dict }}
+              {{- range $key, $value := .Values.jobNodeSelector }}
+              {{- $_ := set $jobNodeSelector $key (toString $value) }}
+              {{- end }}
+              value: {{ $jobNodeSelector | toJson | quote }}
+              {{- end }}
             {{ end }}
             {{ if .Values.resources.limits.cpu }}
             - name: RESOURCES_LIMITS_CPU
