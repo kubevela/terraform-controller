@@ -56,10 +56,14 @@ jobs:
           images: |
             oamdev/terraform-controller
             ghcr.io/kubevela/oamdev/terraform-controller
+          # Without this, metadata-action adds `latest` for every tag (`latest=auto` with
+          # `type=ref,event=tag`), so the last tag pushed on any line moved it. `latest` is set
+          # after the push instead (the last step).
+          flavor: |
+            latest=false
           tags: |
             type=ref,event=tag
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=raw,value={{branch}}-{{sha}},enable=${{ github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/release-') }}
+            type=raw,value={{branch}}-{{sha}},enable=${{ github.event_name == 'workflow_dispatch' }}
       - name: Login docker.io
         uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
@@ -79,6 +83,7 @@ jobs:
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Build and push
+        id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
@@ -89,3 +94,27 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # `latest` is the newest release: only a tag vX.Y.Z (no pre-release suffix) that is the
+      # highest of all such tags moves it. A patch on an older line (v0.8.2 after v0.9.0) or an
+      # alpha doesn't. The check runs after the push, so a build that finishes after a newer
+      # tag was pushed doesn't move `latest` back.
+      - name: Tag latest if this is the newest release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          TAG: ${{ github.ref_name }}
+          IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          newest=$(git ls-remote --tags --refs origin 'v*' | sed 's|.*refs/tags/||' |
+            { grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true; } | sort -V | tail -n1)
+          if [[ ! ${TAG} =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ || ${TAG} != "${newest}" ]]; then
+            echo "Tag ${TAG}, newest release ${newest:-none}: latest not moved"
+            exit 0
+          fi
+          while read -r ref; do
+            image=${ref%:*}
+            docker buildx imagetools create --tag "${image}:latest" "${image}@${DIGEST}"
+            echo "${image}:latest -> ${DIGEST}"
+          done <<<"${IMAGE_TAGS}"
