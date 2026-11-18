@@ -1351,7 +1351,9 @@ func TestGetTFOutputs(t *testing.T) {
 				errMsg:   "configuration(namespace: b ; name: configuration6) cannot update secret(namespace: default ; name: connection-secret-e) whose owner is configuration(namespace: a ; name: configuration6)",
 			},
 		},
-		"update a connectionSecret without owner labels": {
+		// A Secret without owner labels was not created by this Configuration, so it is not
+		// overwritten.
+		"refuse to update a connectionSecret without owner labels": {
 			args: args{
 				ctx:           ctx,
 				k8sClient:     k8sClient8,
@@ -1359,8 +1361,7 @@ func TestGetTFOutputs(t *testing.T) {
 				meta:          meta8,
 			},
 			want: want{
-				property: tfStateOutputs,
-				errMsg:   "",
+				errMsg: "which no configuration owns; if this configuration wrote it before the ownership labels existed, label it to adopt it: kubectl label secret --overwrite",
 			},
 		},
 	}
