@@ -274,20 +274,15 @@ func (r *ConfigurationReconciler) terraformDestroy(ctx context.Context, configur
 func (r *ConfigurationReconciler) cleanUpSubResources(ctx context.Context, configuration v1beta2.Configuration, meta *process.TFConfigurationMeta) error {
 	var k8sClient = r.Client
 
-	// 1. delete connectionSecret
-	if configuration.Spec.WriteConnectionSecretToReference != nil {
-		secretName := configuration.Spec.WriteConnectionSecretToReference.Name
-		secretNameSpace := configuration.Spec.WriteConnectionSecretToReference.Namespace
-		if err := deleteConnectionSecret(ctx, k8sClient, secretName, secretNameSpace); err != nil {
-			return err
-		}
-	}
+	// 1. delete connectionSecret. A Secret that cannot be read now does not stop the apply Job and
+	// its inputs going, but the destroy Job and the Terraform state stay: they route the next
+	// reconcile back here through terraformDestroy, which keeps the finalizer until it is handled.
+	connectionErr := deleteConnectionSecret(ctx, k8sClient, configuration)
 
-	// 2~5. delete the jobs, variable secrets, configuration configmaps
+	// 2~5. delete the apply job, variable secrets, configuration configmaps, then the destroy job
 	type cleanupResourceFunc func(ctx context.Context, meta *process.TFConfigurationMeta, k8sClient client.Client) error
 	resourceToCleanup := []cleanupResourceFunc{
 		deleteApplyJob,
-		deleteDestroyJob,
 		deleteVariableSecret,
 		deleteConfigMap,
 	}
@@ -295,6 +290,12 @@ func (r *ConfigurationReconciler) cleanUpSubResources(ctx context.Context, confi
 		if err := clean(ctx, meta, k8sClient); err != nil {
 			return err
 		}
+	}
+	if connectionErr != nil {
+		return connectionErr
+	}
+	if err := deleteDestroyJob(ctx, meta, k8sClient); err != nil {
+		return err
 	}
 
 	// 6. delete Kubernetes backend secret
@@ -574,17 +575,25 @@ func deleteDestroyJob(ctx context.Context, meta *process.TFConfigurationMeta, k8
 	return nil
 }
 
-func deleteConnectionSecret(ctx context.Context, k8sClient client.Client, name, ns string) error {
-	if len(name) == 0 {
+// deleteConnectionSecret deletes the connection Secret configuration created. A Secret its spec
+// names that it did not create (process.OwnsConnectionSecret) is left in place.
+func deleteConnectionSecret(ctx context.Context, k8sClient client.Client, configuration v1beta2.Configuration) error {
+	ref := configuration.Spec.WriteConnectionSecretToReference
+	if ref == nil || len(ref.Name) == 0 {
 		return nil
 	}
-
-	var connectionSecret v1.Secret
+	ns := ref.Namespace
 	if len(ns) == 0 {
 		ns = defaultNamespace
 	}
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: name, Namespace: ns}, &connectionSecret); err == nil {
-		return k8sClient.Delete(ctx, &connectionSecret)
+	var connectionSecret v1.Secret
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: ref.Name, Namespace: ns}, &connectionSecret); err != nil {
+		return client.IgnoreNotFound(err)
 	}
-	return nil
+	if !process.OwnsConnectionSecret(&configuration, &connectionSecret) {
+		klog.InfoS("Keeping a connection secret this configuration did not create", "secret", klog.KRef(ns, ref.Name),
+			"configuration", klog.KRef(configuration.Namespace, configuration.Name))
+		return nil
+	}
+	return k8sClient.Delete(ctx, &connectionSecret)
 }
