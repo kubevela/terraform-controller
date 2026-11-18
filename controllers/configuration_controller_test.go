@@ -1282,6 +1282,12 @@ func TestTerraformDestroy(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      connectionSecretName,
 			Namespace: connectionSecretNS,
+			// As the controller labels the connection Secret it creates for base-conf.
+			Labels: map[string]string{
+				"terraform.core.oam.dev/created-by":      "terraform-controller",
+				"terraform.core.oam.dev/owned-by":        "base-conf",
+				"terraform.core.oam.dev/owned-namespace": "default",
+			},
 		},
 		Type: corev1.SecretTypeOpaque,
 	}
