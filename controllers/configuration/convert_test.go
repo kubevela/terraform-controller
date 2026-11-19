@@ -148,6 +148,20 @@ func TestInterface2String(t *testing.T) {
 				err:    nil,
 			},
 		},
+		"LargeNumberType": {
+			variable: float64(1000000),
+			want: want{
+				result: "1000000",
+				err:    nil,
+			},
+		},
+		"LargeIntegerFromJSON": {
+			variable: float64(123456789012),
+			want: want{
+				result: "123456789012",
+				err:    nil,
+			},
+		},
 		"ListType1": {
 			variable: []interface{}{"Will", "Catherine"},
 			want: want{
