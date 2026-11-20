@@ -34,6 +34,16 @@ Terraform Controller is a Kubernetes Controller for Terraform.
 
 See our [Getting Started](./getting-started.md) guide please.
 
+# Releases
+
+| Line | Branch | Latest | Image |
+| --- | --- | --- | --- |
+| 0.9 | `release-0.9` | [`v0.9.1`](https://github.com/kubevela/terraform-controller/releases/tag/v0.9.1) | `oamdev/terraform-controller:v0.9.1` |
+| 0.8 | `release-0.8` | [`v0.8.2`](https://github.com/kubevela/terraform-controller/releases/tag/v0.8.2) | `oamdev/terraform-controller:v0.8.2` |
+
+Images are on Docker Hub and `ghcr.io/kubevela/oamdev/terraform-controller` (`linux/amd64`, `linux/arm64`); the chart
+is `terraform-controller` in `https://kubevela.github.io/charts`. How releases and backports work: [RELEASE.md](./RELEASE.md).
+
 # Design
 
 Please refer to [Design](./DESIGN.md).
