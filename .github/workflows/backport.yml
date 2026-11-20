@@ -1,0 +1,145 @@
+name: Backport
+
+# Opens backport pull requests for a merged pull request:
+# - when it is merged into master with `backport release-x.y` labels, one pull request per label;
+# - when someone with write access comments `/backport release-x.y` (or `/backport x.y`;
+#   several branches separated by spaces) on it. Use this for a label forgotten at the merge:
+#   adding the label afterwards does nothing.
+#
+# Pull requests opened with GITHUB_TOKEN don't start CI on their own. Set the repository variable
+# BACKPORT_APP_CLIENT_ID and the secret BACKPORT_APP_PRIVATE_KEY (a GitHub App installed on
+# this repository with contents and pull-requests write) to open them with the app's token.
+# Without them the workflow uses GITHUB_TOKEN: then the repository setting "Allow GitHub Actions
+# to create and approve pull requests" has to be on, and the checks on a backport pull request
+# wait for a maintainer to approve them.
+#
+# Labels are read on the push of the merge commit to master, not on pull_request_target, which
+# GitHub blocks by default in public repositories from 2026-12-02. master is protected, so each
+# push is one merged pull request; only the pushed commit is looked up. issue_comment runs this
+# file from master too. Nothing from the pull request is executed: the checkout is master, and
+# the commits are only cherry-picked.
+
+on:
+  push:
+    branches: [master]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+jobs:
+  backport:
+    runs-on: ubuntu-24.04
+    if: >
+      github.event_name == 'push' || (
+        github.event_name == 'issue_comment' &&
+        github.event.issue.pull_request &&
+        startsWith(github.event.comment.body, '/backport')
+      )
+    permissions:
+      contents: write # push the backport branches
+      pull-requests: write # open the pull requests and comment on the original
+    steps:
+      - name: Find the target branches
+        id: targets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          COMMENT: ${{ github.event.comment.body }}
+          ACTOR: ${{ github.actor }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          set -f # the branch names below are split on spaces, never globbed
+          case "${GITHUB_EVENT_NAME}" in
+            push)
+              # The commit-to-pull-request association can lag the push by a few seconds.
+              pr=""
+              for attempt in 1 2 3; do
+                pr=$(gh api "repos/${REPO}/commits/${SHA}/pulls" \
+                  --jq "[.[] | select(.merge_commit_sha == \"${SHA}\")][0] // empty")
+                [[ -n ${pr} ]] && break
+                sleep $((attempt * 5))
+              done
+              if [[ -z ${pr} ]]; then
+                echo "No pull request was merged as ${SHA}; nothing to backport"
+                exit 0
+              fi
+              PR_NUMBER=$(jq -r .number <<<"${pr}")
+              requested=$(jq -r '.labels[].name | select(startswith("backport ")) | sub("^backport "; "")' <<<"${pr}")
+              if [[ -z ${requested} ]]; then
+                echo "#${PR_NUMBER} has no backport label; nothing to backport"
+                exit 0
+              fi
+              ;;
+            issue_comment)
+              permission=$(gh api "repos/${REPO}/collaborators/${ACTOR}/permission" --jq .permission)
+              if [[ ${permission} != admin && ${permission} != write ]]; then
+                echo "::error::/backport needs write access; ${ACTOR} has ${permission}"
+                exit 1
+              fi
+              if [[ $(gh api "repos/${REPO}/pulls/${PR_NUMBER}" --jq .merged) != true ]]; then
+                echo "::error::#${PR_NUMBER} is not merged"
+                exit 1
+              fi
+              requested=$(head -n1 <<<"${COMMENT}" | tr -d '\r' | sed 's|^/backport||')
+              ;;
+          esac
+          targets=""
+          for b in ${requested}; do
+            [[ ${b} =~ ^[0-9]+\.[0-9]+$ ]] && b="release-${b}"
+            if [[ ! ${b} =~ ^release-[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::not a release branch: ${b}"
+              exit 1
+            fi
+            if ! gh api "repos/${REPO}/branches/${b}" --silent; then
+              echo "::error::branch ${b} does not exist"
+              exit 1
+            fi
+            targets="${targets} ${b}"
+          done
+          if [[ -z ${targets} ]]; then
+            echo "::error::no target branch given"
+            exit 1
+          fi
+          echo "pr=${PR_NUMBER}" >> "${GITHUB_OUTPUT}"
+          echo "branches=${targets# }" >> "${GITHUB_OUTPUT}"
+          echo "Backport to: ${targets# }"
+
+      - name: Create a GitHub App token
+        id: app-token
+        if: steps.targets.outputs.branches && vars.BACKPORT_APP_CLIENT_ID != ''
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.BACKPORT_APP_CLIENT_ID }}
+          private-key: ${{ secrets.BACKPORT_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.targets.outputs.branches
+
+      - name: Open the backport pull requests
+        id: backport
+        if: steps.targets.outputs.branches
+        uses: korthout/backport-action@8560fb503c275d433c56f05a2f64850093baa9f7 # v4.7.0
+        with:
+          github_token: ${{ steps.app-token.outputs.token || github.token }}
+          # A push event carries no pull request, so the action is told which one.
+          source_pr_number: ${{ steps.targets.outputs.pr }}
+          # The branches come from the step above, for every trigger, so a /backport
+          # comment doesn't backport the merge's labels again.
+          target_branches: ${{ steps.targets.outputs.branches }}
+          label_pattern: ""
+
+      # The action reports a failed backport (a conflict, or a rejected pull request) in a
+      # comment but leaves the step green; fail the run too, so it shows up in Actions.
+      - name: Fail if a backport failed
+        if: steps.targets.outputs.branches && steps.backport.outputs.was_successful != 'true'
+        env:
+          BY_TARGET: ${{ steps.backport.outputs.was_successful_by_target }}
+        run: |
+          echo "::error::backport failed: ${BY_TARGET}"
+          exit 1
