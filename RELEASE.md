@@ -56,13 +56,13 @@ from the tag (`vX.Y.Z` → chart `X.Y.Z`, image `vX.Y.Z`) and publishes it to <h
 2. Build a candidate: Actions → BuildImage → Run workflow on `release-x.y` publishes
    `oamdev/terraform-controller:release-x.y-<short sha>`.
 3. Test the candidate: scan it, and install the branch's chart with the candidate image
-   (`helm install ./chart --set image.tag=release-x.y-<short sha>`); apply a `Configuration`, and upgrade from the
-   previous release with one already applied.
+   (`helm install terraform-controller ./chart --set image.tag=release-x.y-<short sha>`); apply a `Configuration`, and
+   upgrade from the previous release with one already applied.
 4. Tag the tested commit, `vX.Y.Z` on `release-x.y`. Tags are never moved or reused: a fix after tagging is the next
    patch.
 5. Check the published image (it is rebuilt from the tag, so its digest differs from the candidate's), `latest`, and
    the chart in the Helm repository; then publish the GitHub Release with the release notes: what changed, the image
    digest, and how to upgrade. Mark only the highest final release as Latest; a `-alpha.N` / `-rc.N` tag is a
-   pre-release.
+   pre-release. Then run Actions → Release on the `vX.Y.Z` tag to attach the `backup_restore` tool to the release.
 6. Update KubeVela: `go.mod` on the KubeVela branches that use the line (table above), and the chart version of the
    `terraform` addon in kubevela/catalog. Then update the table above and in the [README](README.md).
