@@ -51,7 +51,9 @@ func Interface2String(v interface{}) (string, error) {
 	case int:
 		value = strconv.Itoa(v)
 	case float64:
-		value = fmt.Sprint(v)
+		// JSON numbers decode to float64. fmt.Sprint renders values such as
+		// 1000000 as "1e+06", so format them without an exponent.
+		value = strconv.FormatFloat(v, 'f', -1, 64)
 	case bool:
 		value = strconv.FormatBool(v)
 	default:
