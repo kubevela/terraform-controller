@@ -10,8 +10,8 @@ updates:
       - "/hack/tool/validation/tf_validation_backend"
     schedule:
       interval: "weekly"
-    # A release has to be a week old before it is proposed, so a bad or
-    # compromised version has time to be pulled first.
+    # A version update waits until the release is a week old, so a bad or
+    # compromised version has time to be pulled first. Security updates skip the wait.
     cooldown:
       default-days: 7
     open-pull-requests-limit: 5
