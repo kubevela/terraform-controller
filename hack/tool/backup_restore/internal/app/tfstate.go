@@ -19,7 +19,9 @@ package app
 import (
 	"bytes"
 	"compress/gzip"
+	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/oam-dev/terraform-controller/controllers/configuration/backend"
 )
@@ -28,18 +30,22 @@ func getSecretName(k *backend.K8SBackend) string {
 	return "tfstate-default-" + k.SecretSuffix
 }
 
-// Modified based on Hashicorp code base https://github.com/hashicorp/terraform/blob/fabdf0bea1fa2bf6a9d56cc3ea0f28242bf5e812/backend/remote-state/kubernetes/client.go#L343
-// Licensed under Mozilla Public License 2.0
+// compressedTFState returns the Terraform state file at path, gzip-compressed
+// as the Kubernetes backend stores it in its state Secret.
 func compressedTFState(path string) ([]byte, error) {
-	srcBytes, err := os.ReadFile(path)
-	var buf bytes.Buffer
-	writer := gzip.NewWriter(&buf)
-	_, err = writer.Write(srcBytes)
+	state, err := os.Open(filepath.Clean(path))
 	if err != nil {
+		return nil, err
+	}
+	defer state.Close() //nolint:errcheck // read only
+
+	var compressed bytes.Buffer
+	writer := gzip.NewWriter(&compressed)
+	if _, err := io.Copy(writer, state); err != nil {
 		return nil, err
 	}
 	if err := writer.Close(); err != nil {
 		return nil, err
 	}
-	return buf.Bytes(), nil
+	return compressed.Bytes(), nil
 }
