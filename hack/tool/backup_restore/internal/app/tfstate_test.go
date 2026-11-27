@@ -72,8 +72,16 @@ func TestCompressedTFStateOfAnEmptyFileIsValidGzip(t *testing.T) {
 // A state file that cannot be read must be an error, not an empty state that
 // would then be restored over the real one.
 func TestCompressedTFStateReportsAFileItCannotRead(t *testing.T) {
-	compressed, err := compressedTFState(filepath.Join(t.TempDir(), "missing.json"))
-	if err == nil {
-		t.Fatalf("want an error for a missing file, got %d bytes and no error", len(compressed))
+	dir := t.TempDir()
+	for name, path := range map[string]string{
+		"a file that is not there":   filepath.Join(dir, "missing.json"),
+		"a path that is a directory": dir,
+	} {
+		t.Run(name, func(t *testing.T) {
+			compressed, err := compressedTFState(path)
+			if err == nil {
+				t.Fatalf("want an error, got %d bytes and no error", len(compressed))
+			}
+		})
 	}
 }
