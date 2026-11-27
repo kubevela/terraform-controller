@@ -1,6 +1,8 @@
 package util
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/base64"
 	"testing"
 
@@ -65,4 +67,36 @@ func TestDecompressTerraformStateSecret(t *testing.T) {
 			}
 		})
 	}
+}
+
+// gzipped compresses state with the standard library, as Terraform's
+// Kubernetes backend does before storing it.
+func gzipped(t *testing.T, state string) []byte {
+	var compressed bytes.Buffer
+	writer := gzip.NewWriter(&compressed)
+	_, err := writer.Write([]byte(state))
+	assert.NoError(t, err)
+	assert.NoError(t, writer.Close())
+	return compressed.Bytes()
+}
+
+func TestDecompressTerraformStateSecretRoundTrip(t *testing.T) {
+	for name, state := range map[string]string{
+		"a state":        `{"version": 4, "serial": 7, "resources": []}`,
+		"an empty state": "",
+	} {
+		t.Run(name, func(t *testing.T) {
+			got, err := DecompressTerraformStateSecret(string(gzipped(t, state)))
+			assert.NoError(t, err)
+			assert.Equal(t, state, string(got))
+		})
+	}
+}
+
+func TestDecompressTerraformStateSecretRejectsATruncatedSecret(t *testing.T) {
+	compressed := gzipped(t, `{"version": 4, "serial": 7, "resources": []}`)
+
+	_, err := DecompressTerraformStateSecret(string(compressed[:len(compressed)-6]))
+
+	assert.Error(t, err)
 }
